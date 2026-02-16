@@ -10,6 +10,28 @@ import {
   PatchSuggestionResultSchema,
 } from '../schemas/outputs.js';
 
+const DEFAULT_PATCH_STYLE = 'balanced';
+
+interface PatchPromptInput {
+  diff: string;
+  findingTitle: string;
+  findingDetails: string;
+  patchStyle: 'minimal' | 'balanced' | 'defensive';
+}
+
+function getDiffBudgetErrorResponse(
+  diff: string
+): ReturnType<typeof createErrorResponse> | undefined {
+  if (!exceedsDiffBudget(diff)) {
+    return undefined;
+  }
+
+  return createErrorResponse(
+    'E_INPUT_TOO_LARGE',
+    getDiffBudgetError(diff.length)
+  );
+}
+
 const SuggestPatchJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
@@ -24,12 +46,7 @@ const SuggestPatchJsonSchema: Record<string, unknown> = {
   required: ['summary', 'patch', 'validationChecklist'],
 };
 
-function buildPatchPrompt(input: {
-  diff: string;
-  findingTitle: string;
-  findingDetails: string;
-  patchStyle: 'minimal' | 'balanced' | 'defensive';
-}): string {
+function buildPatchPrompt(input: PatchPromptInput): string {
   return [
     'You are producing a corrective patch for a code review issue.',
     'Return strict JSON only, no markdown fences.',
@@ -59,11 +76,9 @@ export function registerSuggestPatchTool(server: McpServer): void {
     },
     async (input) => {
       try {
-        if (exceedsDiffBudget(input.diff)) {
-          return createErrorResponse(
-            'E_INPUT_TOO_LARGE',
-            getDiffBudgetError(input.diff.length)
-          );
+        const budgetError = getDiffBudgetErrorResponse(input.diff);
+        if (budgetError) {
+          return budgetError;
         }
 
         const raw = await generateStructuredJson({
@@ -71,7 +86,7 @@ export function registerSuggestPatchTool(server: McpServer): void {
             diff: input.diff,
             findingTitle: input.findingTitle,
             findingDetails: input.findingDetails,
-            patchStyle: input.patchStyle ?? 'balanced',
+            patchStyle: input.patchStyle ?? DEFAULT_PATCH_STYLE,
           }),
           responseSchema: SuggestPatchJsonSchema,
         });

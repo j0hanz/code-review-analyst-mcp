@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { GoogleGenAI } from '@google/genai';
+import type { GenerateContentConfig } from '@google/genai';
 
 import { getErrorMessage } from './errors.js';
 import type { GeminiStructuredRequest } from './types.js';
@@ -61,6 +62,22 @@ function shouldRetry(error: unknown): boolean {
   return /(429|500|502|503|504|rate limit|unavailable|timeout)/i.test(message);
 }
 
+function getRetryDelayMs(attempt: number): number {
+  return RETRY_DELAY_BASE_MS * 2 ** attempt;
+}
+
+function buildGenerationConfig(
+  request: GeminiStructuredRequest,
+  abortSignal: AbortSignal
+): GenerateContentConfig {
+  return {
+    temperature: request.temperature ?? 0.2,
+    responseMimeType: 'application/json',
+    responseSchema: request.responseSchema,
+    abortSignal,
+  };
+}
+
 async function generateContentWithTimeout(
   request: GeminiStructuredRequest,
   model: string,
@@ -76,12 +93,7 @@ async function generateContentWithTimeout(
     return await getClient().models.generateContent({
       model,
       contents: request.prompt,
-      config: {
-        temperature: request.temperature ?? 0.2,
-        responseMimeType: 'application/json',
-        responseSchema: request.responseSchema,
-        abortSignal: controller.signal,
-      },
+      config: buildGenerationConfig(request, controller.signal),
     });
   } catch (error: unknown) {
     if (controller.signal.aborted) {
@@ -104,10 +116,9 @@ export async function generateStructuredJson(
   return geminiContext.run(
     { requestId: nextRequestId(), model },
     async (): Promise<unknown> => {
-      let attempt = 0;
       let lastError: unknown;
 
-      while (attempt <= maxRetries) {
+      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
         const startedAt = performance.now();
 
         try {
@@ -135,7 +146,7 @@ export async function generateStructuredJson(
             break;
           }
 
-          const delayMs = RETRY_DELAY_BASE_MS * 2 ** attempt;
+          const delayMs = getRetryDelayMs(attempt);
           logEvent('gemini_retry', {
             attempt,
             delayMs,
@@ -143,7 +154,6 @@ export async function generateStructuredJson(
           });
 
           await sleep(delayMs, undefined, { ref: false });
-          attempt += 1;
         }
       }
 

@@ -1,19 +1,39 @@
-interface BaseResult {
+interface ToolError {
+  code: string;
+  message: string;
+}
+
+interface ToolTextContent {
+  type: 'text';
+  text: string;
+}
+
+interface ToolStructuredContent {
   [key: string]: unknown;
   ok: boolean;
   result?: unknown;
-  error?: {
-    code: string;
-    message: string;
-  };
+  error?: ToolError;
 }
 
-export function createToolResponse(structured: BaseResult): {
-  content: { type: 'text'; text: string }[];
-  structuredContent: BaseResult;
-} {
+interface ToolResponse<TStructuredContent extends ToolStructuredContent> {
+  [key: string]: unknown;
+  content: ToolTextContent[];
+  structuredContent: TStructuredContent;
+}
+
+interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
+  isError: true;
+}
+
+function toTextContent(structured: ToolStructuredContent): ToolTextContent[] {
+  return [{ type: 'text', text: JSON.stringify(structured) }];
+}
+
+export function createToolResponse<
+  TStructuredContent extends ToolStructuredContent,
+>(structured: TStructuredContent): ToolResponse<TStructuredContent> {
   return {
-    content: [{ type: 'text', text: JSON.stringify(structured) }],
+    content: toTextContent(structured),
     structuredContent: structured,
   };
 }
@@ -22,22 +42,15 @@ export function createErrorToolResponse(
   code: string,
   message: string,
   result?: unknown
-): {
-  content: { type: 'text'; text: string }[];
-  structuredContent: BaseResult;
-  isError: true;
-} {
-  const structured: BaseResult = {
+): ErrorToolResponse {
+  const structured: ToolStructuredContent = {
     ok: false,
     error: { code, message },
+    ...(result === undefined ? {} : { result }),
   };
 
-  if (result !== undefined) {
-    structured.result = result;
-  }
-
   return {
-    content: [{ type: 'text', text: JSON.stringify(structured) }],
+    content: toTextContent(structured),
     structuredContent: structured,
     isError: true,
   };

@@ -10,6 +10,26 @@ import {
   RiskScoreResultSchema,
 } from '../schemas/outputs.js';
 
+const DEFAULT_DEPLOYMENT_CRITICALITY = 'medium';
+
+interface RiskPromptInput {
+  diff: string;
+  deploymentCriticality?: 'low' | 'medium' | 'high';
+}
+
+function getDiffBudgetErrorResponse(
+  diff: string
+): ReturnType<typeof createErrorResponse> | undefined {
+  if (!exceedsDiffBudget(diff)) {
+    return undefined;
+  }
+
+  return createErrorResponse(
+    'E_INPUT_TOO_LARGE',
+    getDiffBudgetError(diff.length)
+  );
+}
+
 const RiskScoreJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
@@ -24,14 +44,11 @@ const RiskScoreJsonSchema: Record<string, unknown> = {
   required: ['score', 'bucket', 'rationale'],
 };
 
-function buildRiskPrompt(input: {
-  diff: string;
-  deploymentCriticality?: 'low' | 'medium' | 'high';
-}): string {
+function buildRiskPrompt(input: RiskPromptInput): string {
   return [
     'You are assessing software deployment risk from a code diff.',
     'Return strict JSON only, no markdown fences.',
-    `Deployment criticality: ${input.deploymentCriticality ?? 'medium'}`,
+    `Deployment criticality: ${input.deploymentCriticality ?? DEFAULT_DEPLOYMENT_CRITICALITY}`,
     'Score guidance: 0 is no risk, 100 is severe risk.',
     'Rationale must be concise, concrete, and evidence-based.',
     '',
@@ -56,11 +73,9 @@ export function registerRiskScoreTool(server: McpServer): void {
     },
     async (input) => {
       try {
-        if (exceedsDiffBudget(input.diff)) {
-          return createErrorResponse(
-            'E_INPUT_TOO_LARGE',
-            getDiffBudgetError(input.diff.length)
-          );
+        const budgetError = getDiffBudgetErrorResponse(input.diff);
+        if (budgetError) {
+          return budgetError;
         }
 
         const raw = await generateStructuredJson({

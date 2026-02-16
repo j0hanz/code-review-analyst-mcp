@@ -10,6 +10,30 @@ import {
   ReviewDiffResultSchema,
 } from '../schemas/outputs.js';
 
+const DEFAULT_MAX_FINDINGS = 10;
+const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
+
+interface ReviewPromptInput {
+  repository: string;
+  language?: string;
+  focusAreas?: string[];
+  maxFindings: number;
+  diff: string;
+}
+
+function getDiffBudgetErrorResponse(
+  diff: string
+): ReturnType<typeof createErrorResponse> | undefined {
+  if (!exceedsDiffBudget(diff)) {
+    return undefined;
+  }
+
+  return createErrorResponse(
+    'E_INPUT_TOO_LARGE',
+    getDiffBudgetError(diff.length)
+  );
+}
+
 function getReviewSchema(maxFindings: number): Record<string, unknown> {
   return {
     type: 'object',
@@ -53,16 +77,10 @@ function getReviewSchema(maxFindings: number): Record<string, unknown> {
   };
 }
 
-export function buildReviewPrompt(input: {
-  repository: string;
-  language?: string;
-  focusAreas?: string[];
-  maxFindings: number;
-  diff: string;
-}): string {
+export function buildReviewPrompt(input: ReviewPromptInput): string {
   const focus = input.focusAreas?.length
     ? input.focusAreas.join(', ')
-    : 'security, correctness, regressions, performance';
+    : DEFAULT_FOCUS_AREAS;
 
   return [
     'You are a senior staff engineer performing pull request review.',
@@ -95,14 +113,12 @@ export function registerReviewDiffTool(server: McpServer): void {
     },
     async (input) => {
       try {
-        if (exceedsDiffBudget(input.diff)) {
-          return createErrorResponse(
-            'E_INPUT_TOO_LARGE',
-            getDiffBudgetError(input.diff.length)
-          );
+        const budgetError = getDiffBudgetErrorResponse(input.diff);
+        if (budgetError) {
+          return budgetError;
         }
 
-        const maxFindings = input.maxFindings ?? 10;
+        const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
         const prompt = buildReviewPrompt({
           repository: input.repository,
           ...(input.language ? { language: input.language } : {}),

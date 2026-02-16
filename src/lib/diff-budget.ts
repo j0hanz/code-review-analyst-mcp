@@ -1,14 +1,13 @@
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
+const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
 
-const parsedMaxDiffChars = Number.parseInt(
-  process.env.MAX_DIFF_CHARS ?? '',
-  10
-);
+function getPositiveIntEnv(name: string): number | undefined {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 export const MAX_DIFF_CHARS =
-  Number.isFinite(parsedMaxDiffChars) && parsedMaxDiffChars > 0
-    ? parsedMaxDiffChars
-    : DEFAULT_MAX_DIFF_CHARS;
+  getPositiveIntEnv(MAX_DIFF_CHARS_ENV_VAR) ?? DEFAULT_MAX_DIFF_CHARS;
 
 export function exceedsDiffBudget(diff: string): boolean {
   return diff.length > MAX_DIFF_CHARS;
