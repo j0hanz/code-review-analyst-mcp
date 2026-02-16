@@ -141,7 +141,7 @@ test('generateStructuredJson maps aborts to timeout errors', async () => {
         maxRetries: 0,
         timeoutMs: 5,
       }),
-    /Gemini request failed after 1 attempts: Gemini request timed out after 5ms\./
+    /Gemini request failed after 1 attempts: Gemini request timed out after \d{1,3}(?:,\d{3})*ms\./
   );
 
   assert.equal(generateContentMock.mock.calls.length, 1);

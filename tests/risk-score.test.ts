@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { validateDiffBudget } from '../src/lib/diff-budget.js';
 import { RiskScoreInputSchema } from '../src/schemas/inputs.js';
 import { RiskScoreResultSchema } from '../src/schemas/outputs.js';
 
@@ -51,4 +52,28 @@ test('RiskScoreResultSchema rejects score outside 0-100 range', () => {
   });
 
   assert.equal(parsed.success, false);
+});
+
+test('validateDiffBudget formats diff budget error message with en-US separators', () => {
+  const oldMaxDiffChars = process.env.MAX_DIFF_CHARS;
+  process.env.MAX_DIFF_CHARS = '120000';
+
+  try {
+    const diff = 'x'.repeat(120_001);
+    const error = validateDiffBudget(diff);
+
+    assert.ok(error);
+    assert.equal(error.structuredContent.ok, false);
+    assert.equal(error.structuredContent.error?.code, 'E_INPUT_TOO_LARGE');
+
+    const message = error.structuredContent.error?.message ?? '';
+    assert.ok(message.includes('120,001'), 'Expected formatted diff length');
+    assert.ok(message.includes('120,000'), 'Expected formatted max diff chars');
+  } finally {
+    if (oldMaxDiffChars === undefined) {
+      delete process.env.MAX_DIFF_CHARS;
+    } else {
+      process.env.MAX_DIFF_CHARS = oldMaxDiffChars;
+    }
+  }
 });

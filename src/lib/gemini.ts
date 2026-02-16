@@ -21,6 +21,12 @@ const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
 
+const numberFormatter = new Intl.NumberFormat('en-US');
+
+function formatNumber(value: number): string {
+  return numberFormatter.format(value);
+}
+
 const SAFETY_THRESHOLD_BY_NAME = {
   BLOCK_NONE: HarmBlockThreshold.BLOCK_NONE,
   BLOCK_ONLY_HIGH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
@@ -244,7 +250,9 @@ async function generateContentWithTimeout(
     }
 
     if (controller.signal.aborted) {
-      throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
+      throw new Error(
+        `Gemini request timed out after ${formatNumber(timeoutMs)}ms.`
+      );
     }
 
     throw error;

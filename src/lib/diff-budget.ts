@@ -3,6 +3,12 @@ import { createErrorToolResponse } from './tool-response.js';
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
 
+const numberFormatter = new Intl.NumberFormat('en-US');
+
+function formatNumber(value: number): string {
+  return numberFormatter.format(value);
+}
+
 function getPositiveIntEnv(name: string): number | undefined {
   const parsed = Number.parseInt(process.env[name] ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
@@ -17,7 +23,8 @@ export function exceedsDiffBudget(diff: string): boolean {
 }
 
 export function getDiffBudgetError(diffLength: number): string {
-  return `diff exceeds max allowed size (${diffLength} chars > ${getMaxDiffChars()} chars)`;
+  const maxDiffChars = getMaxDiffChars();
+  return `diff exceeds max allowed size (${formatNumber(diffLength)} chars > ${formatNumber(maxDiffChars)} chars)`;
 }
 
 export function validateDiffBudget(
