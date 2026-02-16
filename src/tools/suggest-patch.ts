@@ -43,6 +43,7 @@ export function registerSuggestPatchTool(server: McpServer): void {
     description:
       'Generate a focused unified diff patch to address one selected review finding.',
     inputSchema: SuggestPatchInputSchema.shape,
+    fullInputSchema: SuggestPatchInputSchema,
     resultSchema: PatchSuggestionResultSchema,
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_SUGGEST_PATCH',

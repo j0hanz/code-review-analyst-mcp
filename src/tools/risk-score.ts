@@ -40,6 +40,7 @@ export function registerRiskScoreTool(server: McpServer): void {
     description:
       'Score a diff from 0-100 and explain the key risk drivers for release decisions.',
     inputSchema: RiskScoreInputSchema.shape,
+    fullInputSchema: RiskScoreInputSchema,
     resultSchema: RiskScoreResultSchema,
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_RISK_SCORE',

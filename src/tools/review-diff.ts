@@ -56,6 +56,7 @@ export function registerReviewDiffTool(server: McpServer): void {
     description:
       'Analyze a code diff and return structured findings, risk level, and test recommendations.',
     inputSchema: ReviewDiffInputSchema.shape,
+    fullInputSchema: ReviewDiffInputSchema,
     resultSchema: ReviewDiffResultSchema,
     geminiSchema: ReviewDiffGeminiSchema,
     validateInput: (input) => validateDiffBudget(input.diff),

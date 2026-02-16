@@ -33,6 +33,9 @@ export interface StructuredToolTaskConfig<
   /** Zod shape object (e.g. `MySchema.shape`) used as the MCP input schema. */
   inputSchema: ZodRawShapeCompat;
 
+  /** Full Zod schema for runtime input re-validation (rejects unknown fields). */
+  fullInputSchema?: z.ZodTypeAny;
+
   /** Zod schema for parsing and validating the Gemini structured response. */
   resultSchema: z.ZodTypeAny;
 
@@ -85,22 +88,44 @@ export function registerStructuredToolTask<TInput extends object>(
           ttl: extra.taskRequestedTtl ?? null,
         });
 
+        const progressToken = extra._meta?.progressToken;
+        const sendProgress = async (
+          progress: number,
+          total: number
+        ): Promise<void> => {
+          if (progressToken == null) return;
+          try {
+            await extra.sendNotification({
+              method: 'notifications/progress',
+              params: { progressToken, progress, total },
+            });
+          } catch {
+            // Progress is best-effort; never fail the tool call.
+          }
+        };
+
         try {
-          const inputRecord = input as TInput;
+          const inputRecord = config.fullInputSchema
+            ? (config.fullInputSchema.parse(input) as TInput)
+            : (input as TInput);
 
           if (config.validateInput) {
             const validationError = await config.validateInput(inputRecord);
             if (validationError) {
               await extra.taskStore.storeTaskResult(
                 task.taskId,
-                'completed',
+                'failed',
                 validationError
               );
               return { task };
             }
           }
 
+          await sendProgress(1, 4);
+
           const { systemInstruction, prompt } = config.buildPrompt(inputRecord);
+
+          await sendProgress(2, 4);
 
           const raw = await generateStructuredJson({
             systemInstruction,
@@ -108,6 +133,8 @@ export function registerStructuredToolTask<TInput extends object>(
             responseSchema,
             signal: extra.signal,
           });
+
+          await sendProgress(3, 4);
 
           const parsed: unknown = config.resultSchema.parse(raw);
 
@@ -119,6 +146,8 @@ export function registerStructuredToolTask<TInput extends object>(
               result: parsed,
             })
           );
+
+          await sendProgress(4, 4);
         } catch (error: unknown) {
           await extra.taskStore.storeTaskResult(
             task.taskId,
