@@ -114,6 +114,18 @@ export function registerStructuredToolTask<TInput extends object>(
           if (config.validateInput) {
             const validationError = await config.validateInput(inputRecord);
             if (validationError) {
+              const validationMessage =
+                validationError.structuredContent.error?.message ??
+                'Input validation failed';
+              try {
+                await extra.taskStore.updateTaskStatus(
+                  task.taskId,
+                  'working',
+                  validationMessage
+                );
+              } catch {
+                // statusMessage is best-effort; task may already be terminal.
+              }
               await extra.taskStore.storeTaskResult(
                 task.taskId,
                 'failed',
@@ -151,10 +163,20 @@ export function registerStructuredToolTask<TInput extends object>(
 
           await sendProgress(4, 4);
         } catch (error: unknown) {
+          const errorMessage = getErrorMessage(error);
+          try {
+            await extra.taskStore.updateTaskStatus(
+              task.taskId,
+              'working',
+              errorMessage
+            );
+          } catch {
+            // statusMessage is best-effort; task may already be terminal.
+          }
           await extra.taskStore.storeTaskResult(
             task.taskId,
             'failed',
-            createErrorToolResponse(config.errorCode, getErrorMessage(error))
+            createErrorToolResponse(config.errorCode, errorMessage)
           );
         }
 
