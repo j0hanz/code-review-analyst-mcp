@@ -37,6 +37,9 @@ export interface StructuredToolTaskConfig<
   /** Zod schema for parsing and validating the Gemini structured response. */
   resultSchema: z.ZodTypeAny;
 
+  /** Optional Zod schema used specifically for Gemini response validation. */
+  geminiSchema?: z.ZodTypeAny;
+
   /** Stable error code returned on failure (e.g. 'E_REVIEW_DIFF'). */
   errorCode: string;
 
@@ -144,7 +147,9 @@ export function registerStructuredToolTask<TInput extends object>(
           const { systemInstruction, prompt } = config.buildPrompt(inputRecord);
 
           const responseSchema = zodToJsonSchema(
-            config.resultSchema as Parameters<typeof zodToJsonSchema>[0]
+            (config.geminiSchema ?? config.resultSchema) as Parameters<
+              typeof zodToJsonSchema
+            >[0]
           ) as Record<string, unknown>;
 
           const raw = await generateStructuredJson({

@@ -4,7 +4,10 @@ import { test } from 'node:test';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { ReviewDiffInputSchema } from '../src/schemas/inputs.js';
-import { ReviewDiffResultSchema } from '../src/schemas/outputs.js';
+import {
+  ReviewDiffGeminiSchema,
+  ReviewDiffResultSchema,
+} from '../src/schemas/outputs.js';
 import { registerAllTools } from '../src/tools/index.js';
 
 test('registerAllTools does not throw', () => {
@@ -46,4 +49,32 @@ test('ReviewDiffResultSchema validates expected payload shape', () => {
   });
 
   assert.equal(parsed.findings.length, 1);
+});
+
+test('ReviewDiffGeminiSchema accepts same payload as ResultSchema', () => {
+  const payload = {
+    summary: 'One high-risk change around auth flow.',
+    overallRisk: 'high',
+    findings: [
+      {
+        severity: 'high',
+        file: 'src/auth.ts',
+        line: 42,
+        title: 'Missing null check',
+        explanation: 'Null response can throw and break login.',
+        recommendation: 'Guard for null before property access.',
+      },
+    ],
+    testsNeeded: ['Add auth null-path regression test'],
+  };
+
+  const parsed = ReviewDiffGeminiSchema.parse(payload);
+  assert.equal(parsed.findings.length, 1);
+});
+
+test('ReviewDiffGeminiSchema converts to JSON Schema without error', async () => {
+  const { zodToJsonSchema } = await import('zod-to-json-schema');
+  const jsonSchema = zodToJsonSchema(ReviewDiffGeminiSchema);
+  assert.equal(typeof jsonSchema, 'object');
+  assert.ok(jsonSchema !== null);
 });

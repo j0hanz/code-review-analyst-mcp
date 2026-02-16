@@ -96,6 +96,33 @@ export const ReviewDiffResultSchema = z.strictObject({
     .describe('Targeted tests to add before merge.'),
 });
 
+const ReviewFindingGeminiSchema = z.strictObject({
+  severity: z
+    .enum(['low', 'medium', 'high', 'critical'])
+    .describe('Severity for this issue.'),
+  file: z.string().describe('File path for the finding.'),
+  line: z
+    .number()
+    .nullable()
+    .describe('1-based line number when known, otherwise null.'),
+  title: z.string().describe('Short finding title.'),
+  explanation: z.string().describe('Why this issue matters.'),
+  recommendation: z.string().describe('Concrete fix recommendation.'),
+});
+
+export const ReviewDiffGeminiSchema = z.strictObject({
+  summary: z.string().describe('Short review summary.'),
+  overallRisk: z
+    .enum(['low', 'medium', 'high'])
+    .describe('Overall risk for merging this diff.'),
+  findings: z
+    .array(ReviewFindingGeminiSchema.describe('Single code review finding.'))
+    .describe('Ordered list of findings, highest severity first.'),
+  testsNeeded: z
+    .array(z.string().describe('Test recommendation to reduce risk.'))
+    .describe('Targeted tests to add before merge.'),
+});
+
 export const RiskScoreResultSchema = z.strictObject({
   score: z
     .number()

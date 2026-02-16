@@ -5,7 +5,10 @@ import {
   registerStructuredToolTask,
 } from '../lib/tool-factory.js';
 import { ReviewDiffInputSchema } from '../schemas/inputs.js';
-import { ReviewDiffResultSchema } from '../schemas/outputs.js';
+import {
+  ReviewDiffGeminiSchema,
+  ReviewDiffResultSchema,
+} from '../schemas/outputs.js';
 
 const DEFAULT_MAX_FINDINGS = 10;
 const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
@@ -53,6 +56,7 @@ export function registerReviewDiffTool(server: McpServer): void {
       'Analyze a code diff and return structured findings, risk level, and test recommendations.',
     inputSchema: ReviewDiffInputSchema.shape,
     resultSchema: ReviewDiffResultSchema,
+    geminiSchema: ReviewDiffGeminiSchema,
     errorCode: 'E_REVIEW_DIFF',
     buildPrompt: buildReviewPrompt,
   });
