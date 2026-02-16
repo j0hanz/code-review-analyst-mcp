@@ -1,6 +1,26 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function registerAllPrompts(_server: McpServer): void {
-  // Prompts are intentionally omitted for this first release.
+export function registerAllPrompts(
+  server: McpServer,
+  instructions: string
+): void {
+  server.registerPrompt(
+    'get-help',
+    {
+      title: 'Get Help',
+      description: 'Return the server usage instructions.',
+    },
+    () => ({
+      description: 'Server usage instructions',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: instructions,
+          },
+        },
+      ],
+    })
+  );
 }

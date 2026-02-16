@@ -1,6 +1,29 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function registerAllResources(_server: McpServer): void {
-  // Resources are intentionally omitted for this first release.
+export function registerAllResources(
+  server: McpServer,
+  instructions: string
+): void {
+  server.registerResource(
+    'server-instructions',
+    'internal://instructions',
+    {
+      title: 'Server Instructions',
+      description: 'Guidance for using the MCP tools effectively.',
+      mimeType: 'text/markdown',
+      annotations: {
+        audience: ['assistant'],
+        priority: 0.8,
+      },
+    },
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'text/markdown',
+          text: instructions,
+        },
+      ],
+    })
+  );
 }

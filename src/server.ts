@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { findPackageJSON } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -70,15 +72,33 @@ function loadVersion(): string {
 
 const SERVER_VERSION = loadVersion();
 
+function loadInstructions(): string {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+
+  try {
+    return readFileSync(join(currentDir, 'instructions.md'), 'utf8');
+  } catch (error: unknown) {
+    console.error('[WARNING] Failed to load instructions.md:', error);
+    return '(Instructions failed to load)';
+  }
+}
+
+const SERVER_INSTRUCTIONS = loadInstructions();
+
 export function createServer(): McpServer {
-  const server = new McpServer({
-    name: 'code-review-analyst',
-    version: SERVER_VERSION,
-  });
+  const server = new McpServer(
+    {
+      name: 'code-review-analyst',
+      version: SERVER_VERSION,
+    },
+    {
+      instructions: SERVER_INSTRUCTIONS,
+    }
+  );
 
   registerAllTools(server);
-  registerAllResources(server);
-  registerAllPrompts(server);
+  registerAllResources(server, SERVER_INSTRUCTIONS);
+  registerAllPrompts(server, SERVER_INSTRUCTIONS);
 
   return server;
 }
