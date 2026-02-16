@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import type { z } from 'zod';
+
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
@@ -10,12 +12,7 @@ import { PatchSuggestionResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_PATCH_STYLE = 'balanced';
 
-interface PatchPromptInput {
-  diff: string;
-  findingTitle: string;
-  findingDetails: string;
-  patchStyle?: 'minimal' | 'balanced' | 'defensive';
-}
+type PatchPromptInput = z.infer<typeof SuggestPatchInputSchema>;
 
 function buildPatchPrompt(input: PatchPromptInput): PromptParts {
   const systemInstruction = [

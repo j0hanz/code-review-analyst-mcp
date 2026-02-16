@@ -62,7 +62,9 @@ export function registerStructuredToolTask<TInput extends object>(
   config: StructuredToolTaskConfig<TInput>
 ): void {
   const responseSchema = config.geminiSchema
-    ? (z.toJSONSchema(config.geminiSchema) as Record<string, unknown>)
+    ? stripJsonSchemaConstraints(
+        z.toJSONSchema(config.geminiSchema) as Record<string, unknown>
+      )
     : stripJsonSchemaConstraints(
         z.toJSONSchema(config.resultSchema) as Record<string, unknown>
       );

@@ -38,18 +38,17 @@ test('generateStructuredJson uses systemInstruction and default safetySettings',
   });
 
   assert.equal(generateContentMock.mock.calls.length, 1);
-  const callArgs = generateContentMock.mock.calls[0].arguments;
+  const firstCall = generateContentMock.mock.calls[0];
+  assert.ok(firstCall);
+  const callArgs = firstCall.arguments;
   const config = (callArgs[0] as { config: Record<string, unknown> }).config;
 
   assert.equal(config.systemInstruction, 'system instruction');
-  assert.equal(
-    (config.safetySettings as Array<{ threshold: string }>).length,
-    4
-  );
-  assert.equal(
-    (config.safetySettings as Array<{ threshold: string }>)[0].threshold,
-    'BLOCK_NONE'
-  );
+  const safetySettings = config.safetySettings as Array<{ threshold: string }>;
+  assert.equal(safetySettings.length, 4);
+  const firstSafetySetting = safetySettings[0];
+  assert.ok(firstSafetySetting);
+  assert.equal(firstSafetySetting.threshold, 'BLOCK_NONE');
 });
 
 test('generateStructuredJson uses env-configured safety threshold when provided', async () => {
@@ -67,12 +66,16 @@ test('generateStructuredJson uses env-configured safety threshold when provided'
       responseSchema: { type: 'object' },
     });
 
-    const callArgs = generateContentMock.mock.calls[0].arguments;
+    const firstCall = generateContentMock.mock.calls[0];
+    assert.ok(firstCall);
+    const callArgs = firstCall.arguments;
     const config = (callArgs[0] as { config: Record<string, unknown> }).config;
-    assert.equal(
-      (config.safetySettings as Array<{ threshold: string }>)[0].threshold,
-      'BLOCK_ONLY_HIGH'
-    );
+    const safetySettings = config.safetySettings as Array<{
+      threshold: string;
+    }>;
+    const firstSafetySetting = safetySettings[0];
+    assert.ok(firstSafetySetting);
+    assert.equal(firstSafetySetting.threshold, 'BLOCK_ONLY_HIGH');
   } finally {
     delete process.env.GEMINI_HARM_BLOCK_THRESHOLD;
   }
@@ -120,19 +123,20 @@ test('generateStructuredJson does not retry non-transient failures', async () =>
 });
 
 test('generateStructuredJson maps aborts to timeout errors', async () => {
-  const generateContentMock = setMockClient(
-    async (args: { config: { abortSignal: AbortSignal } }) => {
-      await new Promise<never>((_resolve, reject) => {
-        args.config.abortSignal.addEventListener(
-          'abort',
-          () => {
-            reject(new Error('aborted by signal'));
-          },
-          { once: true }
-        );
-      });
-    }
-  );
+  const generateContentMock = setMockClient(async (...callArgs: unknown[]) => {
+    const [request] = callArgs as [{ config: { abortSignal: AbortSignal } }];
+    assert.ok(request);
+
+    await new Promise<never>((_resolve, reject) => {
+      request.config.abortSignal.addEventListener(
+        'abort',
+        () => {
+          reject(new Error('aborted by signal'));
+        },
+        { once: true }
+      );
+    });
+  });
 
   await assert.rejects(
     () =>
@@ -225,12 +229,16 @@ test('generateStructuredJson throws after exhausting all retries', async () => {
 });
 
 test('generateStructuredJson rejects with cancellation error when external signal is aborted', async () => {
-  setMockClient(async (args: { config: { abortSignal: AbortSignal } }) => {
-    if (args.config.abortSignal.aborted) {
+  setMockClient(async (...callArgs: unknown[]) => {
+    const [request] = callArgs as [{ config: { abortSignal: AbortSignal } }];
+    assert.ok(request);
+
+    if (request.config.abortSignal.aborted) {
       throw new Error('aborted by signal');
     }
+
     await new Promise<never>((_resolve, reject) => {
-      args.config.abortSignal.addEventListener(
+      request.config.abortSignal.addEventListener(
         'abort',
         () => {
           reject(new Error('aborted by signal'));

@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import type { z } from 'zod';
+
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
@@ -11,13 +13,7 @@ import { ReviewDiffResultSchema } from '../schemas/outputs.js';
 const DEFAULT_MAX_FINDINGS = 10;
 const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
 
-interface ReviewPromptInput {
-  repository: string;
-  language?: string;
-  focusAreas?: string[];
-  maxFindings?: number;
-  diff: string;
-}
+type ReviewPromptInput = z.infer<typeof ReviewDiffInputSchema>;
 
 function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
   const focus = input.focusAreas?.length

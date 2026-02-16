@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import type { z } from 'zod';
+
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
@@ -10,10 +12,7 @@ import { RiskScoreResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_DEPLOYMENT_CRITICALITY = 'medium';
 
-interface RiskPromptInput {
-  diff: string;
-  deploymentCriticality?: 'low' | 'medium' | 'high';
-}
+type RiskPromptInput = z.infer<typeof RiskScoreInputSchema>;
 
 function buildRiskPrompt(input: RiskPromptInput): PromptParts {
   const systemInstruction = [
