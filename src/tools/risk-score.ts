@@ -6,10 +6,7 @@ import {
   registerStructuredToolTask,
 } from '../lib/tool-factory.js';
 import { RiskScoreInputSchema } from '../schemas/inputs.js';
-import {
-  RiskScoreGeminiSchema,
-  RiskScoreResultSchema,
-} from '../schemas/outputs.js';
+import { RiskScoreResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_DEPLOYMENT_CRITICALITY = 'medium';
 
@@ -45,7 +42,6 @@ export function registerRiskScoreTool(server: McpServer): void {
     inputSchema: RiskScoreInputSchema.shape,
     fullInputSchema: RiskScoreInputSchema,
     resultSchema: RiskScoreResultSchema,
-    geminiSchema: RiskScoreGeminiSchema,
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_RISK_SCORE',
     buildPrompt: buildRiskPrompt,

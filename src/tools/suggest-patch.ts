@@ -6,10 +6,7 @@ import {
   registerStructuredToolTask,
 } from '../lib/tool-factory.js';
 import { SuggestPatchInputSchema } from '../schemas/inputs.js';
-import {
-  PatchSuggestionGeminiSchema,
-  PatchSuggestionResultSchema,
-} from '../schemas/outputs.js';
+import { PatchSuggestionResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_PATCH_STYLE = 'balanced';
 
@@ -48,7 +45,6 @@ export function registerSuggestPatchTool(server: McpServer): void {
     inputSchema: SuggestPatchInputSchema.shape,
     fullInputSchema: SuggestPatchInputSchema,
     resultSchema: PatchSuggestionResultSchema,
-    geminiSchema: PatchSuggestionGeminiSchema,
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_SUGGEST_PATCH',
     buildPrompt: buildPatchPrompt,

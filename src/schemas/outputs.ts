@@ -96,33 +96,6 @@ export const ReviewDiffResultSchema = z.strictObject({
     .describe('Targeted tests to add before merge.'),
 });
 
-const ReviewFindingGeminiSchema = z.strictObject({
-  severity: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Severity for this issue.'),
-  file: z.string().describe('File path for the finding.'),
-  line: z
-    .number()
-    .nullable()
-    .describe('1-based line number when known, otherwise null.'),
-  title: z.string().describe('Short finding title.'),
-  explanation: z.string().describe('Why this issue matters.'),
-  recommendation: z.string().describe('Concrete fix recommendation.'),
-});
-
-export const ReviewDiffGeminiSchema = z.strictObject({
-  summary: z.string().describe('Short review summary.'),
-  overallRisk: z
-    .enum(['low', 'medium', 'high'])
-    .describe('Overall risk for merging this diff.'),
-  findings: z
-    .array(ReviewFindingGeminiSchema.describe('Single code review finding.'))
-    .describe('Ordered list of findings, highest severity first.'),
-  testsNeeded: z
-    .array(z.string().describe('Test recommendation to reduce risk.'))
-    .describe('Targeted tests to add before merge.'),
-});
-
 export const RiskScoreResultSchema = z.strictObject({
   score: z
     .number()
@@ -143,18 +116,6 @@ export const RiskScoreResultSchema = z.strictObject({
     )
     .min(OUTPUT_LIMITS.riskScoreResult.rationale.minItems)
     .max(OUTPUT_LIMITS.riskScoreResult.rationale.maxItems)
-    .describe('Evidence-based explanation for the score.'),
-});
-
-export const RiskScoreGeminiSchema = z.strictObject({
-  score: z
-    .number()
-    .describe('Deployment risk score, where 100 is highest risk.'),
-  bucket: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Risk bucket derived from score and criticality.'),
-  rationale: z
-    .array(z.string().describe('Reason that influenced the final score.'))
     .describe('Evidence-based explanation for the score.'),
 });
 
@@ -179,13 +140,5 @@ export const PatchSuggestionResultSchema = z.strictObject({
     )
     .min(OUTPUT_LIMITS.patchSuggestionResult.checklist.minItems)
     .max(OUTPUT_LIMITS.patchSuggestionResult.checklist.maxItems)
-    .describe('Post-change validation actions.'),
-});
-
-export const PatchSuggestionGeminiSchema = z.strictObject({
-  summary: z.string().describe('Short patch strategy summary.'),
-  patch: z.string().describe('Unified diff patch text.'),
-  validationChecklist: z
-    .array(z.string().describe('Validation step after applying patch.'))
     .describe('Post-change validation actions.'),
 });

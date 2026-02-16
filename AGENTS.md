@@ -10,8 +10,8 @@
   - **Frameworks:** `@modelcontextprotocol/sdk` v1.26+ (see `package.json` dependencies), stdio transport (see `src/index.ts`)
   - **Key Libraries:**
     - `@google/genai` ^1.41.0 — Gemini API client (see `package.json`)
-    - `zod` ^3.24.1 — Schema validation for inputs/outputs (see `package.json`)
-    - `zod-to-json-schema` ^3.25.1 — Converts Zod schemas to JSON Schema for Gemini response schema (see `package.json`)
+    - `zod` ^4.3.6 — Schema validation for inputs/outputs (see `package.json`)
+    - `zod-to-json-schema` ^3.25.1 — Used internally by MCP SDK; project uses Zod v4's built-in `z.toJSONSchema()` (see `src/lib/tool-factory.ts`)
     - `tsx` ^4.21.0 — TypeScript execution for tests (see `package.json` devDependencies)
 - **Architecture:** Single-package MCP server using a layered module structure: entrypoint → server → tools/resources/prompts → lib (shared adapters, schemas, helpers). One tool per file, one schema file for inputs and one for outputs, shared Gemini adapter with retry/timeout logic (see `src/` tree).
 
@@ -21,8 +21,8 @@
   - `src/index.ts` — CLI entrypoint with shebang, stdio transport wiring, signal shutdown handlers
   - `src/server.ts` — `McpServer` instance creation, capability declaration, version loading, instructions loading
   - `src/tools/` — Tool implementations, one file per tool (`review-diff.ts`, `risk-score.ts`, `suggest-patch.ts`), plus `index.ts` registrar
-  - `src/schemas/` — Zod schemas: `inputs.ts` (tool input validation), `outputs.ts` (tool result + Gemini response schemas)
-  - `src/lib/` — Shared infrastructure: `gemini.ts` (API adapter with retry/timeout), `tool-factory.ts` (generic tool-task registrar), `tool-response.ts` (response helpers), `errors.ts` (error extraction), `diff-budget.ts` (diff size guard), `types.ts` (shared type definitions)
+  - `src/schemas/` — Zod schemas: `inputs.ts` (tool input validation), `outputs.ts` (tool result schemas; Gemini schemas auto-derived via `stripJsonSchemaConstraints` in `tool-factory.ts`)
+  - `src/lib/` — Shared infrastructure: `gemini.ts` (API adapter with retry/timeout), `gemini-schema.ts` (JSON Schema constraint stripping for Gemini), `tool-factory.ts` (generic tool-task registrar), `tool-response.ts` (response helpers), `errors.ts` (error extraction), `diff-budget.ts` (diff size guard), `types.ts` (shared type definitions)
   - `src/resources/` — MCP resource registration (`internal://instructions`)
   - `src/prompts/` — MCP prompt registration (`get-help`)
   - `src/instructions.md` — Server usage guide bundled into `dist/` and served as a resource
@@ -58,6 +58,7 @@
 - **Error Handling:** Errors caught as `unknown`, extracted via `getErrorMessage()` helper (see `src/lib/errors.ts`). Tool errors returned via `createErrorToolResponse(code, message)` with `isError: true` (see `src/lib/tool-response.ts`). Uncaught exceptions avoided in tool handlers (see `src/lib/tool-factory.ts`).
 - **Patterns Observed:**
   - Generic tool-task factory pattern: all three tools use the same `registerStructuredToolTask<TInput>()` abstraction with config objects (observed in `src/tools/review-diff.ts`, `src/tools/risk-score.ts`, `src/tools/suggest-patch.ts`)
+  - Gemini response schemas are auto-derived from result schemas by stripping JSON Schema constraints (`stripJsonSchemaConstraints` in `src/lib/gemini-schema.ts`), eliminating manual duplication
   - Dual content output: every tool response includes both `content` (JSON text) and `structuredContent` for backward compatibility (observed in `src/lib/tool-response.ts`)
   - Gemini adapter with retry + exponential backoff + jitter + timeout + abort signal propagation (observed in `src/lib/gemini.ts`)
   - `maxOutputTokens` capped at 16,384 by default to prevent unbounded Gemini responses (observed in `src/lib/gemini.ts`)
@@ -74,6 +75,8 @@
 - Do not use default exports; use named exports only (see `eslint.config.mjs`, observed convention throughout `src/`).
 - Do not use `any` type — `@typescript-eslint/no-explicit-any: 'error'` is enforced (see `eslint.config.mjs`).
 - Do not use `z.object()`; use `z.strictObject()` for all schemas (see `.github/instructions/typescript-mcp-server.instructions.md`, observed in `src/schemas/`).
+- Do not use `z.ZodTypeAny`; use `z.ZodType` (without generics) — `ZodTypeAny` is deprecated in Zod v4 (see `src/lib/tool-factory.ts`).
+- Do not import `zod-to-json-schema` directly; use Zod v4's built-in `z.toJSONSchema()` instead (see `src/lib/tool-factory.ts`).
 - Do not disable or bypass existing lint/type rules without explicit approval (see `eslint.config.mjs`, `tsconfig.json`).
 - Do not change public tool APIs (`review_diff`, `risk_score`, `suggest_patch`) without updating `README.md`, `src/instructions.md`, schemas, and tests.
 - Do not omit `.js` extensions in local imports — required for NodeNext module resolution (see `tsconfig.json#module`, observed in all source files).
@@ -87,9 +90,10 @@
   - `tests/` — Primary test directory (see `scripts/tasks.mjs` test patterns: `tests/**/*.test.ts`)
   - `src/__tests__/` — Additional test location (pattern configured but directory currently empty)
 - **Test files:**
-  - `tests/review-diff.test.ts` — Tool registration smoke test, input schema rejection of unknown fields, output schema validation, Gemini schema compatibility, JSON Schema conversion
+  - `tests/review-diff.test.ts` — Tool registration smoke test, input schema rejection of unknown fields, output schema validation
   - `tests/risk-score.test.ts` — Risk score schema validation tests
   - `tests/suggest-patch.test.ts` — Patch suggestion schema validation tests
+  - `tests/gemini-schema.test.ts` — Unit + integration tests for `stripJsonSchemaConstraints` utility
   - `tests/server-discovery.test.ts` — Integration tests using `InMemoryTransport` client/server pairs: resource discoverability, resource content reading, prompt discoverability, prompt content
   - `tests/gemini.integration.test.ts` — Gemini adapter integration tests
 - **Approach:** Unit tests for schema validation (parse/safeParse), smoke tests for tool registration, integration tests for MCP server discovery using in-memory transport (no external services required for unit/integration tests). No mocking framework — tests use direct schema validation and `InMemoryTransport` from MCP SDK.

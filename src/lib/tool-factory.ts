@@ -2,11 +2,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import type { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
 import { getErrorMessage } from './errors.js';
+import { stripJsonSchemaConstraints } from './gemini-schema.js';
 import { generateStructuredJson } from './gemini.js';
 import {
   createErrorToolResponse,
@@ -34,13 +34,13 @@ export interface StructuredToolTaskConfig<
   inputSchema: ZodRawShapeCompat;
 
   /** Full Zod schema for runtime input re-validation (rejects unknown fields). */
-  fullInputSchema?: z.ZodTypeAny;
+  fullInputSchema?: z.ZodType;
 
   /** Zod schema for parsing and validating the Gemini structured response. */
-  resultSchema: z.ZodTypeAny;
+  resultSchema: z.ZodType;
 
   /** Optional Zod schema used specifically for Gemini response validation. */
-  geminiSchema?: z.ZodTypeAny;
+  geminiSchema?: z.ZodType;
 
   /** Stable error code returned on failure (e.g. 'E_REVIEW_DIFF'). */
   errorCode: string;
@@ -61,11 +61,11 @@ export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
   config: StructuredToolTaskConfig<TInput>
 ): void {
-  const responseSchema = zodToJsonSchema(
-    (config.geminiSchema ?? config.resultSchema) as Parameters<
-      typeof zodToJsonSchema
-    >[0]
-  ) as Record<string, unknown>;
+  const responseSchema = config.geminiSchema
+    ? (z.toJSONSchema(config.geminiSchema) as Record<string, unknown>)
+    : stripJsonSchemaConstraints(
+        z.toJSONSchema(config.resultSchema) as Record<string, unknown>
+      );
 
   server.experimental.tasks.registerToolTask(
     config.name,

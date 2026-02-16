@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { zodToJsonSchema } from 'zod-to-json-schema';
-
 import { SuggestPatchInputSchema } from '../src/schemas/inputs.js';
-import {
-  PatchSuggestionGeminiSchema,
-  PatchSuggestionResultSchema,
-} from '../src/schemas/outputs.js';
+import { PatchSuggestionResultSchema } from '../src/schemas/outputs.js';
 
 test('SuggestPatchInputSchema rejects unknown fields', () => {
   const parsed = SuggestPatchInputSchema.safeParse({
@@ -64,21 +59,4 @@ test('PatchSuggestionResultSchema rejects empty validationChecklist', () => {
   });
 
   assert.equal(parsed.success, false);
-});
-
-test('PatchSuggestionGeminiSchema accepts valid payload without bounds', () => {
-  const parsed = PatchSuggestionGeminiSchema.safeParse({
-    summary: 'x',
-    patch: 'y',
-    validationChecklist: ['z'],
-  });
-
-  assert.equal(parsed.success, true);
-});
-
-test('PatchSuggestionGeminiSchema converts to JSON Schema', () => {
-  const jsonSchema = zodToJsonSchema(PatchSuggestionGeminiSchema);
-
-  assert.equal(typeof jsonSchema, 'object');
-  assert.ok('properties' in jsonSchema);
 });

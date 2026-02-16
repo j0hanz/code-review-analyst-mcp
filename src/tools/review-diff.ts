@@ -6,10 +6,7 @@ import {
   registerStructuredToolTask,
 } from '../lib/tool-factory.js';
 import { ReviewDiffInputSchema } from '../schemas/inputs.js';
-import {
-  ReviewDiffGeminiSchema,
-  ReviewDiffResultSchema,
-} from '../schemas/outputs.js';
+import { ReviewDiffResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_MAX_FINDINGS = 10;
 const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
@@ -58,7 +55,6 @@ export function registerReviewDiffTool(server: McpServer): void {
     inputSchema: ReviewDiffInputSchema.shape,
     fullInputSchema: ReviewDiffInputSchema,
     resultSchema: ReviewDiffResultSchema,
-    geminiSchema: ReviewDiffGeminiSchema,
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_REVIEW_DIFF',
     buildPrompt: buildReviewPrompt,

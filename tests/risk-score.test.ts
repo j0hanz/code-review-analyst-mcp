@@ -1,14 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { zodToJsonSchema } from 'zod-to-json-schema';
-
 import { validateDiffBudget } from '../src/lib/diff-budget.js';
 import { RiskScoreInputSchema } from '../src/schemas/inputs.js';
-import {
-  RiskScoreGeminiSchema,
-  RiskScoreResultSchema,
-} from '../src/schemas/outputs.js';
+import { RiskScoreResultSchema } from '../src/schemas/outputs.js';
 
 test('RiskScoreInputSchema rejects unknown fields', () => {
   const parsed = RiskScoreInputSchema.safeParse({
@@ -57,23 +52,6 @@ test('RiskScoreResultSchema rejects score outside 0-100 range', () => {
   });
 
   assert.equal(parsed.success, false);
-});
-
-test('RiskScoreGeminiSchema accepts valid payload without bounds', () => {
-  const parsed = RiskScoreGeminiSchema.safeParse({
-    score: 200,
-    bucket: 'high',
-    rationale: ['x'],
-  });
-
-  assert.equal(parsed.success, true);
-});
-
-test('RiskScoreGeminiSchema converts to JSON Schema', () => {
-  const jsonSchema = zodToJsonSchema(RiskScoreGeminiSchema);
-
-  assert.equal(typeof jsonSchema, 'object');
-  assert.ok('properties' in jsonSchema);
 });
 
 test('validateDiffBudget formats diff budget error message with en-US separators', () => {
