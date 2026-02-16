@@ -1,8 +1,8 @@
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
 import { createServer } from '../src/server.js';
 

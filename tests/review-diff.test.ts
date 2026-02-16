@@ -1,7 +1,7 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { ReviewDiffInputSchema } from '../src/schemas/inputs.js';
 import { ReviewDiffResultSchema } from '../src/schemas/outputs.js';

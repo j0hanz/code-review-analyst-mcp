@@ -1,8 +1,7 @@
 #!/usr/bin/env node
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { parseArgs } from 'node:util';
-
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { getErrorMessage } from './lib/errors.js';
 import { createServer } from './server.js';
