@@ -1,7 +1,5 @@
 import { inspect } from 'node:util';
 
-import { createErrorToolResponse } from './tool-response.js';
-
 function isErrorWithMessage(error: unknown): error is { message: string } {
   return (
     typeof error === 'object' &&
@@ -21,12 +19,4 @@ export function getErrorMessage(error: unknown): string {
   }
 
   return inspect(error, { depth: 3, breakLength: 120 });
-}
-
-export function createErrorResponse(
-  code: string,
-  message: string,
-  result?: unknown
-): ReturnType<typeof createErrorToolResponse> {
-  return createErrorToolResponse(code, message, result);
 }

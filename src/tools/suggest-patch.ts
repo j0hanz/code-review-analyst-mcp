@@ -4,9 +4,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
-import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
+import { getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
-import { createToolResponse } from '../lib/tool-response.js';
+import {
+  createErrorToolResponse,
+  createToolResponse,
+} from '../lib/tool-response.js';
 import { SuggestPatchInputSchema } from '../schemas/inputs.js';
 import {
   DefaultOutputSchema,
@@ -24,18 +27,18 @@ interface PatchPromptInput {
 
 function getDiffBudgetErrorResponse(
   diff: string
-): ReturnType<typeof createErrorResponse> | undefined {
+): ReturnType<typeof createErrorToolResponse> | undefined {
   if (!exceedsDiffBudget(diff)) {
     return undefined;
   }
 
-  return createErrorResponse(
+  return createErrorToolResponse(
     'E_INPUT_TOO_LARGE',
     getDiffBudgetError(diff.length)
   );
 }
 
-export function buildPatchPrompt(input: PatchPromptInput): {
+function buildPatchPrompt(input: PatchPromptInput): {
   systemInstruction: string;
   prompt: string;
 } {
@@ -158,7 +161,7 @@ export function registerSuggestPatchTool(server: McpServer): void {
           await extra.taskStore.storeTaskResult(
             task.taskId,
             'failed',
-            createErrorResponse('E_SUGGEST_PATCH', getErrorMessage(error))
+            createErrorToolResponse('E_SUGGEST_PATCH', getErrorMessage(error))
           );
         }
 
