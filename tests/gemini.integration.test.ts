@@ -200,5 +200,5 @@ test('generateStructuredJson forwards progress updates', async () => {
     },
   });
 
-  assert.deepEqual(progress, [5, 20, 95, 100]);
+  assert.deepEqual(progress, [10, 20, 85, 90, 98]);
 });

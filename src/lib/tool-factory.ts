@@ -127,7 +127,7 @@ export function registerStructuredToolTask<TInput extends object>(
             );
           };
 
-          await notify(5, `Starting ${config.name}`);
+          await notify(2, `Starting ${config.name}`);
 
           const inputRecord = input as TInput;
           const { diff } = input as Record<string, unknown>;
@@ -158,13 +158,17 @@ export function registerStructuredToolTask<TInput extends object>(
             responseSchema,
             signal: extra.signal,
             onProgress: async (update) => {
+              const clamped = Math.max(0, Math.min(100, update.progress));
+              const remapped = Math.round(10 + clamped * 0.8);
               await notify(
-                update.progress,
+                Math.min(90, remapped),
                 update.message ?? `${config.name} in progress`
               );
             },
           });
           const parsed: unknown = config.resultSchema.parse(raw);
+
+          await notify(95, `Validating ${config.name} result`);
 
           await notify(100, `Completed ${config.name}`);
 

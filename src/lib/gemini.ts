@@ -271,9 +271,9 @@ export async function generateStructuredJson(
       let lastError: unknown;
 
       await notifyProgress(request, {
-        progress: 5,
+        progress: 10,
         total: 100,
-        message: 'Starting Gemini request',
+        message: 'Preparing request',
       });
 
       for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -282,7 +282,10 @@ export async function generateStructuredJson(
         await notifyProgress(request, {
           progress: Math.min(80, 20 + attempt * 20),
           total: 100,
-          message: `Sending request attempt ${attempt + 1}`,
+          message:
+            attempt === 0
+              ? 'Analyzing code changes'
+              : `Retrying analysis (attempt ${attempt + 1})`,
         });
 
         try {
@@ -303,7 +306,13 @@ export async function generateStructuredJson(
           }
 
           await notifyProgress(request, {
-            progress: 95,
+            progress: 85,
+            total: 100,
+            message: 'Response received',
+          });
+
+          await notifyProgress(request, {
+            progress: 90,
             total: 100,
             message: 'Parsing structured response',
           });
@@ -311,9 +320,9 @@ export async function generateStructuredJson(
           const parsed: unknown = JSON.parse(response.text);
 
           await notifyProgress(request, {
-            progress: 100,
+            progress: 98,
             total: 100,
-            message: 'Completed',
+            message: 'Finalizing',
           });
 
           return parsed;
