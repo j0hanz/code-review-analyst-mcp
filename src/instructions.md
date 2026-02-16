@@ -21,7 +21,18 @@ These instructions are available as a resource (internal://instructions) or prom
 ## RESOURCES & RESOURCE LINKS
 
 - `internal://instructions`: This document.
-- If a tool response includes a `resourceUri` or `resource_link`, call `resources/read` with the URI to fetch the full payload.
+
+---
+
+## PROGRESS & TASKS
+
+- Include `_meta.progressToken` in requests to receive `notifications/progress` updates during Gemini processing.
+- Task-augmented tool calls are supported for `review_diff`, `risk_score`, and `suggest_patch`:
+  - These tools declare `execution.taskSupport: "optional"` — invoke normally or as a task.
+  - Send `tools/call` with `task` to get a task id.
+  - Poll `tasks/get` and fetch results via `tasks/result`.
+  - Use `tasks/cancel` to abort.
+  - Task data is stored in memory and cleared on restart.
 
 ---
 
@@ -29,24 +40,24 @@ These instructions are available as a resource (internal://instructions) or prom
 
 ### WORKFLOW A: FULL PR REVIEW
 
-- Call `review_diff` with `diff` and `repository` to get structured findings and merge risk.
-- Use `focusAreas` to bias analysis toward the highest-priority concerns.
-- Use `maxFindings` to cap result volume when context windows are tight.
-  NOTE: Never pass oversized diffs. Pre-check against your own limits and handle `E_INPUT_TOO_LARGE`.
+1. Call `review_diff` with `diff` and `repository` to get structured findings and merge risk.
+2. Use `focusAreas` to bias analysis toward the highest-priority concerns.
+3. Use `maxFindings` to cap result volume when context windows are tight.
+   NOTE: Never pass oversized diffs. Pre-check against your own limits and handle `E_INPUT_TOO_LARGE`.
 
 ### WORKFLOW B: RELEASE GATE RISK CHECK
 
-- Call `risk_score` with `diff` to get a 0-100 score, bucket, and rationale.
-- Set `deploymentCriticality` when evaluating sensitive systems.
-- Use score and rationale to decide whether to block or require additional validation.
-  NOTE: Call `review_diff` first if you need file-level defect evidence.
+1. Call `risk_score` with `diff` to get a 0–100 score, bucket, and rationale.
+2. Set `deploymentCriticality` when evaluating sensitive systems.
+3. Use score and rationale to decide whether to block or require additional validation.
+   NOTE: Call `review_diff` first if you need file-level defect evidence.
 
 ### WORKFLOW C: PATCH FROM A SELECTED FINDING
 
-- Call `review_diff` to identify one concrete finding to fix.
-- Call `suggest_patch` with the same `diff`, plus `findingTitle` and `findingDetails` from that finding.
-- Use `patchStyle` (`minimal`, `balanced`, `defensive`) to control change breadth.
-  NOTE: Keep inputs scoped to one finding at a time to avoid mixed patch intent.
+1. Call `review_diff` to identify one concrete finding to fix.
+2. Call `suggest_patch` with the same `diff`, plus `findingTitle` and `findingDetails` from that finding.
+3. Use `patchStyle` (`minimal`, `balanced`, `defensive`) to control change breadth.
+   NOTE: Keep inputs scoped to one finding at a time to avoid mixed patch intent.
 
 ---
 
@@ -70,7 +81,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 `suggest_patch`
 
-- Purpose: Generate a focused unified diff patch for one selected finding.
+- Purpose: Generate a focused unified diff patch for one selected review finding.
 - Input: `patchStyle` defaults to `balanced`; requires both `findingTitle` and `findingDetails`.
 - Output: `ok/result/error` envelope; successful payload includes `summary`, `patch`, and `validationChecklist`.
 - Gotcha: Output is model-generated text and must be validated before application.
