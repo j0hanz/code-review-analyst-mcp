@@ -1,3 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { performance } from 'node:perf_hooks';
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { GoogleGenAI } from '@google/genai';
 
 import { getErrorMessage } from './errors.js';
@@ -6,8 +10,19 @@ import type { GeminiStructuredRequest } from './types.js';
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_TIMEOUT_MS = 45_000;
+const RETRY_DELAY_BASE_MS = 300;
 
 let cachedClient: GoogleGenAI | undefined;
+let requestSequence = 0;
+
+interface GeminiRequestContext {
+  requestId: string;
+  model: string;
+}
+
+const geminiContext = new AsyncLocalStorage<GeminiRequestContext>({
+  name: 'gemini_request',
+});
 
 function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
@@ -24,10 +39,21 @@ function getClient(): GoogleGenAI {
   return cachedClient;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+function nextRequestId(): string {
+  requestSequence += 1;
+  return `gemini-${requestSequence}`;
+}
+
+function logEvent(event: string, details: Record<string, unknown>): void {
+  const context = geminiContext.getStore();
+  console.error(
+    JSON.stringify({
+      event,
+      requestId: context?.requestId ?? null,
+      model: context?.model ?? null,
+      ...details,
+    })
+  );
 }
 
 function shouldRetry(error: unknown): boolean {
@@ -36,14 +62,10 @@ function shouldRetry(error: unknown): boolean {
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_resolve, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Gemini request timed out after ${timeoutMs}ms.`));
-      }, timeoutMs);
-    }),
-  ]);
+  const timeout = sleep(timeoutMs, undefined, { ref: false }).then(() => {
+    throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
+  });
+  return Promise.race([promise, timeout]);
 }
 
 export async function generateStructuredJson(
@@ -53,52 +75,62 @@ export async function generateStructuredJson(
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
 
-  let attempt = 0;
-  let lastError: unknown;
+  return geminiContext.run(
+    { requestId: nextRequestId(), model },
+    async (): Promise<unknown> => {
+      let attempt = 0;
+      let lastError: unknown;
 
-  while (attempt <= maxRetries) {
-    const startedAt = Date.now();
+      while (attempt <= maxRetries) {
+        const startedAt = performance.now();
 
-    try {
-      const response = await withTimeout(
-        getClient().models.generateContent({
-          model,
-          contents: request.prompt,
-          config: {
-            temperature: request.temperature ?? 0.2,
-            responseMimeType: 'application/json',
-            responseSchema: request.responseSchema,
-          },
-        }),
-        timeoutMs
-      );
+        try {
+          const response = await withTimeout(
+            getClient().models.generateContent({
+              model,
+              contents: request.prompt,
+              config: {
+                temperature: request.temperature ?? 0.2,
+                responseMimeType: 'application/json',
+                responseSchema: request.responseSchema,
+              },
+            }),
+            timeoutMs
+          );
 
-      console.error(
-        JSON.stringify({
-          event: 'gemini_call',
-          model,
-          latencyMs: Date.now() - startedAt,
-          usageMetadata: response.usageMetadata ?? null,
-        })
-      );
+          logEvent('gemini_call', {
+            attempt,
+            latencyMs: Math.round(performance.now() - startedAt),
+            usageMetadata: response.usageMetadata ?? null,
+          });
 
-      if (!response.text) {
-        throw new Error('Gemini returned an empty response body.');
+          if (!response.text) {
+            throw new Error('Gemini returned an empty response body.');
+          }
+
+          return JSON.parse(response.text);
+        } catch (error: unknown) {
+          lastError = error;
+          const retryable = shouldRetry(error);
+          if (attempt >= maxRetries || !retryable) {
+            break;
+          }
+
+          const delayMs = RETRY_DELAY_BASE_MS * 2 ** attempt;
+          logEvent('gemini_retry', {
+            attempt,
+            delayMs,
+            reason: getErrorMessage(error),
+          });
+
+          await sleep(delayMs, undefined, { ref: false });
+          attempt += 1;
+        }
       }
 
-      return JSON.parse(response.text);
-    } catch (error: unknown) {
-      lastError = error;
-      if (attempt >= maxRetries || !shouldRetry(error)) {
-        break;
-      }
-
-      await delay(300 * 2 ** attempt);
-      attempt += 1;
+      throw new Error(
+        `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`
+      );
     }
-  }
-
-  throw new Error(
-    `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`
   );
 }

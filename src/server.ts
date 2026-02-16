@@ -7,10 +7,7 @@ import { registerAllPrompts } from './prompts/index.js';
 import { registerAllResources } from './resources/index.js';
 import { registerAllTools } from './tools/index.js';
 
-function extractVersion(
-  packageJson: string,
-  packageJsonPath: string
-): string {
+function extractVersion(packageJson: string, packageJsonPath: string): string {
   let parsed: unknown;
 
   try {

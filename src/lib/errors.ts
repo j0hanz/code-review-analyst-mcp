@@ -1,3 +1,5 @@
+import { inspect } from 'node:util';
+
 import { createErrorToolResponse } from './tool-response.js';
 
 export function getErrorMessage(error: unknown): string {
@@ -5,7 +7,11 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return String(error);
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return inspect(error, { depth: 3, breakLength: 120 });
 }
 
 export function createErrorResponse(

@@ -1,21 +1,18 @@
 /* eslint-disable */
 import { spawn } from 'node:child_process';
-import {
-  chmod,
-  cp,
-  glob,
-  mkdir,
-  readdir,
-  rm,
-  stat,
-} from 'node:fs/promises';
+import { chmod, cp, glob, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { EOL } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = resolve(SCRIPT_DIR, '..');
+const fromProjectRoot = (...segments) => resolve(PROJECT_ROOT, ...segments);
 
 // --- Configuration Layer (Constants & Settings) ---
 const BIN = {
@@ -24,14 +21,14 @@ const BIN = {
 
 const CONFIG = {
   paths: {
-    dist: 'dist',
-    assets: 'assets',
-    instructions: 'src/instructions.md',
-    executable: 'dist/index.js',
+    dist: fromProjectRoot('dist'),
+    assets: fromProjectRoot('assets'),
+    instructions: fromProjectRoot('src', 'instructions.md'),
+    executable: fromProjectRoot('dist', 'index.js'),
     tsBuildInfo: [
-      '.tsbuildinfo',
-      'tsconfig.tsbuildinfo',
-      'tsconfig.build.tsbuildinfo',
+      fromProjectRoot('.tsbuildinfo'),
+      fromProjectRoot('tsconfig.tsbuildinfo'),
+      fromProjectRoot('tsconfig.build.tsbuildinfo'),
     ],
     get distAssets() {
       return join(this.dist, 'assets');
@@ -65,10 +62,7 @@ function isMissingPathError(error) {
     return false;
   }
 
-  return (
-    error.code === 'ENOENT' ||
-    error.code === 'ENOTDIR'
-  );
+  return error.code === 'ENOENT' || error.code === 'ENOTDIR';
 }
 
 // --- Infrastructure Layer (IO & System) ---
@@ -156,6 +150,7 @@ const System = {
         stdio: 'inherit',
         shell: false,
         windowsHide: true,
+        cwd: PROJECT_ROOT,
         ...(combinedSignal ? { signal: combinedSignal } : {}),
       });
 
@@ -270,10 +265,10 @@ const BuildTasks = {
 
 // --- Test Helpers (Pure Functions) ---
 async function detectTestLoader() {
-  if (await System.exists('node_modules/tsx')) {
+  if (await System.exists(fromProjectRoot('node_modules', 'tsx'))) {
     return ['--import', 'tsx/esm'];
   }
-  if (await System.exists('node_modules/ts-node')) {
+  if (await System.exists(fromProjectRoot('node_modules', 'ts-node'))) {
     return ['--loader', 'ts-node/esm'];
   }
   return [];
@@ -287,8 +282,8 @@ async function findTestPatterns() {
   const matches = await Promise.all(
     CONFIG.test.patterns.map(async (pattern) => {
       const files = [];
-      for await (const entry of glob(pattern)) {
-        files.push(entry);
+      for await (const entry of glob(pattern, { cwd: PROJECT_ROOT })) {
+        files.push(fromProjectRoot(entry));
       }
       return files;
     })
@@ -375,9 +370,10 @@ const Pipeline = {
     await Runner.runTask('Making executable', BuildTasks.makeExecutable);
 
     Logger.info(
-      `\n✨ Build completed in ${((performance.now() - start) / 1000).toFixed(
-        2
-      )}s`
+      `${EOL}✨ Build completed in ${(
+        (performance.now() - start) /
+        1000
+      ).toFixed(2)}s`
     );
   },
 };
