@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -9,7 +10,10 @@ import type { GenerateContentConfig } from '@google/genai';
 import { getErrorMessage } from './errors.js';
 import type { GeminiStructuredRequest } from './types.js';
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+function getDefaultModel(): string {
+  return process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+}
+
 const DEFAULT_MAX_RETRIES = 1;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const RETRY_DELAY_BASE_MS = 300;
@@ -25,7 +29,12 @@ const SAFETY_THRESHOLD_BY_NAME = {
 } as const;
 
 let cachedClient: GoogleGenAI | undefined;
-let requestSequence = 0;
+
+export const geminiEvents = new EventEmitter();
+
+geminiEvents.on('log', (payload: unknown) => {
+  console.error(JSON.stringify(payload));
+});
 
 interface GeminiRequestContext {
   requestId: string;
@@ -56,20 +65,17 @@ export function setClientForTesting(client: GoogleGenAI): void {
 }
 
 function nextRequestId(): string {
-  requestSequence += 1;
-  return `gemini-${requestSequence}`;
+  return randomUUID();
 }
 
 function logEvent(event: string, details: Record<string, unknown>): void {
   const context = geminiContext.getStore();
-  console.error(
-    JSON.stringify({
-      event,
-      requestId: context?.requestId ?? null,
-      model: context?.model ?? null,
-      ...details,
-    })
-  );
+  geminiEvents.emit('log', {
+    event,
+    requestId: context?.requestId ?? null,
+    model: context?.model ?? null,
+    ...details,
+  });
 }
 
 function getNestedError(error: unknown): Record<string, unknown> | undefined {
@@ -250,7 +256,7 @@ async function generateContentWithTimeout(
 export async function generateStructuredJson(
   request: GeminiStructuredRequest
 ): Promise<unknown> {
-  const model = request.model ?? DEFAULT_MODEL;
+  const model = request.model ?? getDefaultModel();
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
 

@@ -1,11 +1,37 @@
 #!/usr/bin/env node
 
+import { parseArgs } from 'node:util';
+
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { getErrorMessage } from './lib/errors.js';
 import { createServer } from './server.js';
 
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+
+function parseCommandLineArgs(): void {
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      model: {
+        type: 'string',
+        short: 'm',
+      },
+      'max-diff-chars': {
+        type: 'string',
+      },
+    },
+    strict: false,
+  });
+
+  if (typeof values.model === 'string') {
+    process.env.GEMINI_MODEL = values.model;
+  }
+
+  if (typeof values['max-diff-chars'] === 'string') {
+    process.env.MAX_DIFF_CHARS = values['max-diff-chars'];
+  }
+}
 
 let shuttingDown = false;
 
@@ -32,6 +58,7 @@ function registerShutdownHandlers(
 }
 
 async function main(): Promise<void> {
+  parseCommandLineArgs();
   const server = createServer();
   const transport = new StdioServerTransport();
 

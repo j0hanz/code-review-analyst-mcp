@@ -79,7 +79,9 @@ function loadInstructions(): string {
   try {
     return readFileSync(join(currentDir, 'instructions.md'), 'utf8');
   } catch (error: unknown) {
-    console.error('[WARNING] Failed to load instructions.md:', error);
+    process.emitWarning(
+      `Failed to load instructions.md: ${getErrorMessage(error)}`
+    );
     return '(Instructions failed to load)';
   }
 }

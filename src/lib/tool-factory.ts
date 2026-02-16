@@ -58,6 +58,12 @@ export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
   config: StructuredToolTaskConfig<TInput>
 ): void {
+  const responseSchema = zodToJsonSchema(
+    (config.geminiSchema ?? config.resultSchema) as Parameters<
+      typeof zodToJsonSchema
+    >[0]
+  ) as Record<string, unknown>;
+
   server.experimental.tasks.registerToolTask(
     config.name,
     {
@@ -95,12 +101,6 @@ export function registerStructuredToolTask<TInput extends object>(
           }
 
           const { systemInstruction, prompt } = config.buildPrompt(inputRecord);
-
-          const responseSchema = zodToJsonSchema(
-            (config.geminiSchema ?? config.resultSchema) as Parameters<
-              typeof zodToJsonSchema
-            >[0]
-          ) as Record<string, unknown>;
 
           const raw = await generateStructuredJson({
             systemInstruction,
