@@ -7,11 +7,11 @@ import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
 import { getErrorMessage } from './errors.js';
-import type { GeminiProgressUpdate, GeminiStructuredRequest } from './types.js';
+import type { GeminiStructuredRequest } from './types.js';
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
-const DEFAULT_MAX_RETRIES = 2;
-const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_MAX_RETRIES = 1;
+const DEFAULT_TIMEOUT_MS = 15_000;
 const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
@@ -160,17 +160,6 @@ function getRetryDelayMs(attempt: number): number {
   return Math.min(RETRY_DELAY_MAX_MS, boundedDelay + jitter);
 }
 
-async function notifyProgress(
-  request: GeminiStructuredRequest,
-  update: GeminiProgressUpdate
-): Promise<void> {
-  if (!request.onProgress) {
-    return;
-  }
-
-  await request.onProgress(update);
-}
-
 function getSafetyThreshold(): HarmBlockThreshold {
   const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
   if (!threshold) {
@@ -270,23 +259,8 @@ export async function generateStructuredJson(
     async (): Promise<unknown> => {
       let lastError: unknown;
 
-      await notifyProgress(request, {
-        progress: 10,
-        total: 100,
-        message: 'Preparing request',
-      });
-
       for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
         const startedAt = performance.now();
-
-        await notifyProgress(request, {
-          progress: Math.min(80, 20 + attempt * 20),
-          total: 100,
-          message:
-            attempt === 0
-              ? 'Analyzing code changes'
-              : `Retrying analysis (attempt ${attempt + 1})`,
-        });
 
         try {
           const response = await generateContentWithTimeout(
@@ -305,25 +279,7 @@ export async function generateStructuredJson(
             throw new Error('Gemini returned an empty response body.');
           }
 
-          await notifyProgress(request, {
-            progress: 85,
-            total: 100,
-            message: 'Response received',
-          });
-
-          await notifyProgress(request, {
-            progress: 90,
-            total: 100,
-            message: 'Parsing structured response',
-          });
-
           const parsed: unknown = JSON.parse(response.text);
-
-          await notifyProgress(request, {
-            progress: 98,
-            total: 100,
-            message: 'Finalizing',
-          });
 
           return parsed;
         } catch (error: unknown) {
@@ -338,12 +294,6 @@ export async function generateStructuredJson(
             attempt,
             delayMs,
             reason: getErrorMessage(error),
-          });
-
-          await notifyProgress(request, {
-            progress: Math.min(90, 30 + attempt * 20),
-            total: 100,
-            message: `Retrying after failure on attempt ${attempt + 1}`,
           });
 
           await sleep(delayMs, undefined, { ref: false });

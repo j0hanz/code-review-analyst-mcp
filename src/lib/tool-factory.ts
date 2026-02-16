@@ -60,30 +60,6 @@ function getDiffBudgetErrorResponse(
   );
 }
 
-async function sendProgress(
-  progressToken: string | number | undefined,
-  sendNotification: (notification: {
-    method: string;
-    params: Record<string, unknown>;
-  }) => Promise<void>,
-  progress: number,
-  message: string
-): Promise<void> {
-  if (typeof progressToken !== 'string' && typeof progressToken !== 'number') {
-    return;
-  }
-
-  await sendNotification({
-    method: 'notifications/progress',
-    params: {
-      progressToken,
-      progress,
-      total: 100,
-      message,
-    },
-  });
-}
-
 export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
   config: StructuredToolTaskConfig<TInput>
@@ -110,25 +86,6 @@ export function registerStructuredToolTask<TInput extends object>(
         });
 
         try {
-          const progressToken = extra._meta?.progressToken;
-          const notify = async (
-            progress: number,
-            message: string
-          ): Promise<void> => {
-            await sendProgress(
-              progressToken,
-              async (notification) => {
-                await extra.sendNotification(
-                  notification as Parameters<typeof extra.sendNotification>[0]
-                );
-              },
-              progress,
-              message
-            );
-          };
-
-          await notify(2, `Starting ${config.name}`);
-
           const inputRecord = input as TInput;
           const { diff } = input as Record<string, unknown>;
 
@@ -157,20 +114,9 @@ export function registerStructuredToolTask<TInput extends object>(
             prompt,
             responseSchema,
             signal: extra.signal,
-            onProgress: async (update) => {
-              const clamped = Math.max(0, Math.min(100, update.progress));
-              const remapped = Math.round(10 + clamped * 0.8);
-              await notify(
-                Math.min(90, remapped),
-                update.message ?? `${config.name} in progress`
-              );
-            },
           });
+
           const parsed: unknown = config.resultSchema.parse(raw);
-
-          await notify(95, `Validating ${config.name} result`);
-
-          await notify(100, `Completed ${config.name}`);
 
           await extra.taskStore.storeTaskResult(
             task.taskId,

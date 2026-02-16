@@ -182,23 +182,3 @@ test('generateStructuredJson fails on malformed JSON output', async () => {
     /Gemini request failed after 1 attempts:/
   );
 });
-
-test('generateStructuredJson forwards progress updates', async () => {
-  setMockClient(async () => {
-    return {
-      text: JSON.stringify({ summary: 'ok' }),
-    };
-  });
-
-  const progress: number[] = [];
-
-  await generateStructuredJson({
-    prompt: 'user prompt',
-    responseSchema: { type: 'object' },
-    onProgress: (update) => {
-      progress.push(update.progress);
-    },
-  });
-
-  assert.deepEqual(progress, [10, 20, 85, 90, 98]);
-});
