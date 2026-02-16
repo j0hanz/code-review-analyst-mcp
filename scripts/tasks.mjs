@@ -1,7 +1,6 @@
 /* eslint-disable */
 import { spawn } from 'node:child_process';
 import {
-  access,
   chmod,
   cp,
   glob,
@@ -58,6 +57,19 @@ const TASK_TIMEOUT_MS =
   Number.isFinite(DEFAULT_TASK_TIMEOUT_MS) && DEFAULT_TASK_TIMEOUT_MS > 0
     ? DEFAULT_TASK_TIMEOUT_MS
     : undefined;
+const LOGO_FILE_PATTERN = /^logo\.(svg|png|jpe?g)$/i;
+const MAX_ICON_BYTES = 2 * 1024 * 1024;
+
+function isMissingPathError(error) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  return (
+    error.code === 'ENOENT' ||
+    error.code === 'ENOTDIR'
+  );
+}
 
 // --- Infrastructure Layer (IO & System) ---
 const Logger = {
@@ -72,21 +84,24 @@ const Logger = {
 };
 
 const System = {
-  async exists(path) {
+  async statIfExists(path) {
     try {
-      await access(path);
-      return true;
-    } catch {
-      return false;
+      return await stat(path);
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        return undefined;
+      }
+      throw error;
     }
   },
+
+  async exists(path) {
+    const stats = await this.statIfExists(path);
+    return stats !== undefined;
+  },
   async isDirectory(path) {
-    try {
-      const stats = await stat(path);
-      return stats.isDirectory();
-    } catch {
-      return false;
-    }
+    const stats = await this.statIfExists(path);
+    return stats?.isDirectory() ?? false;
   },
 
   async remove(paths) {
@@ -221,15 +236,21 @@ const BuildTasks = {
 
     if (await System.isDirectory(CONFIG.paths.assets)) {
       try {
-        const files = await readdir(CONFIG.paths.assets);
-        for (const file of files) {
-          if (/^logo\.(svg|png|jpe?g)$/i.test(file)) {
-            const stats = await stat(join(CONFIG.paths.assets, file));
-            if (stats.size >= 2 * 1024 * 1024) {
-              Logger.info(
-                `[WARNING] Icon ${file} is size ${stats.size} bytes (>= 2MB). Large icons may be rejected by clients.`
-              );
-            }
+        const entries = await readdir(CONFIG.paths.assets, {
+          withFileTypes: true,
+        });
+
+        for (const entry of entries) {
+          if (!entry.isFile() || !LOGO_FILE_PATTERN.test(entry.name)) {
+            continue;
+          }
+
+          const iconPath = join(CONFIG.paths.assets, entry.name);
+          const iconStats = await System.statIfExists(iconPath);
+          if (iconStats && iconStats.size >= MAX_ICON_BYTES) {
+            Logger.info(
+              `[WARNING] Icon ${entry.name} is size ${iconStats.size} bytes (>= 2MB). Large icons may be rejected by clients.`
+            );
           }
         }
       } catch {
