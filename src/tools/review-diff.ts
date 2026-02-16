@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
 import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
 import { createToolResponse } from '../lib/tool-response.js';
@@ -12,6 +13,7 @@ import {
 function getReviewSchema(maxFindings: number): Record<string, unknown> {
   return {
     type: 'object',
+    additionalProperties: false,
     properties: {
       summary: { type: 'string' },
       overallRisk: { type: 'string', enum: ['low', 'medium', 'high'] },
@@ -20,6 +22,7 @@ function getReviewSchema(maxFindings: number): Record<string, unknown> {
         maxItems: maxFindings,
         items: {
           type: 'object',
+          additionalProperties: false,
           properties: {
             severity: {
               type: 'string',
@@ -92,6 +95,13 @@ export function registerReviewDiffTool(server: McpServer): void {
     },
     async (input) => {
       try {
+        if (exceedsDiffBudget(input.diff)) {
+          return createErrorResponse(
+            'E_INPUT_TOO_LARGE',
+            getDiffBudgetError(input.diff.length)
+          );
+        }
+
         const maxFindings = input.maxFindings ?? 10;
         const prompt = buildReviewPrompt({
           repository: input.repository,

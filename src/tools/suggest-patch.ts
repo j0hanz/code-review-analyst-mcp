@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
 import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
 import { createToolResponse } from '../lib/tool-response.js';
@@ -11,6 +12,7 @@ import {
 
 const SuggestPatchJsonSchema: Record<string, unknown> = {
   type: 'object',
+  additionalProperties: false,
   properties: {
     summary: { type: 'string' },
     patch: { type: 'string' },
@@ -57,6 +59,13 @@ export function registerSuggestPatchTool(server: McpServer): void {
     },
     async (input) => {
       try {
+        if (exceedsDiffBudget(input.diff)) {
+          return createErrorResponse(
+            'E_INPUT_TOO_LARGE',
+            getDiffBudgetError(input.diff.length)
+          );
+        }
+
         const raw = await generateStructuredJson({
           prompt: buildPatchPrompt({
             diff: input.diff,

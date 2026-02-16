@@ -61,11 +61,37 @@ function shouldRetry(error: unknown): boolean {
   return /(429|500|502|503|504|rate limit|unavailable|timeout)/i.test(message);
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  const timeout = sleep(timeoutMs, undefined, { ref: false }).then(() => {
-    throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
-  });
-  return Promise.race([promise, timeout]);
+async function generateContentWithTimeout(
+  request: GeminiStructuredRequest,
+  model: string,
+  timeoutMs: number
+): Promise<Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  timeout.unref();
+
+  try {
+    return await getClient().models.generateContent({
+      model,
+      contents: request.prompt,
+      config: {
+        temperature: request.temperature ?? 0.2,
+        responseMimeType: 'application/json',
+        responseSchema: request.responseSchema,
+        abortSignal: controller.signal,
+      },
+    });
+  } catch (error: unknown) {
+    if (controller.signal.aborted) {
+      throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function generateStructuredJson(
@@ -85,16 +111,9 @@ export async function generateStructuredJson(
         const startedAt = performance.now();
 
         try {
-          const response = await withTimeout(
-            getClient().models.generateContent({
-              model,
-              contents: request.prompt,
-              config: {
-                temperature: request.temperature ?? 0.2,
-                responseMimeType: 'application/json',
-                responseSchema: request.responseSchema,
-              },
-            }),
+          const response = await generateContentWithTimeout(
+            request,
+            model,
             timeoutMs
           );
 
