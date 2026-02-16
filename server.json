@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.j0hanz/code-review-analyst",
+  "title": "Code Review Analyst",
+  "description": "Gemini-powered MCP server for code review analysis.",
+  "repository": {
+    "url": "https://github.com/j0hanz/code-review-analyst-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/j0hanz/code-review-analyst-mcp#readme",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@j0hanz/code-review-analyst-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "packageArguments": []
+    }
+  ]
+}
