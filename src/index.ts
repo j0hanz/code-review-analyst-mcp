@@ -7,9 +7,16 @@ import { createServer } from './server.js';
 
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
+let shuttingDown = false;
+
 async function shutdown(
   server: ReturnType<typeof createServer>
 ): Promise<void> {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
   await server.close();
   process.exit(0);
 }

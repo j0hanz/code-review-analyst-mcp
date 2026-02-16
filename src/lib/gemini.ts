@@ -233,13 +233,21 @@ async function generateContentWithTimeout(
   }, timeoutMs);
   timeout.unref();
 
+  const signal = request.signal
+    ? AbortSignal.any([controller.signal, request.signal])
+    : controller.signal;
+
   try {
     return await getClient().models.generateContent({
       model,
       contents: request.prompt,
-      config: buildGenerationConfig(request, controller.signal),
+      config: buildGenerationConfig(request, signal),
     });
   } catch (error: unknown) {
+    if (request.signal?.aborted) {
+      throw new Error('Gemini request was cancelled.');
+    }
+
     if (controller.signal.aborted) {
       throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
     }

@@ -11,6 +11,7 @@ interface GeminiStructuredRequestOptions {
   maxRetries?: number;
   timeoutMs?: number;
   temperature?: number;
+  signal?: AbortSignal;
 }
 
 export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {
