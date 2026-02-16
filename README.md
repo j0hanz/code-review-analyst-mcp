@@ -10,6 +10,7 @@ Gemini-powered MCP server for pull request analysis with three tools:
 
 - Node.js `>=24`
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- Optional: `GEMINI_HARM_BLOCK_THRESHOLD` (`BLOCK_NONE`, `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE`)
 
 ## Install
 
@@ -84,3 +85,4 @@ npm run inspector
 - This server uses strict JSON schema outputs for deterministic automation.
 - Tool outputs include both `structuredContent` and JSON string `content`.
 - Gemini usage metadata and latency are logged to `stderr` for observability.
+- Safety thresholds default to `BLOCK_NONE` and can be overridden with `GEMINI_HARM_BLOCK_THRESHOLD`.

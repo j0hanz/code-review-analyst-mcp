@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomInt } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -12,6 +13,16 @@ const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_TIMEOUT_MS = 45_000;
 const RETRY_DELAY_BASE_MS = 300;
+const RETRY_DELAY_MAX_MS = 5_000;
+const RETRY_JITTER_RATIO = 0.2;
+const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
+
+const SAFETY_THRESHOLD_BY_NAME = {
+  BLOCK_NONE: HarmBlockThreshold.BLOCK_NONE,
+  BLOCK_ONLY_HIGH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  BLOCK_MEDIUM_AND_ABOVE: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+  BLOCK_LOW_AND_ABOVE: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+} as const;
 
 let cachedClient: GoogleGenAI | undefined;
 let requestSequence = 0;
@@ -61,13 +72,92 @@ function logEvent(event: string, details: Record<string, unknown>): void {
   );
 }
 
+function getNestedError(error: unknown): Record<string, unknown> | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const record = error as Record<string, unknown>;
+  const nested = record.error;
+  if (!nested || typeof nested !== 'object') {
+    return record;
+  }
+
+  return nested as Record<string, unknown>;
+}
+
+function getNumericErrorCode(error: unknown): number | undefined {
+  const record = getNestedError(error);
+  if (!record) {
+    return undefined;
+  }
+
+  const candidates = [record.status, record.statusCode, record.code];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate;
+    }
+
+    if (typeof candidate === 'string' && /^\d+$/.test(candidate)) {
+      return Number.parseInt(candidate, 10);
+    }
+  }
+
+  return undefined;
+}
+
+function getTransientErrorCode(error: unknown): string | undefined {
+  const record = getNestedError(error);
+  if (!record) {
+    return undefined;
+  }
+
+  const candidates = [record.code, record.status, record.statusText];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim().toUpperCase();
+    }
+  }
+
+  return undefined;
+}
+
 function shouldRetry(error: unknown): boolean {
+  const numericCode = getNumericErrorCode(error);
+  if (
+    numericCode === 429 ||
+    numericCode === 500 ||
+    numericCode === 502 ||
+    numericCode === 503 ||
+    numericCode === 504
+  ) {
+    return true;
+  }
+
+  const transientCode = getTransientErrorCode(error);
+  if (
+    transientCode === 'RESOURCE_EXHAUSTED' ||
+    transientCode === 'UNAVAILABLE' ||
+    transientCode === 'DEADLINE_EXCEEDED' ||
+    transientCode === 'INTERNAL' ||
+    transientCode === 'ABORTED'
+  ) {
+    return true;
+  }
+
   const message = getErrorMessage(error);
   return /(429|500|502|503|504|rate limit|unavailable|timeout)/i.test(message);
 }
 
 function getRetryDelayMs(attempt: number): number {
-  return RETRY_DELAY_BASE_MS * 2 ** attempt;
+  const exponentialDelay = RETRY_DELAY_BASE_MS * 2 ** attempt;
+  const boundedDelay = Math.min(RETRY_DELAY_MAX_MS, exponentialDelay);
+  const jitterWindow = Math.max(
+    1,
+    Math.floor(boundedDelay * RETRY_JITTER_RATIO)
+  );
+  const jitter = randomInt(0, jitterWindow);
+  return Math.min(RETRY_DELAY_MAX_MS, boundedDelay + jitter);
 }
 
 async function notifyProgress(
@@ -81,10 +171,28 @@ async function notifyProgress(
   await request.onProgress(update);
 }
 
+function getSafetyThreshold(): HarmBlockThreshold {
+  const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
+  if (!threshold) {
+    return DEFAULT_SAFETY_THRESHOLD;
+  }
+
+  const normalizedThreshold = threshold.trim().toUpperCase();
+  if (normalizedThreshold in SAFETY_THRESHOLD_BY_NAME) {
+    return SAFETY_THRESHOLD_BY_NAME[
+      normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
+    ];
+  }
+
+  return DEFAULT_SAFETY_THRESHOLD;
+}
+
 function buildGenerationConfig(
   request: GeminiStructuredRequest,
   abortSignal: AbortSignal
 ): GenerateContentConfig {
+  const safetyThreshold = getSafetyThreshold();
+
   return {
     temperature: request.temperature ?? 0.2,
     responseMimeType: 'application/json',
@@ -95,19 +203,19 @@ function buildGenerationConfig(
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        threshold: HarmBlockThreshold.BLOCK_NONE,
+        threshold: safetyThreshold,
       },
       {
         category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold: HarmBlockThreshold.BLOCK_NONE,
+        threshold: safetyThreshold,
       },
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold: HarmBlockThreshold.BLOCK_NONE,
+        threshold: safetyThreshold,
       },
       {
         category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-        threshold: HarmBlockThreshold.BLOCK_NONE,
+        threshold: safetyThreshold,
       },
     ],
     abortSignal,
