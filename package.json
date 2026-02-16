@@ -1,11 +1,32 @@
 {
   "name": "code-review-analyst-mcp",
   "version": "0.1.0",
+  "mcpName": "io.github.j0hanz/code-review-analyst",
   "description": "Gemini-powered MCP server for code review analysis.",
   "type": "module",
-  "bin": {
-    "code-review-analyst-mcp": "dist/src/index.js"
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
+  "bin": {
+    "code-review-analyst-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "author": "j0hanz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/j0hanz/code-review-analyst-mcp.git"
+  },
+  "homepage": "https://github.com/j0hanz/code-review-analyst-mcp#readme",
   "engines": {
     "node": ">=24"
   },
