@@ -16,6 +16,7 @@ function getDefaultModel(): string {
 
 const DEFAULT_MAX_RETRIES = 1;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
 const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
@@ -158,7 +159,9 @@ function shouldRetry(error: unknown): boolean {
   }
 
   const message = getErrorMessage(error);
-  return /(429|500|502|503|504|rate limit|unavailable|timeout)/i.test(message);
+  return /(429|500|502|503|504|rate limit|unavailable|timeout|invalid json)/i.test(
+    message
+  );
 }
 
 function getRetryDelayMs(attempt: number): number {
@@ -196,6 +199,7 @@ function buildGenerationConfig(
 
   return {
     temperature: request.temperature ?? 0.2,
+    maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
     ...(request.systemInstruction
@@ -320,6 +324,11 @@ export async function generateStructuredJson(
           await sleep(delayMs, undefined, { ref: false });
         }
       }
+
+      logEvent('gemini_failure', {
+        error: getErrorMessage(lastError),
+        attempts: maxRetries + 1,
+      });
 
       throw new Error(
         `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`

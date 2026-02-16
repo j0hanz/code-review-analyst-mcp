@@ -4,6 +4,7 @@ import { mock, test } from 'node:test';
 import { GoogleGenAI } from '@google/genai';
 
 import {
+  geminiEvents,
   generateStructuredJson,
   setClientForTesting,
 } from '../src/lib/gemini.js';
@@ -181,4 +182,129 @@ test('generateStructuredJson fails on malformed JSON output', async () => {
       }),
     /Gemini request failed after 1 attempts:/
   );
+});
+
+test('generateStructuredJson retries on 429 rate limit and succeeds', async () => {
+  let attempt = 0;
+  const generateContentMock = setMockClient(async () => {
+    attempt += 1;
+    if (attempt === 1) {
+      throw { status: 429, message: 'rate limited' };
+    }
+    return {
+      text: JSON.stringify({ summary: 'recovered from 429' }),
+    };
+  });
+
+  const result = await generateStructuredJson({
+    prompt: 'user prompt',
+    responseSchema: { type: 'object' },
+    maxRetries: 1,
+  });
+
+  assert.equal(generateContentMock.mock.calls.length, 2);
+  assert.deepEqual(result, { summary: 'recovered from 429' });
+});
+
+test('generateStructuredJson throws after exhausting all retries', async () => {
+  const generateContentMock = setMockClient(async () => {
+    throw { status: 503, message: 'service unavailable' };
+  });
+
+  await assert.rejects(
+    () =>
+      generateStructuredJson({
+        prompt: 'user prompt',
+        responseSchema: { type: 'object' },
+        maxRetries: 2,
+      }),
+    /Gemini request failed after 3 attempts: service unavailable/
+  );
+
+  assert.equal(generateContentMock.mock.calls.length, 3);
+});
+
+test('generateStructuredJson rejects with cancellation error when external signal is aborted', async () => {
+  setMockClient(async (args: { config: { abortSignal: AbortSignal } }) => {
+    if (args.config.abortSignal.aborted) {
+      throw new Error('aborted by signal');
+    }
+    await new Promise<never>((_resolve, reject) => {
+      args.config.abortSignal.addEventListener(
+        'abort',
+        () => {
+          reject(new Error('aborted by signal'));
+        },
+        { once: true }
+      );
+    });
+  });
+
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () =>
+      generateStructuredJson({
+        prompt: 'user prompt',
+        responseSchema: { type: 'object' },
+        maxRetries: 0,
+        signal: controller.signal,
+      }),
+    /Gemini request was cancelled/
+  );
+});
+
+test('generateStructuredJson emits gemini_failure event when all retries exhausted', async () => {
+  const events: unknown[] = [];
+  const listener = (payload: unknown): void => {
+    events.push(payload);
+  };
+  geminiEvents.on('log', listener);
+
+  setMockClient(async () => {
+    throw { status: 503, message: 'service unavailable' };
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        generateStructuredJson({
+          prompt: 'user prompt',
+          responseSchema: { type: 'object' },
+          maxRetries: 1,
+        }),
+      /Gemini request failed after 2 attempts/
+    );
+
+    const failureEvents = events.filter(
+      (e) => (e as Record<string, unknown>).event === 'gemini_failure'
+    );
+    assert.equal(failureEvents.length, 1);
+    const failure = failureEvents[0] as Record<string, unknown>;
+    assert.equal(failure.attempts, 2);
+    assert.ok(typeof failure.error === 'string');
+  } finally {
+    geminiEvents.removeListener('log', listener);
+  }
+});
+
+test('generateStructuredJson retries on invalid JSON and succeeds on second attempt', async () => {
+  let attempt = 0;
+  const generateContentMock = setMockClient(async () => {
+    attempt += 1;
+    if (attempt === 1) {
+      return { text: 'not-valid-json{{{' };
+    }
+    return { text: JSON.stringify({ summary: 'repaired' }) };
+  });
+
+  const result = await generateStructuredJson({
+    prompt: 'user prompt',
+    responseSchema: { type: 'object' },
+    maxRetries: 1,
+  });
+
+  assert.equal(generateContentMock.mock.calls.length, 2);
+  assert.deepEqual(result, { summary: 'repaired' });
 });

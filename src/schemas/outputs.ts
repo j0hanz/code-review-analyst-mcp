@@ -146,6 +146,18 @@ export const RiskScoreResultSchema = z.strictObject({
     .describe('Evidence-based explanation for the score.'),
 });
 
+export const RiskScoreGeminiSchema = z.strictObject({
+  score: z
+    .number()
+    .describe('Deployment risk score, where 100 is highest risk.'),
+  bucket: z
+    .enum(['low', 'medium', 'high', 'critical'])
+    .describe('Risk bucket derived from score and criticality.'),
+  rationale: z
+    .array(z.string().describe('Reason that influenced the final score.'))
+    .describe('Evidence-based explanation for the score.'),
+});
+
 export const PatchSuggestionResultSchema = z.strictObject({
   summary: z
     .string()
@@ -167,5 +179,13 @@ export const PatchSuggestionResultSchema = z.strictObject({
     )
     .min(OUTPUT_LIMITS.patchSuggestionResult.checklist.minItems)
     .max(OUTPUT_LIMITS.patchSuggestionResult.checklist.maxItems)
+    .describe('Post-change validation actions.'),
+});
+
+export const PatchSuggestionGeminiSchema = z.strictObject({
+  summary: z.string().describe('Short patch strategy summary.'),
+  patch: z.string().describe('Unified diff patch text.'),
+  validationChecklist: z
+    .array(z.string().describe('Validation step after applying patch.'))
     .describe('Post-change validation actions.'),
 });

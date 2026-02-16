@@ -5,6 +5,7 @@ interface GeminiStructuredRequestOptions {
   maxRetries?: number;
   timeoutMs?: number;
   temperature?: number;
+  maxOutputTokens?: number;
   signal?: AbortSignal;
 }
 

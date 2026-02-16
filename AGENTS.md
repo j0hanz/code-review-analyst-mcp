@@ -60,6 +60,7 @@
   - Generic tool-task factory pattern: all three tools use the same `registerStructuredToolTask<TInput>()` abstraction with config objects (observed in `src/tools/review-diff.ts`, `src/tools/risk-score.ts`, `src/tools/suggest-patch.ts`)
   - Dual content output: every tool response includes both `content` (JSON text) and `structuredContent` for backward compatibility (observed in `src/lib/tool-response.ts`)
   - Gemini adapter with retry + exponential backoff + jitter + timeout + abort signal propagation (observed in `src/lib/gemini.ts`)
+  - `maxOutputTokens` capped at 16,384 by default to prevent unbounded Gemini responses (observed in `src/lib/gemini.ts`)
   - AsyncLocalStorage for per-request context (request ID, model) in Gemini calls (observed in `src/lib/gemini.ts`)
   - Diff budget guard applied before Gemini calls via `validateDiffBudget()` (observed in `src/lib/diff-budget.ts`, used in all tools)
 - **Formatting:** Prettier with: single quotes, semicolons, trailing commas (es5), 2-space indent, 80 char print width, LF line endings (see `.prettierrc`).
