@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
 import { getErrorMessage } from './errors.js';
@@ -40,6 +40,10 @@ function getClient(): GoogleGenAI {
   return cachedClient;
 }
 
+export function setClientForTesting(client: GoogleGenAI): void {
+  cachedClient = client;
+}
+
 function nextRequestId(): string {
   requestSequence += 1;
   return `gemini-${requestSequence}`;
@@ -74,6 +78,27 @@ function buildGenerationConfig(
     temperature: request.temperature ?? 0.2,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
+    ...(request.systemInstruction
+      ? { systemInstruction: request.systemInstruction }
+      : {}),
+    safetySettings: [
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+    ],
     abortSignal,
   };
 }

@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
 import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
@@ -34,57 +36,20 @@ function getDiffBudgetErrorResponse(
   );
 }
 
-function getReviewSchema(maxFindings: number): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      summary: { type: 'string' },
-      overallRisk: { type: 'string', enum: ['low', 'medium', 'high'] },
-      findings: {
-        type: 'array',
-        maxItems: maxFindings,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            severity: {
-              type: 'string',
-              enum: ['low', 'medium', 'high', 'critical'],
-            },
-            file: { type: 'string' },
-            line: { type: ['integer', 'null'] },
-            title: { type: 'string' },
-            explanation: { type: 'string' },
-            recommendation: { type: 'string' },
-          },
-          required: [
-            'severity',
-            'file',
-            'line',
-            'title',
-            'explanation',
-            'recommendation',
-          ],
-        },
-      },
-      testsNeeded: {
-        type: 'array',
-        items: { type: 'string' },
-      },
-    },
-    required: ['summary', 'overallRisk', 'findings', 'testsNeeded'],
-  };
-}
-
-export function buildReviewPrompt(input: ReviewPromptInput): string {
+export function buildReviewPrompt(input: ReviewPromptInput): {
+  systemInstruction: string;
+  prompt: string;
+} {
   const focus = input.focusAreas?.length
     ? input.focusAreas.join(', ')
     : DEFAULT_FOCUS_AREAS;
 
-  return [
+  const systemInstruction = [
     'You are a senior staff engineer performing pull request review.',
     'Return strict JSON only with no markdown fences.',
+  ].join('\n');
+
+  const prompt = [
     `Repository: ${input.repository}`,
     `Primary language: ${input.language ?? 'not specified'}`,
     `Focus areas: ${focus}`,
@@ -95,6 +60,8 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     'Unified diff:',
     input.diff,
   ].join('\n');
+
+  return { systemInstruction, prompt };
 }
 
 export function registerReviewDiffTool(server: McpServer): void {
@@ -119,7 +86,7 @@ export function registerReviewDiffTool(server: McpServer): void {
         }
 
         const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
-        const prompt = buildReviewPrompt({
+        const { systemInstruction, prompt } = buildReviewPrompt({
           repository: input.repository,
           ...(input.language ? { language: input.language } : {}),
           ...(input.focusAreas ? { focusAreas: input.focusAreas } : {}),
@@ -127,9 +94,14 @@ export function registerReviewDiffTool(server: McpServer): void {
           diff: input.diff,
         });
 
+        const responseSchema = zodToJsonSchema(
+          ReviewDiffResultSchema
+        ) as Record<string, unknown>;
+
         const raw = await generateStructuredJson({
+          systemInstruction,
           prompt,
-          responseSchema: getReviewSchema(maxFindings),
+          responseSchema,
         });
         const parsed = ReviewDiffResultSchema.parse(raw);
 

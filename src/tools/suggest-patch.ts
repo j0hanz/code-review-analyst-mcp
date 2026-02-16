@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
 import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
@@ -32,24 +34,16 @@ function getDiffBudgetErrorResponse(
   );
 }
 
-const SuggestPatchJsonSchema: Record<string, unknown> = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    summary: { type: 'string' },
-    patch: { type: 'string' },
-    validationChecklist: {
-      type: 'array',
-      items: { type: 'string' },
-    },
-  },
-  required: ['summary', 'patch', 'validationChecklist'],
-};
-
-function buildPatchPrompt(input: PatchPromptInput): string {
-  return [
+export function buildPatchPrompt(input: PatchPromptInput): {
+  systemInstruction: string;
+  prompt: string;
+} {
+  const systemInstruction = [
     'You are producing a corrective patch for a code review issue.',
     'Return strict JSON only, no markdown fences.',
+  ].join('\n');
+
+  const prompt = [
     `Patch style: ${input.patchStyle}`,
     `Finding title: ${input.findingTitle}`,
     `Finding details: ${input.findingDetails}`,
@@ -58,6 +52,8 @@ function buildPatchPrompt(input: PatchPromptInput): string {
     'Original unified diff:',
     input.diff,
   ].join('\n');
+
+  return { systemInstruction, prompt };
 }
 
 export function registerSuggestPatchTool(server: McpServer): void {
@@ -81,14 +77,20 @@ export function registerSuggestPatchTool(server: McpServer): void {
           return budgetError;
         }
 
+        const { systemInstruction, prompt } = buildPatchPrompt({
+          diff: input.diff,
+          findingTitle: input.findingTitle,
+          findingDetails: input.findingDetails,
+          patchStyle: input.patchStyle ?? DEFAULT_PATCH_STYLE,
+        });
+        const responseSchema = zodToJsonSchema(
+          PatchSuggestionResultSchema
+        ) as Record<string, unknown>;
+
         const raw = await generateStructuredJson({
-          prompt: buildPatchPrompt({
-            diff: input.diff,
-            findingTitle: input.findingTitle,
-            findingDetails: input.findingDetails,
-            patchStyle: input.patchStyle ?? DEFAULT_PATCH_STYLE,
-          }),
-          responseSchema: SuggestPatchJsonSchema,
+          systemInstruction,
+          prompt,
+          responseSchema,
         });
         const parsed = PatchSuggestionResultSchema.parse(raw);
 

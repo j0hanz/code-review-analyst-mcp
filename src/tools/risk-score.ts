@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { exceedsDiffBudget, getDiffBudgetError } from '../lib/diff-budget.js';
 import { createErrorResponse, getErrorMessage } from '../lib/errors.js';
 import { generateStructuredJson } from '../lib/gemini.js';
@@ -30,24 +32,16 @@ function getDiffBudgetErrorResponse(
   );
 }
 
-const RiskScoreJsonSchema: Record<string, unknown> = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    score: { type: 'integer', minimum: 0, maximum: 100 },
-    bucket: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
-    rationale: {
-      type: 'array',
-      items: { type: 'string' },
-    },
-  },
-  required: ['score', 'bucket', 'rationale'],
-};
-
-function buildRiskPrompt(input: RiskPromptInput): string {
-  return [
+export function buildRiskPrompt(input: RiskPromptInput): {
+  systemInstruction: string;
+  prompt: string;
+} {
+  const systemInstruction = [
     'You are assessing software deployment risk from a code diff.',
     'Return strict JSON only, no markdown fences.',
+  ].join('\n');
+
+  const prompt = [
     `Deployment criticality: ${input.deploymentCriticality ?? DEFAULT_DEPLOYMENT_CRITICALITY}`,
     'Score guidance: 0 is no risk, 100 is severe risk.',
     'Rationale must be concise, concrete, and evidence-based.',
@@ -55,6 +49,8 @@ function buildRiskPrompt(input: RiskPromptInput): string {
     'Unified diff:',
     input.diff,
   ].join('\n');
+
+  return { systemInstruction, prompt };
 }
 
 export function registerRiskScoreTool(server: McpServer): void {
@@ -78,14 +74,22 @@ export function registerRiskScoreTool(server: McpServer): void {
           return budgetError;
         }
 
+        const { systemInstruction, prompt } = buildRiskPrompt({
+          diff: input.diff,
+          ...(input.deploymentCriticality
+            ? { deploymentCriticality: input.deploymentCriticality }
+            : {}),
+        });
+
+        const responseSchema = zodToJsonSchema(RiskScoreResultSchema) as Record<
+          string,
+          unknown
+        >;
+
         const raw = await generateStructuredJson({
-          prompt: buildRiskPrompt({
-            diff: input.diff,
-            ...(input.deploymentCriticality
-              ? { deploymentCriticality: input.deploymentCriticality }
-              : {}),
-          }),
-          responseSchema: RiskScoreJsonSchema,
+          systemInstruction,
+          prompt,
+          responseSchema,
         });
         const parsed = RiskScoreResultSchema.parse(raw);
 

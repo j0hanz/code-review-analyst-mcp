@@ -8,6 +8,7 @@ interface GeminiStructuredRequestOptions {
 }
 
 export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {
+  systemInstruction?: string;
   prompt: string;
   responseSchema: JsonObject;
 }
