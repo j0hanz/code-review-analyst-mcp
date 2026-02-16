@@ -8,7 +8,7 @@ Gemini-powered MCP server for pull request analysis with three tools:
 
 ## Requirements
 
-- Node.js `>=20`
+- Node.js `>=24`
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 
 ## Install
@@ -42,6 +42,16 @@ npm run build
 npm start
 ```
 
+## Streamable HTTP (Evaluation)
+
+- Current default transport remains stdio.
+- Streamable HTTP mode is intentionally not enabled by default.
+- Security prerequisites before enablement:
+  - Validate `Origin` headers and reject invalid origins.
+  - Bind locally (localhost) unless explicitly hardened for remote deployment.
+  - Implement auth/session controls (`MCP-Session-Id` handling, protocol version header checks).
+  - Verify SSE/POST behavior against MCP transport requirements.
+
 ## Inspector
 
 ```bash
@@ -55,7 +65,7 @@ npm run inspector
   "mcpServers": {
     "code-review-analyst": {
       "command": "node",
-      "args": ["C:/code-review-mcp/dist/src/index.js"],
+      "args": ["C:/code-review-mcp/dist/index.js"],
       "env": {
         "GEMINI_API_KEY": "YOUR_KEY",
         "GEMINI_MODEL": "gemini-2.5-flash"
@@ -64,6 +74,10 @@ npm run inspector
   }
 }
 ```
+
+## Workflow Guide
+
+- See `.github/mcp/code-review-analyst-workflow.md` for the project-specific operator/agent flow.
 
 ## Notes
 

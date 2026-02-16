@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -65,53 +66,123 @@ export function buildReviewPrompt(input: ReviewPromptInput): {
 }
 
 export function registerReviewDiffTool(server: McpServer): void {
-  server.registerTool(
+  const reviewDiffInputShape = ReviewDiffInputSchema.shape;
+
+  server.experimental.tasks.registerToolTask<
+    typeof reviewDiffInputShape,
+    typeof DefaultOutputSchema
+  >(
     'review_diff',
     {
       title: 'Review Diff',
       description:
         'Analyze a code diff and return structured findings, risk level, and test recommendations.',
-      inputSchema: ReviewDiffInputSchema,
+      inputSchema: reviewDiffInputShape,
       outputSchema: DefaultOutputSchema,
       annotations: {
         readOnlyHint: true,
         openWorldHint: true,
       },
+      execution: {
+        taskSupport: 'optional',
+      },
     },
-    async (input) => {
-      try {
-        const budgetError = getDiffBudgetErrorResponse(input.diff);
-        if (budgetError) {
-          return budgetError;
+    {
+      createTask: async (input, extra) => {
+        const task = await extra.taskStore.createTask({
+          ttl: extra.taskRequestedTtl ?? null,
+        });
+
+        try {
+          const progressToken = extra._meta?.progressToken;
+          const sendProgress = async (
+            progress: number,
+            message: string
+          ): Promise<void> => {
+            if (
+              typeof progressToken !== 'string' &&
+              typeof progressToken !== 'number'
+            ) {
+              return;
+            }
+
+            await extra.sendNotification({
+              method: 'notifications/progress',
+              params: {
+                progressToken,
+                progress,
+                total: 100,
+                message,
+              },
+            });
+          };
+
+          await sendProgress(5, 'Starting review_diff');
+
+          const budgetError = getDiffBudgetErrorResponse(input.diff);
+          if (budgetError) {
+            await extra.taskStore.storeTaskResult(
+              task.taskId,
+              'completed',
+              budgetError
+            );
+            return { task };
+          }
+
+          const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
+          const { systemInstruction, prompt } = buildReviewPrompt({
+            repository: input.repository,
+            ...(input.language ? { language: input.language } : {}),
+            ...(input.focusAreas ? { focusAreas: input.focusAreas } : {}),
+            maxFindings,
+            diff: input.diff,
+          });
+
+          const responseSchema = zodToJsonSchema(
+            ReviewDiffResultSchema
+          ) as Record<string, unknown>;
+
+          const raw = await generateStructuredJson({
+            systemInstruction,
+            prompt,
+            responseSchema,
+            onProgress: async (update) => {
+              await sendProgress(
+                update.progress,
+                update.message ?? 'review_diff in progress'
+              );
+            },
+          });
+          const parsed = ReviewDiffResultSchema.parse(raw);
+
+          await sendProgress(100, 'Completed review_diff');
+
+          await extra.taskStore.storeTaskResult(
+            task.taskId,
+            'completed',
+            createToolResponse({
+              ok: true,
+              result: parsed,
+            })
+          );
+        } catch (error: unknown) {
+          await extra.taskStore.storeTaskResult(
+            task.taskId,
+            'failed',
+            createErrorResponse('E_REVIEW_DIFF', getErrorMessage(error))
+          );
         }
 
-        const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
-        const { systemInstruction, prompt } = buildReviewPrompt({
-          repository: input.repository,
-          ...(input.language ? { language: input.language } : {}),
-          ...(input.focusAreas ? { focusAreas: input.focusAreas } : {}),
-          maxFindings,
-          diff: input.diff,
-        });
-
-        const responseSchema = zodToJsonSchema(
-          ReviewDiffResultSchema
-        ) as Record<string, unknown>;
-
-        const raw = await generateStructuredJson({
-          systemInstruction,
-          prompt,
-          responseSchema,
-        });
-        const parsed = ReviewDiffResultSchema.parse(raw);
-
-        return createToolResponse({
-          ok: true,
-          result: parsed,
-        });
-      } catch (error: unknown) {
-        return createErrorResponse('E_REVIEW_DIFF', getErrorMessage(error));
-      }
+        return { task };
+      },
+      getTask: async (_input, extra) => {
+        return await extra.taskStore.getTask(extra.taskId);
+      },
+      getTaskResult: async (_input, extra) => {
+        return (await extra.taskStore.getTaskResult(
+          extra.taskId
+        )) as CallToolResult;
+      },
     }
   );
 }

@@ -3,6 +3,7 @@ import { findPackageJSON } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { InMemoryTaskStore } from '@modelcontextprotocol/sdk/experimental/tasks/stores/in-memory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { getErrorMessage } from './lib/errors.js';
@@ -84,6 +85,7 @@ function loadInstructions(): string {
 }
 
 const SERVER_INSTRUCTIONS = loadInstructions();
+const SERVER_TASK_STORE = new InMemoryTaskStore();
 
 export function createServer(): McpServer {
   const server = new McpServer(
@@ -93,6 +95,18 @@ export function createServer(): McpServer {
     },
     {
       instructions: SERVER_INSTRUCTIONS,
+      taskStore: SERVER_TASK_STORE,
+      capabilities: {
+        tasks: {
+          list: {},
+          cancel: {},
+          requests: {
+            tools: {
+              call: {},
+            },
+          },
+        },
+      },
     }
   );
 
