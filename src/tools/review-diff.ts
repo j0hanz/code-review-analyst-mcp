@@ -46,7 +46,7 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
 }
 
 export function registerReviewDiffTool(server: McpServer): void {
-  registerStructuredToolTask(server, {
+  registerStructuredToolTask<ReviewPromptInput>(server, {
     name: 'review_diff',
     title: 'Review Diff',
     description:
@@ -54,7 +54,6 @@ export function registerReviewDiffTool(server: McpServer): void {
     inputSchema: ReviewDiffInputSchema.shape,
     resultSchema: ReviewDiffResultSchema,
     errorCode: 'E_REVIEW_DIFF',
-    buildPrompt: (input) =>
-      buildReviewPrompt(input as unknown as ReviewPromptInput),
+    buildPrompt: buildReviewPrompt,
   });
 }

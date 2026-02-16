@@ -33,7 +33,7 @@ function buildRiskPrompt(input: RiskPromptInput): PromptParts {
 }
 
 export function registerRiskScoreTool(server: McpServer): void {
-  registerStructuredToolTask(server, {
+  registerStructuredToolTask<RiskPromptInput>(server, {
     name: 'risk_score',
     title: 'Risk Score',
     description:
@@ -41,7 +41,6 @@ export function registerRiskScoreTool(server: McpServer): void {
     inputSchema: RiskScoreInputSchema.shape,
     resultSchema: RiskScoreResultSchema,
     errorCode: 'E_RISK_SCORE',
-    buildPrompt: (input) =>
-      buildRiskPrompt(input as unknown as RiskPromptInput),
+    buildPrompt: buildRiskPrompt,
   });
 }

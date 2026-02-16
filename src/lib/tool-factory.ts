@@ -19,7 +19,9 @@ export interface PromptParts {
   prompt: string;
 }
 
-export interface StructuredToolTaskConfig {
+export interface StructuredToolTaskConfig<
+  TInput extends object = Record<string, unknown>,
+> {
   /** Tool name registered with the MCP server (e.g. 'review_diff'). */
   name: string;
 
@@ -39,7 +41,7 @@ export interface StructuredToolTaskConfig {
   errorCode: string;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
-  buildPrompt: (input: Record<string, unknown>) => PromptParts;
+  buildPrompt: (input: TInput) => PromptParts;
 }
 
 function getDiffBudgetErrorResponse(
@@ -79,9 +81,9 @@ async function sendProgress(
   });
 }
 
-export function registerStructuredToolTask(
+export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
-  config: StructuredToolTaskConfig
+  config: StructuredToolTaskConfig<TInput>
 ): void {
   server.experimental.tasks.registerToolTask(
     config.name,
@@ -124,8 +126,8 @@ export function registerStructuredToolTask(
 
           await notify(5, `Starting ${config.name}`);
 
-          const inputRecord = input as Record<string, unknown>;
-          const { diff } = inputRecord as { diff: unknown };
+          const inputRecord = input as TInput;
+          const { diff } = input as Record<string, unknown>;
 
           if (typeof diff === 'string') {
             const budgetError = getDiffBudgetErrorResponse(diff);

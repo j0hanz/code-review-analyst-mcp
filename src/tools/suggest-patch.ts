@@ -36,7 +36,7 @@ function buildPatchPrompt(input: PatchPromptInput): PromptParts {
 }
 
 export function registerSuggestPatchTool(server: McpServer): void {
-  registerStructuredToolTask(server, {
+  registerStructuredToolTask<PatchPromptInput>(server, {
     name: 'suggest_patch',
     title: 'Suggest Patch',
     description:
@@ -44,7 +44,6 @@ export function registerSuggestPatchTool(server: McpServer): void {
     inputSchema: SuggestPatchInputSchema.shape,
     resultSchema: PatchSuggestionResultSchema,
     errorCode: 'E_SUGGEST_PATCH',
-    buildPrompt: (input) =>
-      buildPatchPrompt(input as unknown as PatchPromptInput),
+    buildPrompt: buildPatchPrompt,
   });
 }
