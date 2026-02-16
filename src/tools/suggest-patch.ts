@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
   registerStructuredToolTask,
@@ -43,6 +44,7 @@ export function registerSuggestPatchTool(server: McpServer): void {
       'Generate a focused unified diff patch to address one selected review finding.',
     inputSchema: SuggestPatchInputSchema.shape,
     resultSchema: PatchSuggestionResultSchema,
+    validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_SUGGEST_PATCH',
     buildPrompt: buildPatchPrompt,
   });

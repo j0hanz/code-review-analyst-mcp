@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
   registerStructuredToolTask,
@@ -40,6 +41,7 @@ export function registerRiskScoreTool(server: McpServer): void {
       'Score a diff from 0-100 and explain the key risk drivers for release decisions.',
     inputSchema: RiskScoreInputSchema.shape,
     resultSchema: RiskScoreResultSchema,
+    validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_RISK_SCORE',
     buildPrompt: buildRiskPrompt,
   });

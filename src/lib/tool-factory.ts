@@ -6,7 +6,6 @@ import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
-import { exceedsDiffBudget, getDiffBudgetError } from './diff-budget.js';
 import { getErrorMessage } from './errors.js';
 import { generateStructuredJson } from './gemini.js';
 import {
@@ -43,21 +42,16 @@ export interface StructuredToolTaskConfig<
   /** Stable error code returned on failure (e.g. 'E_REVIEW_DIFF'). */
   errorCode: string;
 
+  /** Optional validation hook for input parameters. */
+  validateInput?: (
+    input: TInput
+  ) =>
+    | Promise<ReturnType<typeof createErrorToolResponse> | undefined>
+    | ReturnType<typeof createErrorToolResponse>
+    | undefined;
+
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput) => PromptParts;
-}
-
-function getDiffBudgetErrorResponse(
-  diff: string
-): ReturnType<typeof createErrorToolResponse> | undefined {
-  if (!exceedsDiffBudget(diff)) {
-    return undefined;
-  }
-
-  return createErrorToolResponse(
-    'E_INPUT_TOO_LARGE',
-    getDiffBudgetError(diff.length)
-  );
 }
 
 export function registerStructuredToolTask<TInput extends object>(
@@ -87,15 +81,14 @@ export function registerStructuredToolTask<TInput extends object>(
 
         try {
           const inputRecord = input as TInput;
-          const { diff } = input as Record<string, unknown>;
 
-          if (typeof diff === 'string') {
-            const budgetError = getDiffBudgetErrorResponse(diff);
-            if (budgetError) {
+          if (config.validateInput) {
+            const validationError = await config.validateInput(inputRecord);
+            if (validationError) {
               await extra.taskStore.storeTaskResult(
                 task.taskId,
                 'completed',
-                budgetError
+                validationError
               );
               return { task };
             }

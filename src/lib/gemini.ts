@@ -279,7 +279,14 @@ export async function generateStructuredJson(
             throw new Error('Gemini returned an empty response body.');
           }
 
-          const parsed: unknown = JSON.parse(response.text);
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(response.text);
+          } catch (error: unknown) {
+            throw new Error(
+              `Model produced invalid JSON: ${getErrorMessage(error)}`
+            );
+          }
 
           return parsed;
         } catch (error: unknown) {

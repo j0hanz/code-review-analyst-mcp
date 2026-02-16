@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   type PromptParts,
   registerStructuredToolTask,
@@ -57,6 +58,7 @@ export function registerReviewDiffTool(server: McpServer): void {
     inputSchema: ReviewDiffInputSchema.shape,
     resultSchema: ReviewDiffResultSchema,
     geminiSchema: ReviewDiffGeminiSchema,
+    validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_REVIEW_DIFF',
     buildPrompt: buildReviewPrompt,
   });
