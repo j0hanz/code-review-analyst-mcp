@@ -18,6 +18,10 @@ const SYSTEM_INSTRUCTION =
 
 type ReviewPromptInput = z.infer<typeof ReviewDiffInputSchema>;
 
+function joinPromptLines(lines: readonly string[]): string {
+  return lines.join('\n');
+}
+
 function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
   const focus = input.focusAreas?.length
     ? input.focusAreas.join(', ')
@@ -25,7 +29,7 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
 
   const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
 
-  const prompt = [
+  const prompt = joinPromptLines([
     `Repository: ${input.repository}`,
     `Primary language: ${input.language ?? 'not specified'}`,
     `Focus areas: ${focus}`,
@@ -35,7 +39,7 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
     '',
     'Unified diff:',
     input.diff,
-  ].join('\n');
+  ]);
 
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }

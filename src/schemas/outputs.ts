@@ -24,6 +24,14 @@ const OUTPUT_LIMITS = {
   },
 } as const;
 
+function createBoundedString(
+  min: number,
+  max: number,
+  description: string
+): z.ZodString {
+  return z.string().min(min).max(max).describe(description);
+}
+
 export const DefaultOutputSchema = z.strictObject({
   ok: z.boolean().describe('Whether the tool completed successfully.'),
   result: z.unknown().optional().describe('Successful result payload.'),
@@ -52,29 +60,29 @@ export const ReviewFindingSchema = z.strictObject({
     .max(OUTPUT_LIMITS.reviewFinding.lineMax)
     .nullable()
     .describe('1-based line number when known, otherwise null.'),
-  title: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewFinding.title.min)
-    .max(OUTPUT_LIMITS.reviewFinding.title.max)
-    .describe('Short finding title.'),
-  explanation: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewFinding.text.min)
-    .max(OUTPUT_LIMITS.reviewFinding.text.max)
-    .describe('Why this issue matters.'),
-  recommendation: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewFinding.text.min)
-    .max(OUTPUT_LIMITS.reviewFinding.text.max)
-    .describe('Concrete fix recommendation.'),
+  title: createBoundedString(
+    OUTPUT_LIMITS.reviewFinding.title.min,
+    OUTPUT_LIMITS.reviewFinding.title.max,
+    'Short finding title.'
+  ),
+  explanation: createBoundedString(
+    OUTPUT_LIMITS.reviewFinding.text.min,
+    OUTPUT_LIMITS.reviewFinding.text.max,
+    'Why this issue matters.'
+  ),
+  recommendation: createBoundedString(
+    OUTPUT_LIMITS.reviewFinding.text.min,
+    OUTPUT_LIMITS.reviewFinding.text.max,
+    'Concrete fix recommendation.'
+  ),
 });
 
 export const ReviewDiffResultSchema = z.strictObject({
-  summary: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
-    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
-    .describe('Short review summary.'),
+  summary: createBoundedString(
+    OUTPUT_LIMITS.reviewDiffResult.summary.min,
+    OUTPUT_LIMITS.reviewDiffResult.summary.max,
+    'Short review summary.'
+  ),
   overallRisk: z
     .enum(['low', 'medium', 'high'])
     .describe('Overall risk for merging this diff.'),
@@ -85,11 +93,11 @@ export const ReviewDiffResultSchema = z.strictObject({
     .describe('Ordered list of findings, highest severity first.'),
   testsNeeded: z
     .array(
-      z
-        .string()
-        .min(OUTPUT_LIMITS.reviewDiffResult.testsNeeded.itemMin)
-        .max(OUTPUT_LIMITS.reviewDiffResult.testsNeeded.itemMax)
-        .describe('Test recommendation to reduce risk.')
+      createBoundedString(
+        OUTPUT_LIMITS.reviewDiffResult.testsNeeded.itemMin,
+        OUTPUT_LIMITS.reviewDiffResult.testsNeeded.itemMax,
+        'Test recommendation to reduce risk.'
+      )
     )
     .min(OUTPUT_LIMITS.reviewDiffResult.testsNeeded.minItems)
     .max(OUTPUT_LIMITS.reviewDiffResult.testsNeeded.maxItems)
@@ -108,11 +116,11 @@ export const RiskScoreResultSchema = z.strictObject({
     .describe('Risk bucket derived from score and criticality.'),
   rationale: z
     .array(
-      z
-        .string()
-        .min(OUTPUT_LIMITS.riskScoreResult.rationale.itemMin)
-        .max(OUTPUT_LIMITS.riskScoreResult.rationale.itemMax)
-        .describe('Reason that influenced the final score.')
+      createBoundedString(
+        OUTPUT_LIMITS.riskScoreResult.rationale.itemMin,
+        OUTPUT_LIMITS.riskScoreResult.rationale.itemMax,
+        'Reason that influenced the final score.'
+      )
     )
     .min(OUTPUT_LIMITS.riskScoreResult.rationale.minItems)
     .max(OUTPUT_LIMITS.riskScoreResult.rationale.maxItems)
@@ -120,23 +128,23 @@ export const RiskScoreResultSchema = z.strictObject({
 });
 
 export const PatchSuggestionResultSchema = z.strictObject({
-  summary: z
-    .string()
-    .min(OUTPUT_LIMITS.patchSuggestionResult.summary.min)
-    .max(OUTPUT_LIMITS.patchSuggestionResult.summary.max)
-    .describe('Short patch strategy summary.'),
-  patch: z
-    .string()
-    .min(OUTPUT_LIMITS.patchSuggestionResult.patch.min)
-    .max(OUTPUT_LIMITS.patchSuggestionResult.patch.max)
-    .describe('Unified diff patch text.'),
+  summary: createBoundedString(
+    OUTPUT_LIMITS.patchSuggestionResult.summary.min,
+    OUTPUT_LIMITS.patchSuggestionResult.summary.max,
+    'Short patch strategy summary.'
+  ),
+  patch: createBoundedString(
+    OUTPUT_LIMITS.patchSuggestionResult.patch.min,
+    OUTPUT_LIMITS.patchSuggestionResult.patch.max,
+    'Unified diff patch text.'
+  ),
   validationChecklist: z
     .array(
-      z
-        .string()
-        .min(OUTPUT_LIMITS.patchSuggestionResult.checklist.itemMin)
-        .max(OUTPUT_LIMITS.patchSuggestionResult.checklist.itemMax)
-        .describe('Validation step after applying patch.')
+      createBoundedString(
+        OUTPUT_LIMITS.patchSuggestionResult.checklist.itemMin,
+        OUTPUT_LIMITS.patchSuggestionResult.checklist.itemMax,
+        'Validation step after applying patch.'
+      )
     )
     .min(OUTPUT_LIMITS.patchSuggestionResult.checklist.minItems)
     .max(OUTPUT_LIMITS.patchSuggestionResult.checklist.maxItems)

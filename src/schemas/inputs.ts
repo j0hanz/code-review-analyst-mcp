@@ -10,34 +10,41 @@ const INPUT_LIMITS = {
   findingDetails: { min: 10, max: 3_000 },
 } as const;
 
+function createBoundedString(
+  min: number,
+  max: number,
+  description: string
+): z.ZodString {
+  return z.string().min(min).max(max).describe(description);
+}
+
 function createDiffSchema(description: string): z.ZodString {
-  return z
-    .string()
-    .min(INPUT_LIMITS.diff.min)
-    .max(INPUT_LIMITS.diff.max)
-    .describe(description);
+  return createBoundedString(
+    INPUT_LIMITS.diff.min,
+    INPUT_LIMITS.diff.max,
+    description
+  );
 }
 
 export const ReviewDiffInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text for one PR or commit.'),
-  repository: z
-    .string()
-    .min(INPUT_LIMITS.repository.min)
-    .max(INPUT_LIMITS.repository.max)
-    .describe('Repository identifier, for example org/repo.'),
-  language: z
-    .string()
-    .min(INPUT_LIMITS.language.min)
-    .max(INPUT_LIMITS.language.max)
-    .optional()
-    .describe('Primary implementation language to bias review depth.'),
+  repository: createBoundedString(
+    INPUT_LIMITS.repository.min,
+    INPUT_LIMITS.repository.max,
+    'Repository identifier, for example org/repo.'
+  ),
+  language: createBoundedString(
+    INPUT_LIMITS.language.min,
+    INPUT_LIMITS.language.max,
+    'Primary implementation language to bias review depth.'
+  ).optional(),
   focusAreas: z
     .array(
-      z
-        .string()
-        .min(INPUT_LIMITS.focusArea.min)
-        .max(INPUT_LIMITS.focusArea.max)
-        .describe('Specific area to inspect, for example security or tests.')
+      createBoundedString(
+        INPUT_LIMITS.focusArea.min,
+        INPUT_LIMITS.focusArea.max,
+        'Specific area to inspect, for example security or tests.'
+      )
     )
     .min(1)
     .max(INPUT_LIMITS.focusArea.maxItems)
@@ -62,16 +69,16 @@ export const RiskScoreInputSchema = z.strictObject({
 
 export const SuggestPatchInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text that contains the issue to patch.'),
-  findingTitle: z
-    .string()
-    .min(INPUT_LIMITS.findingTitle.min)
-    .max(INPUT_LIMITS.findingTitle.max)
-    .describe('Short title of the finding that needs a patch.'),
-  findingDetails: z
-    .string()
-    .min(INPUT_LIMITS.findingDetails.min)
-    .max(INPUT_LIMITS.findingDetails.max)
-    .describe('Detailed explanation of the bug or risk.'),
+  findingTitle: createBoundedString(
+    INPUT_LIMITS.findingTitle.min,
+    INPUT_LIMITS.findingTitle.max,
+    'Short title of the finding that needs a patch.'
+  ),
+  findingDetails: createBoundedString(
+    INPUT_LIMITS.findingDetails.min,
+    INPUT_LIMITS.findingDetails.max,
+    'Detailed explanation of the bug or risk.'
+  ),
   patchStyle: z
     .enum(['minimal', 'balanced', 'defensive'])
     .optional()

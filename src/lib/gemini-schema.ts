@@ -16,6 +16,10 @@ const CONSTRAINT_KEYS = new Set([
   'multipleOf',
 ]);
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * Recursively strips value-range constraints (`min*`, `max*`, `multipleOf`)
  * from a JSON Schema object and converts `"type": "integer"` to
@@ -41,15 +45,11 @@ export function stripJsonSchemaConstraints(
     }
 
     if (Array.isArray(value)) {
-      result[key] = (value as unknown[]).map((item: unknown) =>
-        typeof item === 'object' && item !== null && !Array.isArray(item)
-          ? stripJsonSchemaConstraints(item as Record<string, unknown>)
-          : (item as Record<string, unknown>)
+      result[key] = value.map((item: unknown) =>
+        isJsonRecord(item) ? stripJsonSchemaConstraints(item) : item
       );
-    } else if (typeof value === 'object' && value !== null) {
-      result[key] = stripJsonSchemaConstraints(
-        value as Record<string, unknown>
-      );
+    } else if (isJsonRecord(value)) {
+      result[key] = stripJsonSchemaConstraints(value);
     } else {
       result[key] = value;
     }

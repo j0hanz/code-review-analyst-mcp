@@ -7,6 +7,16 @@ import { getErrorMessage } from './lib/errors.js';
 import { createServer } from './server.js';
 
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+type ServerInstance = ReturnType<typeof createServer>;
+
+function setEnvFromArg(
+  name: string,
+  value: string | boolean | undefined
+): void {
+  if (typeof value === 'string') {
+    process.env[name] = value;
+  }
+}
 
 function parseCommandLineArgs(): void {
   const { values } = parseArgs({
@@ -23,20 +33,13 @@ function parseCommandLineArgs(): void {
     strict: false,
   });
 
-  if (typeof values.model === 'string') {
-    process.env.GEMINI_MODEL = values.model;
-  }
-
-  if (typeof values['max-diff-chars'] === 'string') {
-    process.env.MAX_DIFF_CHARS = values['max-diff-chars'];
-  }
+  setEnvFromArg('GEMINI_MODEL', values.model);
+  setEnvFromArg('MAX_DIFF_CHARS', values['max-diff-chars']);
 }
 
 let shuttingDown = false;
 
-async function shutdown(
-  server: ReturnType<typeof createServer>
-): Promise<void> {
+async function shutdown(server: ServerInstance): Promise<void> {
   if (shuttingDown) {
     return;
   }
@@ -46,9 +49,7 @@ async function shutdown(
   process.exit(0);
 }
 
-function registerShutdownHandlers(
-  server: ReturnType<typeof createServer>
-): void {
+function registerShutdownHandlers(server: ServerInstance): void {
   for (const signal of SHUTDOWN_SIGNALS) {
     process.on(signal, () => {
       void shutdown(server);

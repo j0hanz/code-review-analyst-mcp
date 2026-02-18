@@ -15,6 +15,10 @@ interface PackageJsonMetadata {
   version: string;
 }
 
+const SERVER_NAME = 'code-review-analyst';
+const INSTRUCTIONS_FILENAME = 'instructions.md';
+const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
+
 function isPackageJsonMetadata(value: unknown): value is PackageJsonMetadata {
   return (
     typeof value === 'object' &&
@@ -48,10 +52,6 @@ function parsePackageJson(
   return parsed;
 }
 
-function extractVersion(packageJson: string, packageJsonPath: string): string {
-  return parsePackageJson(packageJson, packageJsonPath).version;
-}
-
 function readPackageJson(packageJsonPath: string): string {
   try {
     return readFileSync(packageJsonPath, 'utf8');
@@ -65,24 +65,26 @@ function readPackageJson(packageJsonPath: string): string {
 function loadVersion(): string {
   const packageJsonPath = findPackageJSON(import.meta.url);
   if (!packageJsonPath) {
-    throw new Error('Unable to locate package.json for code-review-analyst.');
+    throw new Error(`Unable to locate package.json for ${SERVER_NAME}.`);
   }
 
-  return extractVersion(readPackageJson(packageJsonPath), packageJsonPath);
+  return parsePackageJson(readPackageJson(packageJsonPath), packageJsonPath)
+    .version;
 }
 
 const SERVER_VERSION = loadVersion();
 
 function loadInstructions(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
+  const instructionsPath = join(currentDir, INSTRUCTIONS_FILENAME);
 
   try {
-    return readFileSync(join(currentDir, 'instructions.md'), 'utf8');
+    return readFileSync(instructionsPath, 'utf8');
   } catch (error: unknown) {
     process.emitWarning(
-      `Failed to load instructions.md: ${getErrorMessage(error)}`
+      `Failed to load ${INSTRUCTIONS_FILENAME}: ${getErrorMessage(error)}`
     );
-    return '(Instructions failed to load)';
+    return INSTRUCTIONS_FALLBACK;
   }
 }
 
@@ -92,7 +94,7 @@ const SERVER_TASK_STORE = new InMemoryTaskStore();
 export function createServer(): McpServer {
   const server = new McpServer(
     {
-      name: 'code-review-analyst',
+      name: SERVER_NAME,
       version: SERVER_VERSION,
     },
     {

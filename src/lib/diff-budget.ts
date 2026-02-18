@@ -8,11 +8,21 @@ const numberFormatter = new Intl.NumberFormat('en-US');
 // Lazy-cached: first call happens after parseCommandLineArgs() sets MAX_DIFF_CHARS.
 let _maxDiffChars: number | undefined;
 
+function parsePositiveInteger(value: string): number | undefined {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
 function getMaxDiffChars(): number {
   if (_maxDiffChars !== undefined) return _maxDiffChars;
-  const parsed = Number.parseInt(process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '', 10);
+
   const value =
-    Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_DIFF_CHARS;
+    parsePositiveInteger(process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '') ??
+    DEFAULT_MAX_DIFF_CHARS;
   _maxDiffChars = value;
   return value;
 }

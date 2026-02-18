@@ -34,7 +34,7 @@ export interface StructuredToolTaskConfig<
   inputSchema: ZodRawShapeCompat;
 
   /** Full Zod schema for runtime input re-validation (rejects unknown fields). */
-  fullInputSchema?: z.ZodType;
+  fullInputSchema?: z.ZodType<TInput>;
 
   /** Zod schema for parsing and validating the Gemini structured response. */
   resultSchema: z.ZodType;
@@ -57,17 +57,35 @@ export interface StructuredToolTaskConfig<
   buildPrompt: (input: TInput) => PromptParts;
 }
 
+function createGeminiResponseSchema(config: {
+  geminiSchema: z.ZodType | undefined;
+  resultSchema: z.ZodType;
+}): Record<string, unknown> {
+  const sourceSchema = config.geminiSchema ?? config.resultSchema;
+  return stripJsonSchemaConstraints(
+    z.toJSONSchema(sourceSchema) as Record<string, unknown>
+  );
+}
+
+function parseToolInput<TInput extends object>(
+  input: unknown,
+  fullInputSchema?: z.ZodType<TInput>
+): TInput {
+  if (!fullInputSchema) {
+    return input as TInput;
+  }
+
+  return fullInputSchema.parse(input);
+}
+
 export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
   config: StructuredToolTaskConfig<TInput>
 ): void {
-  const responseSchema = config.geminiSchema
-    ? stripJsonSchemaConstraints(
-        z.toJSONSchema(config.geminiSchema) as Record<string, unknown>
-      )
-    : stripJsonSchemaConstraints(
-        z.toJSONSchema(config.resultSchema) as Record<string, unknown>
-      );
+  const responseSchema = createGeminiResponseSchema({
+    geminiSchema: config.geminiSchema,
+    resultSchema: config.resultSchema,
+  });
 
   server.experimental.tasks.registerToolTask(
     config.name,
@@ -106,10 +124,23 @@ export function registerStructuredToolTask<TInput extends object>(
           }
         };
 
+        const updateStatusMessage = async (message: string): Promise<void> => {
+          try {
+            await extra.taskStore.updateTaskStatus(
+              task.taskId,
+              'working',
+              message
+            );
+          } catch {
+            // statusMessage is best-effort; task may already be terminal.
+          }
+        };
+
         try {
-          const inputRecord = config.fullInputSchema
-            ? (config.fullInputSchema.parse(input) as TInput)
-            : (input as TInput);
+          const inputRecord = parseToolInput<TInput>(
+            input,
+            config.fullInputSchema
+          );
 
           if (config.validateInput) {
             const validationError = await config.validateInput(inputRecord);
@@ -117,15 +148,7 @@ export function registerStructuredToolTask<TInput extends object>(
               const validationMessage =
                 validationError.structuredContent.error?.message ??
                 'Input validation failed';
-              try {
-                await extra.taskStore.updateTaskStatus(
-                  task.taskId,
-                  'working',
-                  validationMessage
-                );
-              } catch {
-                // statusMessage is best-effort; task may already be terminal.
-              }
+              await updateStatusMessage(validationMessage);
               await extra.taskStore.storeTaskResult(
                 task.taskId,
                 'failed',
@@ -164,15 +187,7 @@ export function registerStructuredToolTask<TInput extends object>(
           await sendProgress(4, 4);
         } catch (error: unknown) {
           const errorMessage = getErrorMessage(error);
-          try {
-            await extra.taskStore.updateTaskStatus(
-              task.taskId,
-              'working',
-              errorMessage
-            );
-          } catch {
-            // statusMessage is best-effort; task may already be terminal.
-          }
+          await updateStatusMessage(errorMessage);
           await extra.taskStore.storeTaskResult(
             task.taskId,
             'failed',

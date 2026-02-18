@@ -29,6 +29,18 @@ function toTextContent(structured: ToolStructuredContent): ToolTextContent[] {
   return [{ type: 'text', text: JSON.stringify(structured) }];
 }
 
+function createErrorStructuredContent(
+  code: string,
+  message: string,
+  result?: unknown
+): ToolStructuredContent {
+  if (result === undefined) {
+    return { ok: false, error: { code, message } };
+  }
+
+  return { ok: false, error: { code, message }, result };
+}
+
 export function createToolResponse<
   TStructuredContent extends ToolStructuredContent,
 >(structured: TStructuredContent): ToolResponse<TStructuredContent> {
@@ -43,11 +55,7 @@ export function createErrorToolResponse(
   message: string,
   result?: unknown
 ): ErrorToolResponse {
-  // Avoid allocating an intermediate {} when result is absent (the common case).
-  const structured: ToolStructuredContent =
-    result !== undefined
-      ? { ok: false, error: { code, message }, result }
-      : { ok: false, error: { code, message } };
+  const structured = createErrorStructuredContent(code, message, result);
 
   return {
     content: toTextContent(structured),

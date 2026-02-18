@@ -28,6 +28,14 @@ const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
+const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
+const RETRYABLE_TRANSIENT_CODES = new Set([
+  'RESOURCE_EXHAUSTED',
+  'UNAVAILABLE',
+  'DEADLINE_EXCEEDED',
+  'INTERNAL',
+  'ABORTED',
+]);
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
@@ -169,23 +177,14 @@ function getTransientErrorCode(error: unknown): string | undefined {
 
 function shouldRetry(error: unknown): boolean {
   const numericCode = getNumericErrorCode(error);
-  if (
-    numericCode === 429 ||
-    numericCode === 500 ||
-    numericCode === 502 ||
-    numericCode === 503 ||
-    numericCode === 504
-  ) {
+  if (numericCode !== undefined && RETRYABLE_NUMERIC_CODES.has(numericCode)) {
     return true;
   }
 
   const transientCode = getTransientErrorCode(error);
   if (
-    transientCode === 'RESOURCE_EXHAUSTED' ||
-    transientCode === 'UNAVAILABLE' ||
-    transientCode === 'DEADLINE_EXCEEDED' ||
-    transientCode === 'INTERNAL' ||
-    transientCode === 'ABORTED'
+    transientCode !== undefined &&
+    RETRYABLE_TRANSIENT_CODES.has(transientCode)
   ) {
     return true;
   }
@@ -244,6 +243,13 @@ function buildGenerationConfig(
   };
 }
 
+function combineSignals(
+  signal: AbortSignal,
+  requestSignal?: AbortSignal
+): AbortSignal {
+  return requestSignal ? AbortSignal.any([signal, requestSignal]) : signal;
+}
+
 async function generateContentWithTimeout(
   request: GeminiStructuredRequest,
   model: string,
@@ -255,9 +261,7 @@ async function generateContentWithTimeout(
   }, timeoutMs);
   timeout.unref();
 
-  const signal = request.signal
-    ? AbortSignal.any([controller.signal, request.signal])
-    : controller.signal;
+  const signal = combineSignals(controller.signal, request.signal);
 
   try {
     return await getClient().models.generateContent({

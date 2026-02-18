@@ -17,8 +17,12 @@ const SYSTEM_INSTRUCTION =
 
 type PatchPromptInput = z.infer<typeof SuggestPatchInputSchema>;
 
+function joinPromptLines(lines: readonly string[]): string {
+  return lines.join('\n');
+}
+
 function buildPatchPrompt(input: PatchPromptInput): PromptParts {
-  const prompt = [
+  const prompt = joinPromptLines([
     `Patch style: ${input.patchStyle ?? DEFAULT_PATCH_STYLE}`,
     `Finding title: ${input.findingTitle}`,
     `Finding details: ${input.findingDetails}`,
@@ -26,7 +30,7 @@ function buildPatchPrompt(input: PatchPromptInput): PromptParts {
     '',
     'Original unified diff:',
     input.diff,
-  ].join('\n');
+  ]);
 
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }

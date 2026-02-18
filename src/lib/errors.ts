@@ -1,5 +1,9 @@
 import { inspect } from 'node:util';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function isErrorWithMessage(error: unknown): error is { message: string } {
   return (
     typeof error === 'object' &&
@@ -14,7 +18,7 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === 'string') {
+  if (isString(error)) {
     return error;
   }
 

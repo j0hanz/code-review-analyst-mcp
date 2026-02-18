@@ -17,15 +17,19 @@ const SYSTEM_INSTRUCTION =
 
 type RiskPromptInput = z.infer<typeof RiskScoreInputSchema>;
 
+function joinPromptLines(lines: readonly string[]): string {
+  return lines.join('\n');
+}
+
 function buildRiskPrompt(input: RiskPromptInput): PromptParts {
-  const prompt = [
+  const prompt = joinPromptLines([
     `Deployment criticality: ${input.deploymentCriticality ?? DEFAULT_DEPLOYMENT_CRITICALITY}`,
     'Score guidance: 0 is no risk, 100 is severe risk.',
     'Rationale must be concise, concrete, and evidence-based.',
     '',
     'Unified diff:',
     input.diff,
-  ].join('\n');
+  ]);
 
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }

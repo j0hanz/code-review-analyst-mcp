@@ -1,6 +1,6 @@
 export type JsonObject = Record<string, unknown>;
 
-interface GeminiStructuredRequestOptions {
+export interface GeminiStructuredRequestOptions {
   model?: string;
   maxRetries?: number;
   timeoutMs?: number;
