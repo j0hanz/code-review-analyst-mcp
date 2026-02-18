@@ -104,7 +104,7 @@ These instructions are available as a resource (internal://instructions) or prom
 - API credentials: Require `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - Model selection: Uses `GEMINI_MODEL` if set; defaults to `gemini-2.5-flash`.
 - Diff size: Runtime limit defaults to 120,000 chars (`MAX_DIFF_CHARS` env override). Input schema max is 400,000 chars.
-- Timeout/retries: Per-call timeout defaults to 15,000 ms; retry count defaults to 1 with exponential backoff.
+- Timeout/retries: Per-call timeout defaults to 30,000 ms; retry count defaults to 1 with exponential backoff.
 - Output tokens: `maxOutputTokens` defaults to 16,384 to prevent unbounded responses.
 - Safety config: Gemini safety thresholds default to `BLOCK_NONE` for configured harm categories and can be overridden with `GEMINI_HARM_BLOCK_THRESHOLD` (`BLOCK_NONE`, `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE`).
 - Resource scope: Only `internal://instructions` is registered as a resource; no dynamic resource templates are exposed.
