@@ -3,6 +3,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { debuglog } from 'node:util';
 
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
@@ -39,8 +40,10 @@ let cachedClient: GoogleGenAI | undefined;
 
 export const geminiEvents = new EventEmitter();
 
+const debug = debuglog('gemini');
+
 geminiEvents.on('log', (payload: unknown) => {
-  console.error(JSON.stringify(payload));
+  debug(JSON.stringify(payload));
 });
 
 interface GeminiRequestContext {
@@ -50,6 +53,7 @@ interface GeminiRequestContext {
 
 const geminiContext = new AsyncLocalStorage<GeminiRequestContext>({
   name: 'gemini_request',
+  defaultValue: { requestId: 'unknown', model: 'unknown' },
 });
 
 function getApiKey(): string {
@@ -76,11 +80,14 @@ function nextRequestId(): string {
 }
 
 function logEvent(event: string, details: Record<string, unknown>): void {
-  const context = geminiContext.getStore();
+  const context = geminiContext.getStore() ?? {
+    requestId: 'unknown',
+    model: 'unknown',
+  };
   geminiEvents.emit('log', {
     event,
-    requestId: context?.requestId ?? null,
-    model: context?.model ?? null,
+    requestId: context.requestId,
+    model: context.model,
     ...details,
   });
 }
@@ -255,7 +262,8 @@ async function generateContentWithTimeout(
 
     if (controller.signal.aborted) {
       throw new Error(
-        `Gemini request timed out after ${formatNumber(timeoutMs)}ms.`
+        `Gemini request timed out after ${formatNumber(timeoutMs)}ms.`,
+        { cause: error }
       );
     }
 
@@ -331,7 +339,8 @@ export async function generateStructuredJson(
       });
 
       throw new Error(
-        `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`
+        `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`,
+        { cause: lastError }
       );
     }
   );

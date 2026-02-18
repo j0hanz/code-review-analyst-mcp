@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from 'node:util';
+import { parseArgs, styleText } from 'node:util';
 
 const require = createRequire(import.meta.url);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -68,10 +68,14 @@ function isMissingPathError(error) {
 // --- Infrastructure Layer (IO & System) ---
 const Logger = {
   startGroup: (name) => process.stdout.write(`> ${name}... `),
-  endGroupSuccess: (duration) => console.log(`✅ (${duration}s)`),
+  endGroupSuccess: (duration) =>
+    console.log(styleText('green', `✅ (${duration}s)`)),
   endGroupFail: (err) =>
-    console.log(`❌${err?.message ? ` (${err.message})` : ''}`),
-  shellSuccess: (name, duration) => console.log(`> ${name} ✅ (${duration}s)`),
+    console.log(
+      styleText('red', `❌${err?.message ? ` (${err.message})` : ''}`)
+    ),
+  shellSuccess: (name, duration) =>
+    console.log(`> ${name} ` + styleText('green', `✅ (${duration}s)`)),
   info: (msg) => console.log(msg),
   error: (err) => console.error(err),
   newLine: () => console.log(),
