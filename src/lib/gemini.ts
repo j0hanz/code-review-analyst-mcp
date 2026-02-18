@@ -15,7 +15,7 @@ function getDefaultModel(): string {
 }
 
 const DEFAULT_MAX_RETRIES = 1;
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 45_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
 const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
