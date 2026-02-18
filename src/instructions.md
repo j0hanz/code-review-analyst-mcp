@@ -67,7 +67,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 - Purpose: Generate structured review findings, overall risk, and test recommendations from a unified diff.
 - Input: `maxFindings` defaults to 10; `focusAreas` defaults to security/correctness/regressions/performance when omitted.
-- Output: `ok/result/error` envelope; successful payload follows `ReviewDiffResultSchema` and includes `summary`, `overallRisk`, `findings`, and `testsNeeded`.
+- Output: `ok/result/error` envelope; successful payload includes `summary`, `overallRisk`, `findings[]`, and `testsNeeded[]`.
 - Gotcha: Schema allows `diff` up to 400,000 chars, but runtime rejects payloads above `MAX_DIFF_CHARS` (default 120,000) with `E_INPUT_TOO_LARGE`.
 - Side effects: Calls external Gemini API (`openWorldHint: true`); does not mutate local state (`readOnlyHint: true`).
 
@@ -75,7 +75,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 - Purpose: Produce deployment risk score and rationale for release decisions.
 - Input: `deploymentCriticality` defaults to `medium` when omitted.
-- Output: `ok/result/error` envelope; successful payload includes `score`, `bucket`, and `rationale`.
+- Output: `ok/result/error` envelope; successful payload includes `score`, `bucket`, and `rationale[]`.
 - Gotcha: Uses the same runtime diff budget guard as other tools; oversized inputs fail before model execution.
 - Side effects: External Gemini call only.
 
@@ -83,7 +83,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 - Purpose: Generate a focused unified diff patch for one selected review finding.
 - Input: `patchStyle` defaults to `balanced`; requires both `findingTitle` and `findingDetails`.
-- Output: `ok/result/error` envelope; successful payload includes `summary`, `patch`, and `validationChecklist`.
+- Output: `ok/result/error` envelope; successful payload includes `summary`, `patch`, and `validationChecklist[]`.
 - Gotcha: Output is model-generated text and must be validated before application.
 - Side effects: External Gemini call only.
 
@@ -122,5 +122,3 @@ These instructions are available as a resource (internal://instructions) or prom
 - Gemini timeout message (`Gemini request timed out after ...ms.`): Request exceeded timeout budget. → Reduce prompt/diff size or increase `timeoutMs` in caller.
 - Empty model body (`Gemini returned an empty response body.`): Provider returned no text payload. → Retry and inspect model/service status.
 - JSON parse failure from model output (wrapped by tool error codes): Output was not valid JSON. → Retry with same schema; inspect logs for malformed response text.
-
----
