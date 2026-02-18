@@ -30,11 +30,11 @@ export interface StructuredToolTaskConfig<
   /** Short description of the tool's purpose. */
   description: string;
 
-  /** Zod shape object (e.g. `MySchema.shape`) used as the MCP input schema. */
+  /** Zod schema shape for the tool input. Used by the MCP SDK to strip unknown fields before the handler runs. */
   inputSchema: ZodRawShapeCompat;
 
-  /** Full Zod schema for runtime input re-validation (rejects unknown fields). */
-  fullInputSchema?: z.ZodType<TInput>;
+  /** Zod schema for validating the complete tool input, including all expected fields. This is used within the handler to validate the actual input shape after the MCP SDK has stripped unknown fields. */
+  fullInputSchema: z.ZodType<TInput>;
 
   /** Zod schema for parsing and validating the Gemini structured response. */
   resultSchema: z.ZodType;
@@ -69,12 +69,8 @@ function createGeminiResponseSchema(config: {
 
 function parseToolInput<TInput extends object>(
   input: unknown,
-  fullInputSchema?: z.ZodType<TInput>
+  fullInputSchema: z.ZodType<TInput>
 ): TInput {
-  if (!fullInputSchema) {
-    return input as TInput;
-  }
-
   return fullInputSchema.parse(input);
 }
 

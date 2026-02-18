@@ -28,6 +28,19 @@ test('ReviewDiffInputSchema rejects unknown fields', () => {
   assert.equal(parsed.success, false);
 });
 
+test('ReviewDiffInputSchema accepts pre-stripped input — simulating MCP SDK behavior', () => {
+  // The MCP SDK strips unknown fields before the tool handler runs.
+  // This test documents that the schema correctly handles already-stripped input,
+  // which is the actual input shape the handler receives at runtime.
+  const parsed = ReviewDiffInputSchema.safeParse({
+    diff: 'diff --git a/a.ts b/a.ts\n+const x = 1;',
+    repository: 'acme/widgets',
+    // No unknown fields — the SDK has already removed them.
+  });
+
+  assert.equal(parsed.success, true);
+});
+
 test('ReviewDiffResultSchema validates expected payload shape', () => {
   const parsed = ReviewDiffResultSchema.parse({
     summary: 'One high-risk change around auth flow.',
