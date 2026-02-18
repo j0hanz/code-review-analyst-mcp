@@ -11,8 +11,14 @@ import type { GenerateContentConfig } from '@google/genai';
 import { getErrorMessage } from './errors.js';
 import type { GeminiStructuredRequest } from './types.js';
 
+// Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
+let _defaultModel: string | undefined;
+
 function getDefaultModel(): string {
-  return process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  if (_defaultModel !== undefined) return _defaultModel;
+  const value = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  _defaultModel = value;
+  return value;
 }
 
 const DEFAULT_MAX_RETRIES = 1;
@@ -36,6 +42,22 @@ const SAFETY_THRESHOLD_BY_NAME = {
   BLOCK_LOW_AND_ABOVE: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
 } as const;
 
+function getSafetyThreshold(): HarmBlockThreshold {
+  const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
+  if (!threshold) {
+    return DEFAULT_SAFETY_THRESHOLD;
+  }
+
+  const normalizedThreshold = threshold.trim().toUpperCase();
+  if (normalizedThreshold in SAFETY_THRESHOLD_BY_NAME) {
+    return SAFETY_THRESHOLD_BY_NAME[
+      normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
+    ];
+  }
+
+  return DEFAULT_SAFETY_THRESHOLD;
+}
+
 let cachedClient: GoogleGenAI | undefined;
 
 export const geminiEvents = new EventEmitter();
@@ -55,6 +77,12 @@ const geminiContext = new AsyncLocalStorage<GeminiRequestContext>({
   name: 'gemini_request',
   defaultValue: { requestId: 'unknown', model: 'unknown' },
 });
+
+// Shared fallback avoids a fresh object allocation per logEvent call when outside a run context.
+const UNKNOWN_CONTEXT: GeminiRequestContext = {
+  requestId: 'unknown',
+  model: 'unknown',
+};
 
 function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
@@ -80,10 +108,7 @@ function nextRequestId(): string {
 }
 
 function logEvent(event: string, details: Record<string, unknown>): void {
-  const context = geminiContext.getStore() ?? {
-    requestId: 'unknown',
-    model: 'unknown',
-  };
+  const context = geminiContext.getStore() ?? UNKNOWN_CONTEXT;
   geminiEvents.emit('log', {
     event,
     requestId: context.requestId,
@@ -182,22 +207,6 @@ function getRetryDelayMs(attempt: number): number {
   return Math.min(RETRY_DELAY_MAX_MS, boundedDelay + jitter);
 }
 
-function getSafetyThreshold(): HarmBlockThreshold {
-  const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
-  if (!threshold) {
-    return DEFAULT_SAFETY_THRESHOLD;
-  }
-
-  const normalizedThreshold = threshold.trim().toUpperCase();
-  if (normalizedThreshold in SAFETY_THRESHOLD_BY_NAME) {
-    return SAFETY_THRESHOLD_BY_NAME[
-      normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
-    ];
-  }
-
-  return DEFAULT_SAFETY_THRESHOLD;
-}
-
 function buildGenerationConfig(
   request: GeminiStructuredRequest,
   abortSignal: AbortSignal
@@ -209,9 +218,10 @@ function buildGenerationConfig(
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
+    // Spread undefined instead of {} so no intermediate object is allocated when absent.
     ...(request.systemInstruction
       ? { systemInstruction: request.systemInstruction }
-      : {}),
+      : undefined),
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,

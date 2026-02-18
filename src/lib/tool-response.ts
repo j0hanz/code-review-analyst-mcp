@@ -43,11 +43,11 @@ export function createErrorToolResponse(
   message: string,
   result?: unknown
 ): ErrorToolResponse {
-  const structured: ToolStructuredContent = {
-    ok: false,
-    error: { code, message },
-    ...(result === undefined ? {} : { result }),
-  };
+  // Avoid allocating an intermediate {} when result is absent (the common case).
+  const structured: ToolStructuredContent =
+    result !== undefined
+      ? { ok: false, error: { code, message }, result }
+      : { ok: false, error: { code, message } };
 
   return {
     content: toTextContent(structured),

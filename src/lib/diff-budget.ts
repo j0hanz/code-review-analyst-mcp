@@ -5,17 +5,16 @@ const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
-function formatNumber(value: number): string {
-  return numberFormatter.format(value);
-}
-
-function getPositiveIntEnv(name: string): number | undefined {
-  const parsed = Number.parseInt(process.env[name] ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
+// Lazy-cached: first call happens after parseCommandLineArgs() sets MAX_DIFF_CHARS.
+let _maxDiffChars: number | undefined;
 
 function getMaxDiffChars(): number {
-  return getPositiveIntEnv(MAX_DIFF_CHARS_ENV_VAR) ?? DEFAULT_MAX_DIFF_CHARS;
+  if (_maxDiffChars !== undefined) return _maxDiffChars;
+  const parsed = Number.parseInt(process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '', 10);
+  const value =
+    Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_DIFF_CHARS;
+  _maxDiffChars = value;
+  return value;
 }
 
 export function exceedsDiffBudget(diff: string): boolean {
@@ -23,8 +22,7 @@ export function exceedsDiffBudget(diff: string): boolean {
 }
 
 export function getDiffBudgetError(diffLength: number): string {
-  const maxDiffChars = getMaxDiffChars();
-  return `diff exceeds max allowed size (${formatNumber(diffLength)} chars > ${formatNumber(maxDiffChars)} chars)`;
+  return `diff exceeds max allowed size (${numberFormatter.format(diffLength)} chars > ${numberFormatter.format(getMaxDiffChars())} chars)`;
 }
 
 export function validateDiffBudget(

@@ -11,15 +11,13 @@ import { SuggestPatchInputSchema } from '../schemas/inputs.js';
 import { PatchSuggestionResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_PATCH_STYLE = 'balanced';
+// Hoisted: avoids array allocation + join on every request.
+const SYSTEM_INSTRUCTION =
+  'You are producing a corrective patch for a code review issue.\nReturn strict JSON only, no markdown fences.';
 
 type PatchPromptInput = z.infer<typeof SuggestPatchInputSchema>;
 
 function buildPatchPrompt(input: PatchPromptInput): PromptParts {
-  const systemInstruction = [
-    'You are producing a corrective patch for a code review issue.',
-    'Return strict JSON only, no markdown fences.',
-  ].join('\n');
-
   const prompt = [
     `Patch style: ${input.patchStyle ?? DEFAULT_PATCH_STYLE}`,
     `Finding title: ${input.findingTitle}`,
@@ -30,7 +28,7 @@ function buildPatchPrompt(input: PatchPromptInput): PromptParts {
     input.diff,
   ].join('\n');
 
-  return { systemInstruction, prompt };
+  return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
 export function registerSuggestPatchTool(server: McpServer): void {

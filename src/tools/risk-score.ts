@@ -11,15 +11,13 @@ import { RiskScoreInputSchema } from '../schemas/inputs.js';
 import { RiskScoreResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_DEPLOYMENT_CRITICALITY = 'medium';
+// Hoisted: avoids array allocation + join on every request.
+const SYSTEM_INSTRUCTION =
+  'You are assessing software deployment risk from a code diff.\nReturn strict JSON only, no markdown fences.';
 
 type RiskPromptInput = z.infer<typeof RiskScoreInputSchema>;
 
 function buildRiskPrompt(input: RiskPromptInput): PromptParts {
-  const systemInstruction = [
-    'You are assessing software deployment risk from a code diff.',
-    'Return strict JSON only, no markdown fences.',
-  ].join('\n');
-
   const prompt = [
     `Deployment criticality: ${input.deploymentCriticality ?? DEFAULT_DEPLOYMENT_CRITICALITY}`,
     'Score guidance: 0 is no risk, 100 is severe risk.',
@@ -29,7 +27,7 @@ function buildRiskPrompt(input: RiskPromptInput): PromptParts {
     input.diff,
   ].join('\n');
 
-  return { systemInstruction, prompt };
+  return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
 export function registerRiskScoreTool(server: McpServer): void {

@@ -12,6 +12,9 @@ import { ReviewDiffResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_MAX_FINDINGS = 10;
 const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
+// Hoisted: avoids array allocation + join on every request.
+const SYSTEM_INSTRUCTION =
+  'You are a senior staff engineer performing pull request review.\nReturn strict JSON only with no markdown fences.';
 
 type ReviewPromptInput = z.infer<typeof ReviewDiffInputSchema>;
 
@@ -21,11 +24,6 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
     : DEFAULT_FOCUS_AREAS;
 
   const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
-
-  const systemInstruction = [
-    'You are a senior staff engineer performing pull request review.',
-    'Return strict JSON only with no markdown fences.',
-  ].join('\n');
 
   const prompt = [
     `Repository: ${input.repository}`,
@@ -39,7 +37,7 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
     input.diff,
   ].join('\n');
 
-  return { systemInstruction, prompt };
+  return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
 export function registerReviewDiffTool(server: McpServer): void {
