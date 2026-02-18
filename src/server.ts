@@ -101,6 +101,8 @@ export function createServer(): McpServer {
       instructions: SERVER_INSTRUCTIONS,
       taskStore: SERVER_TASK_STORE,
       capabilities: {
+        logging: {},
+        completions: {},
         tasks: {
           list: {},
           cancel: {},

@@ -1,6 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  CallToolResult,
+  LoggingLevel,
+} from '@modelcontextprotocol/sdk/types.js';
 
 import { z } from 'zod';
 
@@ -133,6 +136,18 @@ export function registerStructuredToolTask<TInput extends object>(
         };
 
         try {
+          const onLog = async (level: string, data: unknown): Promise<void> => {
+            try {
+              await server.sendLoggingMessage({
+                level: level as LoggingLevel,
+                logger: 'gemini',
+                data,
+              });
+            } catch {
+              // Logging is best-effort; never fail the tool call.
+            }
+          };
+
           const inputRecord = parseToolInput<TInput>(
             input,
             config.fullInputSchema
@@ -165,6 +180,7 @@ export function registerStructuredToolTask<TInput extends object>(
             prompt,
             responseSchema,
             signal: extra.signal,
+            onLog,
           });
 
           await sendProgress(3, 4);

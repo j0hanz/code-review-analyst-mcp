@@ -110,3 +110,47 @@ test('prompt get-help returns user message with instructions', async () => {
     await close();
   }
 });
+
+test('prompt review-guide is discoverable', async () => {
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const result = await client.listPrompts();
+    const prompt = result.prompts.find((p) => p.name === 'review-guide');
+
+    assert.ok(prompt, 'review-guide prompt should exist');
+    assert.equal(
+      prompt.description,
+      'Guided workflow instructions for a specific code review tool and focus area.'
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('prompt review-guide returns workflow guide', async () => {
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const result = await client.getPrompt({
+      name: 'review-guide',
+      arguments: { tool: 'review_diff', focusArea: 'security' },
+    });
+
+    assert.ok(result.messages.length > 0, 'Should return at least one message');
+
+    const message = result.messages[0];
+    assert.ok(message);
+    assert.equal(message.role, 'user');
+    assert.equal(message.content.type, 'text');
+    assert.ok(
+      typeof message.content.text === 'string' &&
+        message.content.text.includes('review_diff'),
+      'Guide text should reference the tool'
+    );
+  } finally {
+    await close();
+  }
+});

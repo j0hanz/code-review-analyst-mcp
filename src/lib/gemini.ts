@@ -125,6 +125,18 @@ function logEvent(event: string, details: Record<string, unknown>): void {
   });
 }
 
+async function safeCallOnLog(
+  onLog: GeminiStructuredRequest['onLog'],
+  level: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  try {
+    await onLog?.(level, data);
+  } catch {
+    // Log callbacks are best-effort; never fail the tool call.
+  }
+}
+
 function getNestedError(error: unknown): Record<string, unknown> | undefined {
   if (!error || typeof error !== 'object') {
     return undefined;
@@ -293,6 +305,7 @@ export async function generateStructuredJson(
   const model = request.model ?? getDefaultModel();
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const { onLog } = request;
 
   return geminiContext.run(
     { requestId: nextRequestId(), model },
@@ -309,9 +322,16 @@ export async function generateStructuredJson(
             timeoutMs
           );
 
+          const latencyMs = Math.round(performance.now() - startedAt);
           logEvent('gemini_call', {
             attempt,
-            latencyMs: Math.round(performance.now() - startedAt),
+            latencyMs,
+            usageMetadata: response.usageMetadata ?? null,
+          });
+          await safeCallOnLog(onLog, 'info', {
+            event: 'gemini_call',
+            attempt,
+            latencyMs,
             usageMetadata: response.usageMetadata ?? null,
           });
 
@@ -342,12 +362,23 @@ export async function generateStructuredJson(
             delayMs,
             reason: getErrorMessage(error),
           });
+          await safeCallOnLog(onLog, 'warning', {
+            event: 'gemini_retry',
+            attempt,
+            delayMs,
+            reason: getErrorMessage(error),
+          });
 
           await sleep(delayMs, undefined, { ref: false });
         }
       }
 
       logEvent('gemini_failure', {
+        error: getErrorMessage(lastError),
+        attempts: maxRetries + 1,
+      });
+      await safeCallOnLog(onLog, 'error', {
+        event: 'gemini_failure',
         error: getErrorMessage(lastError),
         attempts: maxRetries + 1,
       });

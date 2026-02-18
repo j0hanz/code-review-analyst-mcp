@@ -7,6 +7,7 @@ export interface GeminiStructuredRequestOptions {
   temperature?: number;
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  onLog?: (level: string, data: unknown) => Promise<void>;
 }
 
 export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {
