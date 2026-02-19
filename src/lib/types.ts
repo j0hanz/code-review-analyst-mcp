@@ -6,6 +6,7 @@ export interface GeminiStructuredRequestOptions {
   timeoutMs?: number;
   temperature?: number;
   maxOutputTokens?: number;
+  thinkingBudget?: number;
   signal?: AbortSignal;
   onLog?: (level: string, data: unknown) => Promise<void>;
 }

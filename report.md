@@ -1,101 +1,82 @@
-# Code Review Report: MCP Gemini Server Implementation
+# Gemini Code Review Tools: Diagnosis & Proposed Improvements
 
-## What’s strong (architecture + protocol hygiene)
+## 🛑 Diagnosis: Why the Current Tools are Struggling
 
-- **Protocol/transport discipline is excellent.** Pure stdio, “stdout purity,” SIGINT/SIGTERM shutdown, and using `console.error()` for logs is exactly what you want for a stable MCP stdio server.
-- **Clean separation of concerns.** Entrypoint → server bootstrap → registrars → shared factory → Gemini adapter → schema/transform → response shaping. This is the right layering for maintainability.
-- **Two-level schema strategy is solid.** Relaxing schema for Gemini structured output, then validating with strict Zod parsing afterward is the correct reliability pattern for “schema-ish” LLM outputs.
-- **Tool results are consistent and machine-usable.** The `DefaultOutputSchema` envelope + `structuredContent` + mirrored `content[0].text` makes the server robust across client implementations and is easy to consume.
-- **Tasks support is thoughtfully integrated.** Declared capabilities, task store, progress notifications, and cancellation signal wiring are all the right pieces.
+1. **`review_diff` (The "Lack of Context" Problem):** You are passing up to 120,000 characters of raw unified diff text. LLMs perform poorly on raw diffs because they lack the surrounding file context (e.g., type definitions, variable initializations). This leads to generic, hallucinated, or nitpicky feedback (e.g., "missing null check" when the null check happened 10 lines above the diff).
+2. **`suggest_patch` (The "Unified Diff Syntax" Problem):** Asking an LLM to generate a valid unified diff (`@@ -x,y +a,b @@`) is notoriously flaky. LLMs struggle with exact line-number math and whitespace matching for context lines. This results in patches that fail to apply cleanly.
+3. **`risk_score` (The "Subjective Number" Problem):** Asking an LLM for a 0-100 score is highly subjective. The LLM will likely cluster scores around 40-60 unless the code is explicitly malicious. A number doesn't help a developer merge a PR; actionable categories do.
 
-## High-impact issues / risks to address
+---
 
-### 1) Task lifecycle semantics likely need tightening
+## 💡 Proposed Replacements & New Tools
 
-From the workflow, on failure you “store failed result” but the task status handling looks inconsistent:
+To make the tools effective, we need to shift from **monolithic diff analysis** to **targeted, deterministic, and context-aware tasks.** ### 1. Replace `risk_score` with `analyze_pr_impact`
+Instead of an arbitrary 0-100 score, ask Gemini to identify _objective risk categories_. This provides developers with actionable release-readiness data.
 
-- **Error path:** `updateTaskStatus(id, 'working', msg)` then `storeTaskResult(... 'failed' ...)`. That means the task may remain “working” even after a failed result exists. Clients that poll `tasks/get` might show “working” while `tasks/result` is already failed.
-- **Budget-exceeded path:** you store a failed result, but the workflow doesn’t clearly state you also set task status to `failed`.
-- **Cancellation path:** you update to `cancelled`, but it’s unclear whether you _also_ store a cancellation result payload, which many clients appreciate for a deterministic `tasks/result` response.
+- **Input:** `diff` (string), `repository` (string)
+- **Output Schema:**
+- `hasBreakingChanges`: boolean
+- `breakingChangeDetails`: string[] (e.g., "Changed signature of `getUser()`")
+- `hasDependencyUpdates`: boolean
+- `hasDatabaseMigrations`: boolean
+- `securityHotspots`: string[] (e.g., "Modifies authentication middleware")
+- `impactRisk`: enum (`LOW`, `MODERATE`, `HIGH`)
 
-**Recommendation:** Make task status and task result mutually consistent:
+### 2. Replace `suggest_patch` with `suggest_search_replace`
 
-- On failure: `updateTaskStatus(id, 'failed', msg)` (or equivalent) **before/when** storing the failed result.
-- On budget rejection: set status to `failed` and store the error result.
-- On cancellation: set status to `cancelled` and store a cancellation result (e.g., `{ok:false,error:{code:'E_CANCELLED', kind:'cancelled', retryable:false}}`), unless the SDK already guarantees a canonical cancelled result.
+Instead of generating a unified diff, use a "Search and Replace" block pattern. This completely eliminates line-number hallucinations and unified diff syntax errors.
 
-### 2) “Task-augmented” execution may not actually return early
+- **Input:** `diff` (string), `findingTitle` (string)
+- **Output Schema:**
+- `file`: string
+- `exactSearchString`: string (The exact existing code to replace, preserving whitespace)
+- `replacementString`: string (The new code)
+- `explanation`: string
 
-Your workflow describes createTask running the whole Gemini pipeline and then returning `{task}`. If that’s literally happening inline, then the client won’t get the `taskId` until the long-running work finishes, undermining the point of tasks.
+- _Why it works:_ The client applying the patch just runs a string replace in the file, which is infinitely more reliable than applying an LLM-generated `.patch`.
 
-**Recommendation:** Ensure the task execution is actually decoupled:
+### 3. Split `review_diff` into Two Distinct Tools
 
-- `createTask` should create/store task as `working`, return it immediately, and continue work asynchronously (same process, but not blocking the response). This can be as simple as scheduling the pipeline with `void Promise.resolve().then(async () => ...)` (or `queueMicrotask`) after creating/storing the task, while `createTask` returns immediately.
+Passing a massive diff and asking for everything at once degrades output quality. Split the tasks so Gemini can allocate its attention mechanisms effectively.
 
-This preserves all your current shape/tools—just fixes semantics and client UX.
+**Tool A: `generate_review_summary` (High Success Rate)**
+LLMs are incredible at summarization. Use this to generate the PR description or a high-level summary for reviewers.
 
-### 3) Unknown-field “strictness” may be weaker than it looks
+- **Input:** `diff` (string)
+- **Output Schema:**
+- `prTitle`: string
+- `summaryParagraph`: string
+- `bulletedChangelog`: array of `{ category: 'feature'|'fix'|'refactor', description: string }`
 
-You state `z.strictObject()` rejects unknown fields, but also note the SDK strips unknown fields before your full schema parses. That means callers can send misspelled/extra keys and they’ll be silently dropped rather than rejected (depending on SDK behavior).
+**Tool B: `inspect_code_quality` (Targeted Review)**
+Instead of reviewing the whole diff, require the client to pass **the full file content** alongside the diff for the specific file being reviewed.
 
-**Recommendation:** Decide what you want:
+- **Input:** `fileContent` (string), `changedLines` (string or array), `focus` (enum)
+- **Output Schema:**
+- `defects`: array of `{ severity, codeSnippet, explanation, suggestedFix }`
 
-- If you **want strict rejection** of unknown keys, you need access to the raw params (often not possible with SDK stripping) or a different registration strategy.
-- If you’re fine with **“best effort” unknown stripping**, document it clearly (so users don’t assume typos will error).
+- _Why it works:_ Giving Gemini the _full_ file content rather than just the unified diff drastically reduces false positives (like suggesting you import a library that is already imported at the top of the file).
 
-At minimum: align documentation and tests with the real behavior.
+### 4. New Tool: `generate_test_plan`
 
-## Medium-impact improvements (polish, resilience, DX)
+Instead of having `testsNeeded` as a small string array in the main review schema, dedicate a tool to mapping logical branches in the diff to test cases.
 
-### 4) Improve `content[0].text` ergonomics without breaking structured output
+- **Input:** `diff` (string)
+- **Output Schema:**
+- `unitTestsNeeded`: array of `{ functionName, scenarioToTest, assertionTarget }`
+- `integrationTestsNeeded`: array of `{ scenario, rationale }`
+- `edgeCasesToCover`: array of string (e.g., "What happens if `input.diff` is exactly 120,000 chars?")
 
-Right now you mirror JSON into text. That’s great for machines, but not great for humans (and some clients display `content` more prominently than `structuredContent`).
+---
 
-**Recommendation (non-breaking):**
+## 🧠 Gemini Optimization Tips for your Workflow
 
-- Keep `structuredContent` identical.
-- Change `content[0].text` to a concise, human-readable summary (plus maybe a short JSON snippet), while still optionally including full JSON only when `DEBUG` or a flag is set.
-  This improves “default” UX without changing any tool contract.
+1. **Leverage Gemini 2.5 Pro for Reasoning:**
+   In your `README.md`, the default is `gemini-2.5-flash`. Flash is great for `generate_review_summary`, but for deep code review (`inspect_code_quality` or finding bugs), **`gemini-2.5-pro`** will yield significantly fewer false positives and better logical reasoning. You could add an input field to let the client request "deep reasoning" which flips the adapter to use Pro.
+2. **System Prompts vs. Diff Budget:**
+   You currently cap diffs at 120k characters. Gemini 2.5 has a 1M+ token context window. While capping is good for cost and latency, the real issue isn't length, it's _attention_. If you pass a 100k diff to Gemini, force it to process chunk by chunk.
 
-### 5) Tighten severity/risk ordering contracts
+- _Prompt upgrade:_ Change your `SYSTEM_INSTRUCTION` from _"Return strict JSON..."_ to _"Analyze the diff file-by-file. Think step-by-step about the execution flow before outputting the final JSON."_ (You can achieve this by adding a `_reasoning` string field at the top of your Zod output schemas where Gemini can "think" before committing to the `findings` array).
 
-Your workflow says findings are sorted by `critical→high→medium→low`. Ensure this is:
-
-- Enforced in schema enums
-- Enforced in transform function sorting
-- Stable even when the model outputs unknown/typo severities (map to `low` or drop with a validation error, but do it deterministically).
-
-### 6) Logging and observability: add correlation IDs consistently
-
-You already have request context via `AsyncLocalStorage` and you emit structured log events.
-
-**Recommendation:** Include a `requestId` (and tool name, taskId) on every log event payload—consistently. It makes debugging multi-tool concurrency dramatically easier.
-
-### 7) Expand tests around the “hard parts”
-
-Your current test suite covers schemas, transforms, budget, and discovery well.
-
-Add high ROI tests that validate runtime semantics:
-
-- **Task lifecycle correctness:** status transitions (`working→completed/failed/cancelled`) and that `tasks/get` matches stored result state.
-- **Cancellation:** cancel during Gemini call and verify final state + no further progress notifications.
-- **Completions:** you already note this as missing—add it; it’s cheap and prevents regressions.
-
-### 8) Make retry/timeout behavior externally transparent (without new tools)
-
-You already log retry attempts and have retryable classifications.
-
-**Recommendation:** Put retry/timeout info into the error envelope (e.g., `error.retryable`, `error.kind`, maybe a `details` object with `attempts`, `timeoutMs`), so clients/LLMs can decide how to proceed without reading logs.
-
-## Security posture notes
-
-- You’ve minimized stdio attack surface (big win) and you don’t leak secrets in logs/results.
-- One item to revisit: if “BLOCK_NONE” is a default harm threshold, that’s a deliberate choice—make sure it’s explicit in documentation and easy to override via env/config (you already mention an env override).
-
-## Priority action list (practical order)
-
-1. **Fix task status/result consistency** (failed/cancelled states)
-2. **Ensure `createTask` returns immediately** and runs pipeline async (true task semantics)
-3. **Decide and document unknown-key behavior** (reject vs strip)
-4. Improve `content[0].text` for human readability (keep structuredContent stable)
-5. Add tests: task lifecycle, cancellation, completions
+1. **Structured Schema Relaxation:**
+   You currently use `stripJsonSchemaConstraints()` (which is a great practice). Ensure that for Gemini, you aren't enforcing overly tight `.min()` or `.max()` string length constraints on your output Zod schemas natively, as Gemini sometimes struggles to accurately predict character counts during JSON generation, leading to schema validation failures inside your MCP server.

@@ -5,9 +5,9 @@ import { z } from 'zod';
 
 import { stripJsonSchemaConstraints } from '../src/lib/gemini-schema.js';
 import {
-  PatchSuggestionResultSchema,
-  ReviewDiffResultSchema,
-  RiskScoreResultSchema,
+  PrImpactResultSchema,
+  ReviewSummaryResultSchema,
+  SearchReplaceResultSchema,
 } from '../src/schemas/outputs.js';
 
 // --- Unit tests for stripJsonSchemaConstraints ---
@@ -128,8 +128,8 @@ test('returns empty object for empty input', () => {
 
 // --- Integration tests: verify result schemas produce valid relaxed JSON Schema ---
 
-test('ReviewDiffResultSchema produces valid relaxed JSON Schema', () => {
-  const jsonSchema = z.toJSONSchema(ReviewDiffResultSchema);
+test('ReviewSummaryResultSchema produces valid relaxed JSON Schema', () => {
+  const jsonSchema = z.toJSONSchema(ReviewSummaryResultSchema);
   const relaxed = stripJsonSchemaConstraints(
     jsonSchema as Record<string, unknown>
   );
@@ -147,8 +147,8 @@ test('ReviewDiffResultSchema produces valid relaxed JSON Schema', () => {
   assert.ok(!serialized.includes('"integer"'));
 });
 
-test('RiskScoreResultSchema produces valid relaxed JSON Schema', () => {
-  const jsonSchema = z.toJSONSchema(RiskScoreResultSchema);
+test('PrImpactResultSchema produces valid relaxed JSON Schema', () => {
+  const jsonSchema = z.toJSONSchema(PrImpactResultSchema);
   const relaxed = stripJsonSchemaConstraints(
     jsonSchema as Record<string, unknown>
   );
@@ -160,8 +160,8 @@ test('RiskScoreResultSchema produces valid relaxed JSON Schema', () => {
   assert.ok(!serialized.includes('"integer"'));
 });
 
-test('PatchSuggestionResultSchema produces valid relaxed JSON Schema', () => {
-  const jsonSchema = z.toJSONSchema(PatchSuggestionResultSchema);
+test('SearchReplaceResultSchema produces valid relaxed JSON Schema', () => {
+  const jsonSchema = z.toJSONSchema(SearchReplaceResultSchema);
   const relaxed = stripJsonSchemaConstraints(
     jsonSchema as Record<string, unknown>
   );

@@ -10,7 +10,13 @@ const REVIEW_GUIDE_PROMPT_NAME = 'review-guide';
 const REVIEW_GUIDE_PROMPT_DESCRIPTION =
   'Guided workflow instructions for a specific code review tool and focus area.';
 
-const TOOLS = ['review_diff', 'risk_score', 'suggest_patch'] as const;
+const TOOLS = [
+  'analyze_pr_impact',
+  'generate_review_summary',
+  'inspect_code_quality',
+  'suggest_search_replace',
+  'generate_test_plan',
+] as const;
 
 const FOCUS_AREAS = [
   'security',
@@ -21,17 +27,18 @@ const FOCUS_AREAS = [
 ] as const;
 
 const TOOL_GUIDES: Record<string, string> = {
-  review_diff:
-    'Call `review_diff` with `diff` (unified diff text) and `repository` (org/repo). ' +
-    'Optional: `focusAreas` array and `maxFindings` cap. ' +
-    'Returns structured findings, overallRisk, and test recommendations.',
-  risk_score:
-    'Call `risk_score` with `diff`. Optional: `deploymentCriticality` (low, medium, high). ' +
-    'Returns a 0–100 score, bucket, and rationale for release gating.',
-  suggest_patch:
-    'First call `review_diff` to get findings. Then call `suggest_patch` with `diff`, ' +
-    '`findingTitle`, and `findingDetails` from one finding. ' +
-    'Optional: `patchStyle` (minimal, balanced, defensive). One finding per call.',
+  analyze_pr_impact:
+    'Call `analyze_pr_impact` with `diff` and `repository`. ' +
+    'Get severity rating and categorization.',
+  generate_review_summary:
+    'Call `generate_review_summary` for a concise digest and merge recommendation.',
+  inspect_code_quality:
+    'Call `inspect_code_quality` for deep review with optional file context. ' +
+    'Uses thinking model for complex reasoning.',
+  suggest_search_replace:
+    'Call `suggest_search_replace` to generate verbatim search/replace fixes.',
+  generate_test_plan:
+    'Call `generate_test_plan` to create a verification strategy.',
 };
 
 const FOCUS_AREA_GUIDES: Record<string, string> = {
@@ -94,7 +101,7 @@ export function registerAllPrompts(
           z
             .string()
             .describe(
-              'Which review tool to use: review_diff, risk_score, or suggest_patch'
+              'Which review tool to use: analyze_pr_impact, generate_review_summary, etc.'
             ),
           (value) => TOOLS.filter((t) => t.startsWith(value))
         ),

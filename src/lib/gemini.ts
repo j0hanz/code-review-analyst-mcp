@@ -229,6 +229,10 @@ function buildGenerationConfig(
 ): GenerateContentConfig {
   const safetyThreshold = getSafetyThreshold();
 
+  const thinkingConfig = request.thinkingBudget
+    ? { includeThoughts: true, thinkingBudget: request.thinkingBudget }
+    : undefined;
+
   return {
     temperature: request.temperature ?? 0.2,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -238,6 +242,7 @@ function buildGenerationConfig(
     ...(request.systemInstruction
       ? { systemInstruction: request.systemInstruction }
       : undefined),
+    ...(thinkingConfig ? { thinkingConfig } : undefined),
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,

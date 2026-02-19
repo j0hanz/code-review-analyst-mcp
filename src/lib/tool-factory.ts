@@ -59,6 +59,12 @@ export interface StructuredToolTaskConfig<
     | ReturnType<typeof createErrorToolResponse>
     | undefined;
 
+  /** Optional Gemini model to use (e.g. 'gemini-2.5-pro'). */
+  model?: string;
+
+  /** Optional thinking budget in tokens. */
+  thinkingBudget?: number;
+
   /** Optional formatter for human-readable text output. */
   formatOutput?: (result: unknown) => string;
 
@@ -200,6 +206,10 @@ export function registerStructuredToolTask<TInput extends object>(
               systemInstruction,
               prompt,
               responseSchema,
+              ...(config.model ? { model: config.model } : undefined),
+              ...(config.thinkingBudget
+                ? { thinkingBudget: config.thinkingBudget }
+                : undefined),
               onLog,
             });
 

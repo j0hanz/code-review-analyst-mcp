@@ -26,61 +26,105 @@ function createDiffSchema(description: string): z.ZodString {
   );
 }
 
-export const ReviewDiffInputSchema = z.strictObject({
+export const FileContextSchema = z.strictObject({
+  path: z.string().min(1).max(500).describe('File path relative to repo root.'),
+  content: z.string().min(0).max(100_000).describe('Full file content.'),
+});
+
+export const AnalyzePrImpactInputSchema = z.strictObject({
+  diff: createDiffSchema('Unified diff text for the PR or commit.'),
+  repository: createBoundedString(
+    1,
+    200,
+    'Repository identifier, e.g. org/repo.'
+  ),
+  language: z
+    .string()
+    .min(2)
+    .max(32)
+    .optional()
+    .describe('Primary language to bias analysis.'),
+});
+
+export const GenerateReviewSummaryInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text for one PR or commit.'),
   repository: createBoundedString(
-    INPUT_LIMITS.repository.min,
-    INPUT_LIMITS.repository.max,
-    'Repository identifier, for example org/repo.'
+    1,
+    200,
+    'Repository identifier, e.g. org/repo.'
   ),
-  language: createBoundedString(
-    INPUT_LIMITS.language.min,
-    INPUT_LIMITS.language.max,
-    'Primary implementation language to bias review depth.'
-  ).optional(),
-  focusAreas: z
-    .array(
-      createBoundedString(
-        INPUT_LIMITS.focusArea.min,
-        INPUT_LIMITS.focusArea.max,
-        'Specific area to inspect, for example security or tests.'
-      )
-    )
-    .min(1)
-    .max(INPUT_LIMITS.focusArea.maxItems)
+  language: z
+    .string()
+    .min(2)
+    .max(32)
     .optional()
-    .describe('Optional list of priorities for this review pass.'),
+    .describe('Primary implementation language.'),
+});
+
+export const InspectCodeQualityInputSchema = z.strictObject({
+  diff: createDiffSchema('Unified diff text for in-depth analysis.'),
+  repository: createBoundedString(
+    1,
+    200,
+    'Repository identifier, e.g. org/repo.'
+  ),
+  language: z.string().min(2).max(32).optional().describe('Primary language.'),
+  focusAreas: z
+    .array(z.string().min(2).max(80))
+    .min(1)
+    .max(12)
+    .optional()
+    .describe('Specific areas to inspect: security, correctness, etc.'),
   maxFindings: z
     .number()
     .int()
-    .min(INPUT_LIMITS.maxFindings.min)
-    .max(INPUT_LIMITS.maxFindings.max)
+    .min(1)
+    .max(25)
     .optional()
     .describe('Maximum number of findings to return.'),
-});
-
-export const RiskScoreInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff text to analyze for release risk.'),
-  deploymentCriticality: z
-    .enum(['low', 'medium', 'high'])
+  files: z
+    .array(FileContextSchema)
+    .min(1)
+    .max(20)
     .optional()
-    .describe('How sensitive the target system is to regressions.'),
+    .describe(
+      'Full file contents for context-aware analysis. Provide the files changed in the diff for best results.'
+    ),
 });
 
-export const SuggestPatchInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff text that contains the issue to patch.'),
+export const SuggestSearchReplaceInputSchema = z.strictObject({
+  diff: createDiffSchema('Unified diff that contains the issue to fix.'),
   findingTitle: createBoundedString(
-    INPUT_LIMITS.findingTitle.min,
-    INPUT_LIMITS.findingTitle.max,
-    'Short title of the finding that needs a patch.'
+    3,
+    160,
+    'Short title of the finding to fix.'
   ),
   findingDetails: createBoundedString(
-    INPUT_LIMITS.findingDetails.min,
-    INPUT_LIMITS.findingDetails.max,
+    10,
+    3000,
     'Detailed explanation of the bug or risk.'
   ),
-  patchStyle: z
-    .enum(['minimal', 'balanced', 'defensive'])
+});
+
+export const GenerateTestPlanInputSchema = z.strictObject({
+  diff: createDiffSchema('Unified diff to generate tests for.'),
+  repository: createBoundedString(
+    1,
+    200,
+    'Repository identifier, e.g. org/repo.'
+  ),
+  language: z.string().min(2).max(32).optional().describe('Primary language.'),
+  testFramework: z
+    .string()
+    .min(1)
+    .max(50)
     .optional()
-    .describe('How broad the patch should be.'),
+    .describe('Test framework to use, e.g. jest, vitest, pytest, node:test.'),
+  maxTestCases: z
+    .number()
+    .int()
+    .min(1)
+    .max(30)
+    .optional()
+    .describe('Maximum number of test cases to return.'),
 });

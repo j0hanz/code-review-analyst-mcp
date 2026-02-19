@@ -7,8 +7,8 @@ These instructions are available as a resource (internal://instructions) or prom
 ## CORE CAPABILITY
 
 - Domain: Analyze pull request diffs with Gemini and return structured review findings, risk scores, and focused patch suggestions for automation clients.
-- Primary Resources: Unified diff text, structured JSON review results, release-risk assessments, and unified-diff patch suggestions.
-- Tools: READ: `review_diff`, `risk_score`, `suggest_patch`. WRITE: none.
+- Primary Resources: Unified diff text, structured JSON review results, release-risk assessments, and search/replace suggestions.
+- Tools: `analyze_pr_impact`, `generate_review_summary`, `inspect_code_quality`, `suggest_search_replace`, `generate_test_plan`.
 
 ---
 
@@ -26,104 +26,83 @@ These instructions are available as a resource (internal://instructions) or prom
 
 ## PROGRESS & TASKS
 
-- Include `_meta.progressToken` in requests to receive `notifications/progress` updates during Gemini processing.
-- Task-augmented tool calls are supported for `review_diff`, `risk_score`, and `suggest_patch`:
-  - These tools declare `execution.taskSupport: "optional"` — invoke normally or as a task.
-  - Send `tools/call` with `task` to get a task id.
+- Include `_meta.progressToken` in requests to receive `notifications/progress` updates.
+- All tools support task execution (`execution.taskSupport: "optional"`).
+  - Invoke normally for direct results, or with `task` parameter for async execution.
   - Poll `tasks/get` and fetch results via `tasks/result`.
-  - Use `tasks/cancel` to abort.
-  - Task data is stored in memory and cleared on restart.
 
 ---
 
 ## THE "GOLDEN PATH" WORKFLOWS (CRITICAL)
 
-### WORKFLOW A: FULL PR REVIEW
+### WORKFLOW A: QUICK PR TRIAGE
 
-1. Call `review_diff` with `diff` and `repository` to get structured findings and merge risk.
-2. Use `focusAreas` to bias analysis toward the highest-priority concerns.
-3. Use `maxFindings` to cap result volume when context windows are tight.
-   NOTE: Never pass oversized diffs. Pre-check against your own limits and handle `E_INPUT_TOO_LARGE`.
+1. Call `analyze_pr_impact` to get a severity rating and category breakdown.
+2. If severity is low/medium, call `generate_review_summary` for a quick digest.
+3. If severity is high/critical, proceed to Workflow B.
 
-### WORKFLOW B: RELEASE GATE RISK CHECK
+### WORKFLOW B: DEEP CODE INSPECTION
 
-1. Call `risk_score` with `diff` to get a 0–100 score, bucket, and rationale.
-2. Set `deploymentCriticality` when evaluating sensitive systems.
-3. Use score and rationale to decide whether to block or require additional validation.
-   NOTE: Call `review_diff` first if you need file-level defect evidence.
+1. Call `inspect_code_quality` with the diff and optionally critical files in `files[]`.
+2. Review findings and `contextualInsights`.
+3. Use `focusAreas` to target specific concerns (security, performance).
 
-### WORKFLOW C: PATCH FROM A SELECTED FINDING
+### WORKFLOW C: REMEDIATION & TESTING
 
-1. Call `review_diff` to identify one concrete finding to fix.
-2. Call `suggest_patch` with the same `diff`, plus `findingTitle` and `findingDetails` from that finding.
-3. Use `patchStyle` (`minimal`, `balanced`, `defensive`) to control change breadth.
-   NOTE: Keep inputs scoped to one finding at a time to avoid mixed patch intent.
+1. For each valid finding, call `suggest_search_replace` to generate a fix.
+2. Call `generate_test_plan` to create a verification strategy for the changes.
+3. Apply fixes and implement tests.
 
 ---
 
 ## TOOL NUANCES & GOTCHAS
 
-`review_diff`
+`analyze_pr_impact` (Flash Model)
 
-- Purpose: Generate structured review findings, overall risk, and test recommendations from a unified diff.
-- Input: `maxFindings` defaults to 10; `focusAreas` defaults to security/correctness/regressions/performance when omitted.
-- Output: `ok/result/error` envelope; successful payload includes `summary`, `overallRisk`, `findings[]`, and `testsNeeded[]`.
-- Gotcha: Both schema and runtime limit `diff` to 120,000 chars by default (overridable via `MAX_DIFF_CHARS`). Oversized diffs fail with `E_INPUT_TOO_LARGE`; the error `result` payload contains `{providedChars, maxChars}` for automated handling.
-- Gotcha: The SDK automatically strips unknown input fields before validation. Typos in optional fields (like `focusAreas`) will be silently ignored rather than rejected.
-- Gotcha: `maxFindings` is enforced server-side — findings are sorted by severity (critical→high→medium→low) and clamped to the requested limit before returning.
-- Side effects: Calls external Gemini API (`openWorldHint: true`); does not mutate local state (`readOnlyHint: true`).
+- Purpose: Objective assessment of PR impact (breaking changes, API changes, etc).
+- Input: `diff`, `repository`.
+- Output: `severity` (low|medium|high|critical), `categories[]`, `breakingChanges[]`.
 
-`risk_score`
+`generate_review_summary` (Flash Model)
 
-- Purpose: Produce deployment risk score and rationale for release decisions.
-- Input: `deploymentCriticality` defaults to `medium` when omitted.
-- Output: `ok/result/error` envelope; successful payload includes `score`, `bucket`, and `rationale[]`.
-- Gotcha: Uses the same runtime diff budget guard as other tools; oversized inputs fail before model execution.
-- Side effects: External Gemini call only.
+- Purpose: High-level summary and merge recommendation.
+- Input: `diff`, `repository`.
+- Output: `summary`, `overallRisk`, `recommendation`, `keyChanges[]`.
 
-`suggest_patch`
+`inspect_code_quality` (Pro Model + Thinking)
 
-- Purpose: Generate a focused unified diff patch for one selected review finding.
-- Input: `patchStyle` defaults to `balanced`; requires both `findingTitle` and `findingDetails`.
-- Output: `ok/result/error` envelope; successful payload includes `summary`, `patch`, and `validationChecklist[]`.
-- Gotcha: Output is model-generated text and must be validated before application.
-- Side effects: External Gemini call only.
+- Purpose: Deep-dive review. Uses Pro model with thinking budget (16k tokens) for complex reasoning.
+- Input: `diff`, `files[]` (optional context).
+- Output: `findings[]`, `contextualInsights[]`, `overallRisk`.
+- Gotcha: Enforces `MAX_CONTEXT_CHARS` (default 500k) on combined diff + files size.
+- Latency: Expect 60-120s due to deep thinking.
 
----
+`suggest_search_replace` (Pro Model + Thinking)
 
-## CROSS-FEATURE RELATIONSHIPS
+- Purpose: Generate verbatim search/replace blocks for fixes.
+- Input: `diff`, `findingTitle`, `findingDetails`.
+- Output: `blocks[]` (`{file, search, replace}`).
+- Gotcha: `search` block must match file content EXACTLY.
 
-- Use `review_diff` first to generate concrete finding metadata for `suggest_patch` inputs.
-- Use `risk_score` after `review_diff` when you need both defect-level detail and a release gate score.
-- All tools share the same Gemini adapter, retry policy, timeout policy, and diff-size guard.
-- All tool responses include both `structuredContent` and JSON-string `content` for client compatibility.
-- Error payloads include a machine-readable `error.kind` field (`'validation'|'budget'|'upstream'|'timeout'|'cancelled'|'internal'`) and an `error.retryable` boolean when set; use these for automated retry logic.
+`generate_test_plan` (Flash Model + Thinking)
+
+- Purpose: Systematic test case generation.
+- Input: `diff`, `testFramework`.
+- Output: `testCases[]` (`{type, priority, pseudoCode}`).
 
 ---
 
 ## CONSTRAINTS & LIMITATIONS
 
-- Transport: stdio only in current server entrypoint.
-- API credentials: Require `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
-- Model selection: Uses `GEMINI_MODEL` if set; defaults to `gemini-2.5-flash`.
-- Diff size: Both schema and runtime default to 120,000 chars (`MAX_DIFF_CHARS` env override). All three tools share the same limit.
-- Task TTL: Tasks default to a 30-minute lifetime. Cancelled tasks have `status: 'cancelled'` with no result payload.
-- Task Async: `createTask` returns immediately. The heavy lifting happens in the background. Poll `tasks/get` to see progress and final result.
-- Timeout/retries: Per-call timeout defaults to 60,000 ms; retry count defaults to 1 with exponential backoff.
-- Output tokens: `maxOutputTokens` defaults to 16,384 to prevent unbounded responses.
-- Safety config: Gemini safety thresholds default to `BLOCK_NONE` for configured harm categories and can be overridden with `GEMINI_HARM_BLOCK_THRESHOLD` (`BLOCK_NONE`, `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE`).
-- Resource scope: Only `internal://instructions` is registered as a resource; no dynamic resource templates are exposed.
-- Prompt scope: Only `get-help` is registered.
+- **Diff Budget:** 120,000 chars (default). Overridable via `MAX_DIFF_CHARS`.
+- **Context Budget:** 500,000 chars (diff + files) for `inspect_code_quality`. Overridable via `MAX_CONTEXT_CHARS`.
+- **Models:** Uses `gemini-2.5-flash` for fast tools and `gemini-2.5-pro` for deep analysis.
+- **Thinking:** Enabled for deep tools. Increases latency but improves quality.
 
 ---
 
 ## ERROR HANDLING STRATEGY
 
-- `E_INPUT_TOO_LARGE`: Diff exceeded runtime budget. Error `result` contains `{providedChars, maxChars}`. → Split the diff into smaller chunks or raise `MAX_DIFF_CHARS` safely.
-- `E_REVIEW_DIFF`: Review generation failed. → Check API key env vars, reduce diff size, and retry; inspect stderr Gemini logs.
-- `E_RISK_SCORE`: Risk scoring failed. → Check connectivity/model availability and retry with same diff.
-- `E_SUGGEST_PATCH`: Patch generation failed. → Verify finding inputs are specific and retry with narrower details.
-- Missing `GEMINI_API_KEY`/`GOOGLE_API_KEY` (wrapped by tool error codes): Credentials not configured. → Set one API key env var and rerun.
-- Gemini timeout message (`Gemini request timed out after ...ms.`): Request exceeded timeout budget. → Reduce prompt/diff size or increase `timeoutMs` in caller.
-- Empty model body (`Gemini returned an empty response body.`): Provider returned no text payload. → Retry and inspect model/service status.
-- JSON parse failure from model output (wrapped by tool error codes): Output was not valid JSON. → Retry with same schema; inspect logs for malformed response text.
+- `E_INPUT_TOO_LARGE`: Diff or context exceeded budget. Reduce scope.
+- `E_ANALYZE_IMPACT` etc: Tool-specific failures. Check API key and quota.
+- `Gemini request timed out`: Pro model tasks might time out. Increase client timeout.

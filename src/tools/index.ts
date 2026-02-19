@@ -1,15 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { registerReviewDiffTool } from './review-diff.js';
-import { registerRiskScoreTool } from './risk-score.js';
-import { registerSuggestPatchTool } from './suggest-patch.js';
+import { registerAnalyzePrImpactTool } from './analyze-pr-impact.js';
+import { registerGenerateReviewSummaryTool } from './generate-review-summary.js';
+import { registerGenerateTestPlanTool } from './generate-test-plan.js';
+import { registerInspectCodeQualityTool } from './inspect-code-quality.js';
+import { registerSuggestSearchReplaceTool } from './suggest-search-replace.js';
 
 type ToolRegistrar = (server: McpServer) => void;
 
 const TOOL_REGISTRARS = [
-  registerReviewDiffTool,
-  registerRiskScoreTool,
-  registerSuggestPatchTool,
+  registerAnalyzePrImpactTool,
+  registerGenerateReviewSummaryTool,
+  registerInspectCodeQualityTool,
+  registerSuggestSearchReplaceTool,
+  registerGenerateTestPlanTool,
 ] as const satisfies readonly ToolRegistrar[];
 
 export function registerAllTools(server: McpServer): void {
