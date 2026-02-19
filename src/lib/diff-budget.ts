@@ -18,10 +18,8 @@ function parsePositiveInteger(value: string): number | undefined {
 }
 
 function getConfiguredMaxDiffChars(): number {
-  return (
-    parsePositiveInteger(process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '') ??
-    DEFAULT_MAX_DIFF_CHARS
-  );
+  const envValue = process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '';
+  return parsePositiveInteger(envValue) ?? DEFAULT_MAX_DIFF_CHARS;
 }
 
 export function getMaxDiffChars(): number {
@@ -46,11 +44,11 @@ const BUDGET_ERROR_META: ErrorMeta = { retryable: false, kind: 'budget' };
 export function validateDiffBudget(
   diff: string
 ): ReturnType<typeof createErrorToolResponse> | undefined {
+  const providedChars = diff.length;
   if (!exceedsDiffBudget(diff)) {
     return undefined;
   }
 
-  const providedChars = diff.length;
   const maxChars = getMaxDiffChars();
 
   return createErrorToolResponse(

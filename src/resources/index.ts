@@ -3,6 +3,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 const RESOURCE_ID = 'server-instructions';
 const RESOURCE_URI = 'internal://instructions';
 const RESOURCE_MIME_TYPE = 'text/markdown';
+const RESOURCE_METADATA = {
+  title: 'Server Instructions',
+  description: 'Guidance for using the MCP tools effectively.',
+  mimeType: RESOURCE_MIME_TYPE,
+  annotations: {
+    audience: ['assistant' as const],
+    priority: 0.8,
+  },
+};
 
 function createInstructionsContents(
   uri: URL,
@@ -28,16 +37,8 @@ export function registerAllResources(
   server.registerResource(
     RESOURCE_ID,
     RESOURCE_URI,
-    {
-      title: 'Server Instructions',
-      description: 'Guidance for using the MCP tools effectively.',
-      mimeType: RESOURCE_MIME_TYPE,
-      annotations: {
-        audience: ['assistant'],
-        priority: 0.8,
-      },
-    },
-    (uri) => ({
+    RESOURCE_METADATA,
+    (uri: URL) => ({
       contents: createInstructionsContents(uri, instructions),
     })
   );

@@ -32,6 +32,20 @@ function createBoundedString(
   return z.string().min(min).max(max).describe(description);
 }
 
+function createBoundedStringArray(
+  itemMin: number,
+  itemMax: number,
+  minItems: number,
+  maxItems: number,
+  description: string
+): z.ZodArray<z.ZodString> {
+  return z
+    .array(z.string().min(itemMin).max(itemMax))
+    .min(minItems)
+    .max(maxItems)
+    .describe(description);
+}
+
 export const DefaultOutputSchema = z.strictObject({
   ok: z.boolean().describe('Whether the tool completed successfully.'),
   result: z.unknown().optional().describe('Successful result payload.'),
@@ -115,16 +129,20 @@ export const PrImpactResultSchema = z.strictObject({
     .max(10)
     .describe('Impact categories detected in the diff.'),
   summary: z.string().min(1).max(1000).describe('Concise impact summary.'),
-  breakingChanges: z
-    .array(z.string().min(1).max(500))
-    .min(0)
-    .max(10)
-    .describe('Specific breaking changes identified.'),
-  affectedAreas: z
-    .array(z.string().min(1).max(200))
-    .min(0)
-    .max(20)
-    .describe('Subsystems or files impacted.'),
+  breakingChanges: createBoundedStringArray(
+    1,
+    500,
+    0,
+    10,
+    'Specific breaking changes identified.'
+  ),
+  affectedAreas: createBoundedStringArray(
+    1,
+    200,
+    0,
+    20,
+    'Subsystems or files impacted.'
+  ),
   rollbackComplexity: z
     .enum(['trivial', 'moderate', 'complex', 'irreversible'])
     .describe('Estimated difficulty to revert this change.'),
@@ -135,11 +153,13 @@ export const ReviewSummaryResultSchema = z.strictObject({
   overallRisk: z
     .enum(['low', 'medium', 'high'])
     .describe('High-level merge risk.'),
-  keyChanges: z
-    .array(z.string().min(1).max(300))
-    .min(1)
-    .max(15)
-    .describe('Most important changes, ordered by significance.'),
+  keyChanges: createBoundedStringArray(
+    1,
+    300,
+    1,
+    15,
+    'Most important changes, ordered by significance.'
+  ),
   recommendation: z
     .string()
     .min(1)
@@ -168,18 +188,20 @@ export const CodeQualityResultSchema = z.strictObject({
     .min(0)
     .max(30)
     .describe('Findings ordered by severity, highest first.'),
-  testsNeeded: z
-    .array(z.string().min(1).max(300))
-    .min(0)
-    .max(12)
-    .describe('Test cases needed to validate this change.'),
-  contextualInsights: z
-    .array(z.string().min(1).max(500))
-    .min(0)
-    .max(5)
-    .describe(
-      'Insights only possible with full file context that diff alone cannot reveal.'
-    ),
+  testsNeeded: createBoundedStringArray(
+    1,
+    300,
+    0,
+    12,
+    'Test cases needed to validate this change.'
+  ),
+  contextualInsights: createBoundedStringArray(
+    1,
+    500,
+    0,
+    5,
+    'Insights only possible with full file context that diff alone cannot reveal.'
+  ),
 });
 
 export const SearchReplaceBlockSchema = z.strictObject({
@@ -208,11 +230,13 @@ export const SearchReplaceResultSchema = z.strictObject({
     .min(1)
     .max(10)
     .describe('Search/replace operations to apply, in order.'),
-  validationChecklist: z
-    .array(z.string().min(1).max(300))
-    .min(1)
-    .max(12)
-    .describe('Steps to validate the fix after applying.'),
+  validationChecklist: createBoundedStringArray(
+    1,
+    300,
+    1,
+    12,
+    'Steps to validate the fix after applying.'
+  ),
 });
 
 export const TestCaseSchema = z.strictObject({

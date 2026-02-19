@@ -23,6 +23,7 @@ export interface PromptParts {
 
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 const TASK_PROGRESS_TOTAL = 4;
+const INPUT_VALIDATION_FAILED = 'Input validation failed';
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
@@ -90,6 +91,31 @@ function parseToolInput<TInput extends object>(
   fullInputSchema: z.ZodType<TInput>
 ): TInput {
   return fullInputSchema.parse(input);
+}
+
+function createGenerationRequest<TInput extends object>(
+  config: StructuredToolTaskConfig<TInput>,
+  promptParts: PromptParts,
+  responseSchema: Record<string, unknown>,
+  onLog: (level: string, data: unknown) => Promise<void>
+): {
+  model?: string;
+  thinkingBudget?: number;
+  onLog: (level: string, data: unknown) => Promise<void>;
+  systemInstruction: string;
+  prompt: string;
+  responseSchema: Record<string, unknown>;
+} {
+  return {
+    systemInstruction: promptParts.systemInstruction,
+    prompt: promptParts.prompt,
+    responseSchema,
+    ...(config.model ? { model: config.model } : undefined),
+    ...(config.thinkingBudget
+      ? { thinkingBudget: config.thinkingBudget }
+      : undefined),
+    onLog,
+  };
 }
 
 async function sendTaskProgress(
@@ -203,7 +229,7 @@ export function registerStructuredToolTask<TInput extends object>(
               if (validationError) {
                 const validationMessage =
                   validationError.structuredContent.error?.message ??
-                  'Input validation failed';
+                  INPUT_VALIDATION_FAILED;
                 await extra.taskStore.updateTaskStatus(
                   task.taskId,
                   'failed',
@@ -225,16 +251,14 @@ export function registerStructuredToolTask<TInput extends object>(
 
             await sendTaskProgress(extra, 2);
 
-            const raw = await generateStructuredJson({
-              systemInstruction,
-              prompt,
-              responseSchema,
-              ...(config.model ? { model: config.model } : undefined),
-              ...(config.thinkingBudget
-                ? { thinkingBudget: config.thinkingBudget }
-                : undefined),
-              onLog,
-            });
+            const raw = await generateStructuredJson(
+              createGenerationRequest(
+                config,
+                { systemInstruction, prompt },
+                responseSchema,
+                onLog
+              )
+            );
 
             await sendTaskProgress(extra, 3);
 

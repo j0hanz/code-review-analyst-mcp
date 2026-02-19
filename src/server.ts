@@ -19,6 +19,21 @@ const SERVER_NAME = 'code-review-analyst';
 const INSTRUCTIONS_FILENAME = 'instructions.md';
 const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
 const UTF8_ENCODING = 'utf8';
+const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+
+const SERVER_CAPABILITIES = {
+  logging: {},
+  completions: {},
+  tasks: {
+    list: {},
+    cancel: {},
+    requests: {
+      tools: {
+        call: {},
+      },
+    },
+  },
+} as const;
 
 function isPackageJsonMetadata(value: unknown): value is PackageJsonMetadata {
   return (
@@ -74,8 +89,7 @@ function loadVersion(): string {
 const SERVER_VERSION = loadVersion();
 
 function getInstructionsPath(): string {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
-  return join(currentDir, INSTRUCTIONS_FILENAME);
+  return join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
 }
 
 function loadInstructions(): string {
@@ -103,19 +117,7 @@ export function createServer(): McpServer {
     {
       instructions: SERVER_INSTRUCTIONS,
       taskStore: SERVER_TASK_STORE,
-      capabilities: {
-        logging: {},
-        completions: {},
-        tasks: {
-          list: {},
-          cancel: {},
-          requests: {
-            tools: {
-              call: {},
-            },
-          },
-        },
-      },
+      capabilities: SERVER_CAPABILITIES,
     }
   );
 

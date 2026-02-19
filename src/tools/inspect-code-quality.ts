@@ -10,6 +10,37 @@ import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import { CodeQualityResultSchema } from '../schemas/outputs.js';
 
+const DEFAULT_LANGUAGE = 'detect';
+const DEFAULT_FOCUS_AREAS = 'General';
+const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
+const SYSTEM_INSTRUCTION = `
+You are a principal software engineer performing a deep code review.
+Analyze the diff and provided file context to identify bugs, security issues, and quality problems.
+Consider interactions between changed code and surrounding code.
+Prioritize correctness and maintainability.
+Return strict JSON only.
+`;
+
+function formatFileContext(
+  files: readonly { path: string; content: string }[] | undefined
+): string {
+  if (!files || files.length === 0) {
+    return '';
+  }
+
+  const fileBlocks = files
+    .map(
+      (file) => `
+<file path="${file.path}">
+${file.content}
+</file>
+`
+    )
+    .join('\n');
+
+  return `${FILE_CONTEXT_HEADING}${fileBlocks}`;
+}
+
 export function registerInspectCodeQualityTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'inspect_code_quality',
@@ -33,32 +64,11 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
       const fileSummary = formatFileSummary(files);
-
-      let fileContext = '';
-      if (input.files && input.files.length > 0) {
-        const fileBlocks = input.files
-          .map(
-            (f) => `
-<file path="${f.path}">
-${f.content}
-</file>
-`
-          )
-          .join('\n');
-        fileContext = `\nFull File Context:\n${fileBlocks}`;
-      }
-
-      const systemInstruction = `
-You are a principal software engineer performing a deep code review.
-Analyze the diff and provided file context to identify bugs, security issues, and quality problems.
-Consider interactions between changed code and surrounding code.
-Prioritize correctness and maintainability.
-Return strict JSON only.
-`;
+      const fileContext = formatFileContext(input.files);
       const prompt = `
 Repository: ${input.repository}
-Language: ${input.language ?? 'detect'}
-Focus Areas: ${input.focusAreas?.join(', ') ?? 'General'}
+Language: ${input.language ?? DEFAULT_LANGUAGE}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}
 Changed Files:
 ${fileSummary}
 
@@ -66,7 +76,7 @@ Diff:
 ${input.diff}
 ${fileContext}
 `;
-      return { systemInstruction, prompt };
+      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
     },
   });
 }

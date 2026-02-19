@@ -2,10 +2,15 @@ import parseDiff from 'parse-diff';
 import type { File as ParsedFile } from 'parse-diff';
 
 export type { ParsedFile };
+const UNKNOWN_PATH = 'unknown';
+const NO_FILES_CHANGED = 'No files changed.';
 
 /** Parse unified diff string into structured file list. */
 export function parseDiffFiles(diff: string): ParsedFile[] {
-  if (!diff) return [];
+  if (!diff) {
+    return [];
+  }
+
   return parseDiff(diff);
 }
 
@@ -63,15 +68,17 @@ export function computeDiffStats(
  * Example: "src/foo.ts (+12 -3), src/bar.ts (+0 -5) [2 files, +12 -8]"
  */
 export function formatFileSummary(files: ParsedFile[]): string {
-  if (files.length === 0) return 'No files changed.';
+  if (files.length === 0) {
+    return NO_FILES_CHANGED;
+  }
 
   let totalAdded = 0;
   let totalDeleted = 0;
-  const summaries = files.map((f) => {
-    totalAdded += f.additions;
-    totalDeleted += f.deletions;
-    const path = resolveChangedPath(f) ?? 'unknown';
-    return `${path} (+${f.additions} -${f.deletions})`;
+  const summaries = files.map((file) => {
+    totalAdded += file.additions;
+    totalDeleted += file.deletions;
+    const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
+    return `${path} (+${file.additions} -${file.deletions})`;
   });
 
   return `${summaries.join(', ')} [${files.length} files, +${totalAdded} -${totalDeleted}]`;

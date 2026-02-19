@@ -59,6 +59,16 @@ function toTextContent(
   return [{ type: 'text', text }];
 }
 
+function buildToolResponse<TStructuredContent extends ToolStructuredContent>(
+  structured: TStructuredContent,
+  textContent?: string
+): ToolResponse<TStructuredContent> {
+  return {
+    content: toTextContent(structured, textContent),
+    structuredContent: structured,
+  };
+}
+
 function createErrorStructuredContent(
   code: string,
   message: string,
@@ -85,10 +95,7 @@ export function createToolResponse<
   structured: TStructuredContent,
   textContent?: string
 ): ToolResponse<TStructuredContent> {
-  return {
-    content: toTextContent(structured, textContent),
-    structuredContent: structured,
-  };
+  return buildToolResponse(structured, textContent);
 }
 
 export function createErrorToolResponse(
@@ -100,8 +107,7 @@ export function createErrorToolResponse(
   const structured = createErrorStructuredContent(code, message, result, meta);
 
   return {
-    content: toTextContent(structured),
-    structuredContent: structured,
+    ...buildToolResponse(structured),
     isError: true,
   };
 }

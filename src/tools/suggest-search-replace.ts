@@ -9,6 +9,15 @@ import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 
+const SYSTEM_INSTRUCTION = `
+You are a code remediation expert.
+Generate precise search-and-replace blocks to fix the described issue.
+The 'search' block must match exact verbatim text from the file (including whitespace).
+Do not invent code that isn't present.
+Scope your suggestions to the changed files if possible.
+Return strict JSON only.
+`;
+
 export function registerSuggestSearchReplaceTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'suggest_search_replace',
@@ -20,24 +29,13 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',
     model: PRO_MODEL,
     thinkingBudget: FLASH_THINKING_BUDGET,
-    validateInput: (input) => {
-      return validateDiffBudget(input.diff);
-    },
+    validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
       const typed = result as z.infer<typeof SearchReplaceResultSchema>;
       return `Search/Replace Suggestion: ${typed.summary}`;
     },
     buildPrompt: (input) => {
       const paths = extractChangedPaths(input.diff);
-
-      const systemInstruction = `
-You are a code remediation expert.
-Generate precise search-and-replace blocks to fix the described issue.
-The 'search' block must match exact verbatim text from the file (including whitespace).
-Do not invent code that isn't present.
-Scope your suggestions to the changed files if possible.
-Return strict JSON only.
-`;
       const prompt = `
 Finding: ${input.findingTitle}
 Details: ${input.findingDetails}
@@ -46,7 +44,7 @@ Changed Files: ${paths.join(', ')}
 Diff:
 ${input.diff}
 `;
-      return { systemInstruction, prompt };
+      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
     },
   });
 }

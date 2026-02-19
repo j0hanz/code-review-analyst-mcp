@@ -4,17 +4,21 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function hasMessageProperty(error: unknown): error is { message: string } {
+function hasStringProperty<K extends string>(
+  value: unknown,
+  key: K
+): value is Record<K, string> {
+  const record = value as Record<K, unknown>;
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof error.message === 'string'
+    typeof value === 'object' &&
+    value !== null &&
+    key in value &&
+    typeof record[key] === 'string'
   );
 }
 
 export function getErrorMessage(error: unknown): string {
-  if (hasMessageProperty(error)) {
+  if (hasStringProperty(error, 'message')) {
     return error.message;
   }
 

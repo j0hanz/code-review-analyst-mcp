@@ -9,6 +9,16 @@ import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
+const DEFAULT_LANGUAGE = 'detect';
+const DEFAULT_TEST_FRAMEWORK = 'detect';
+const SYSTEM_INSTRUCTION = `
+You are a QA automation architect.
+Analyze the diff and generate a comprehensive test plan.
+Focus on edge cases, logical branches, and integration points affected by the changes.
+Ensure test cases are actionable and verify specific behaviors.
+Return strict JSON only.
+`;
+
 export function registerGenerateTestPlanTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_test_plan',
@@ -20,9 +30,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     errorCode: 'E_GENERATE_TEST_PLAN',
     model: FLASH_MODEL,
     thinkingBudget: FLASH_THINKING_BUDGET,
-    validateInput: (input) => {
-      return validateDiffBudget(input.diff);
-    },
+    validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
       const typed = result as z.infer<typeof TestPlanResultSchema>;
       return `Test Plan: ${typed.summary}\n${typed.testCases.length} cases proposed.`;
@@ -30,25 +38,17 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     buildPrompt: (input) => {
       const stats = computeDiffStats(input.diff);
       const paths = extractChangedPaths(input.diff);
-
-      const systemInstruction = `
-You are a QA automation architect.
-Analyze the diff and generate a comprehensive test plan.
-Focus on edge cases, logical branches, and integration points affected by the changes.
-Ensure test cases are actionable and verify specific behaviors.
-Return strict JSON only.
-`;
       const prompt = `
 Repository: ${input.repository}
-Language: ${input.language ?? 'detect'}
-Test Framework: ${input.testFramework ?? 'detect'}
+Language: ${input.language ?? DEFAULT_LANGUAGE}
+Test Framework: ${input.testFramework ?? DEFAULT_TEST_FRAMEWORK}
 Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
 Changed Files: ${paths.join(', ')}
 
 Diff:
 ${input.diff}
 `;
-      return { systemInstruction, prompt };
+      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
     },
   });
 }

@@ -1,8 +1,7 @@
 export type JsonObject = Record<string, unknown>;
 export type GeminiLogHandler = (level: string, data: unknown) => Promise<void>;
 
-export interface GeminiStructuredRequestOptions {
-  model?: string;
+interface GeminiRequestExecutionOptions {
   maxRetries?: number;
   timeoutMs?: number;
   temperature?: number;
@@ -10,6 +9,10 @@ export interface GeminiStructuredRequestOptions {
   thinkingBudget?: number;
   signal?: AbortSignal;
   onLog?: GeminiLogHandler;
+}
+
+export interface GeminiStructuredRequestOptions extends GeminiRequestExecutionOptions {
+  model?: string;
 }
 
 export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {

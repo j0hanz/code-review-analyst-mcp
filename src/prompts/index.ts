@@ -4,9 +4,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 const HELP_PROMPT_NAME = 'get-help';
+const HELP_PROMPT_TITLE = 'Get Help';
 const HELP_PROMPT_DESCRIPTION = 'Return the server usage instructions.';
 
 const REVIEW_GUIDE_PROMPT_NAME = 'review-guide';
+const REVIEW_GUIDE_PROMPT_TITLE = 'Review Guide';
 const REVIEW_GUIDE_PROMPT_DESCRIPTION =
   'Guided workflow instructions for a specific code review tool and focus area.';
 
@@ -68,20 +70,29 @@ function completeByPrefix<T extends string>(
   return values.filter((value) => value.startsWith(prefix));
 }
 
-function getToolGuide(tool: string): string {
-  if (tool in TOOL_GUIDES) {
-    return TOOL_GUIDES[tool as ToolName];
-  }
+function getGuide<T extends string>(
+  guides: Record<T, string>,
+  value: string,
+  fallback: (value: string) => string
+): string {
+  const guide = (guides as Record<string, string>)[value];
+  return guide ?? fallback(value);
+}
 
-  return `Use \`${tool}\` to analyze your code changes.`;
+function getToolGuide(tool: string): string {
+  return getGuide(
+    TOOL_GUIDES,
+    tool,
+    (toolName) => `Use \`${toolName}\` to analyze your code changes.`
+  );
 }
 
 function getFocusAreaGuide(focusArea: string): string {
-  if (focusArea in FOCUS_AREA_GUIDES) {
-    return FOCUS_AREA_GUIDES[focusArea as FocusArea];
-  }
-
-  return `Focus on ${focusArea} concerns.`;
+  return getGuide(
+    FOCUS_AREA_GUIDES,
+    focusArea,
+    (area) => `Focus on ${area} concerns.`
+  );
 }
 
 export function registerAllPrompts(
@@ -91,7 +102,7 @@ export function registerAllPrompts(
   server.registerPrompt(
     HELP_PROMPT_NAME,
     {
-      title: 'Get Help',
+      title: HELP_PROMPT_TITLE,
       description: 'Return the server usage instructions.',
     },
     () => ({
@@ -111,7 +122,7 @@ export function registerAllPrompts(
   server.registerPrompt(
     REVIEW_GUIDE_PROMPT_NAME,
     {
-      title: 'Review Guide',
+      title: REVIEW_GUIDE_PROMPT_TITLE,
       description: REVIEW_GUIDE_PROMPT_DESCRIPTION,
       argsSchema: {
         tool: completable(

@@ -162,6 +162,14 @@ function logEvent(event: string, details: Record<string, unknown>): void {
   });
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+
+  return value as Record<string, unknown>;
+}
+
 async function safeCallOnLog(
   onLog: GeminiStructuredRequest['onLog'],
   level: string,
@@ -187,17 +195,39 @@ async function emitGeminiLog(
 }
 
 function getNestedError(error: unknown): Record<string, unknown> | undefined {
-  if (!error || typeof error !== 'object') {
+  const record = asRecord(error);
+  if (!record) {
     return undefined;
   }
 
-  const record = error as Record<string, unknown>;
   const nested = record.error;
-  if (!nested || typeof nested !== 'object') {
+  const nestedRecord = asRecord(nested);
+  if (!nestedRecord) {
     return record;
   }
 
-  return nested as Record<string, unknown>;
+  return nestedRecord;
+}
+
+function toNumericCode(candidate: unknown): number | undefined {
+  if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+    return candidate;
+  }
+
+  if (typeof candidate === 'string' && /^\d+$/.test(candidate)) {
+    return Number.parseInt(candidate, 10);
+  }
+
+  return undefined;
+}
+
+function toUpperStringCode(candidate: unknown): string | undefined {
+  if (typeof candidate !== 'string') {
+    return undefined;
+  }
+
+  const normalized = candidate.trim().toUpperCase();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function getNumericErrorCode(error: unknown): number | undefined {
@@ -208,12 +238,9 @@ function getNumericErrorCode(error: unknown): number | undefined {
 
   const candidates = [record.status, record.statusCode, record.code];
   for (const candidate of candidates) {
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-      return candidate;
-    }
-
-    if (typeof candidate === 'string' && /^\d+$/.test(candidate)) {
-      return Number.parseInt(candidate, 10);
+    const numericCode = toNumericCode(candidate);
+    if (numericCode !== undefined) {
+      return numericCode;
     }
   }
 
@@ -228,8 +255,9 @@ function getTransientErrorCode(error: unknown): string | undefined {
 
   const candidates = [record.code, record.status, record.statusText];
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim().length > 0) {
-      return candidate.trim().toUpperCase();
+    const transientCode = toUpperStringCode(candidate);
+    if (transientCode !== undefined) {
+      return transientCode;
     }
   }
 

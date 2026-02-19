@@ -9,6 +9,19 @@ import { createServer } from './server.js';
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 const ARG_OPTION_MODEL = 'model';
 const ARG_OPTION_MAX_DIFF_CHARS = 'max-diff-chars';
+const CLI_OPTIONS = {
+  [ARG_OPTION_MODEL]: {
+    type: 'string',
+    short: 'm',
+  },
+  [ARG_OPTION_MAX_DIFF_CHARS]: {
+    type: 'string',
+  },
+} as const;
+const ENV_BY_ARG = {
+  [ARG_OPTION_MODEL]: 'GEMINI_MODEL',
+  [ARG_OPTION_MAX_DIFF_CHARS]: 'MAX_DIFF_CHARS',
+} as const;
 
 type ServerInstance = ReturnType<typeof createServer>;
 
@@ -21,20 +34,13 @@ function setStringEnv(name: string, value: string | boolean | undefined): void {
 function parseCommandLineArgs(): void {
   const { values } = parseArgs({
     args: process.argv.slice(2),
-    options: {
-      model: {
-        type: 'string',
-        short: 'm',
-      },
-      'max-diff-chars': {
-        type: 'string',
-      },
-    },
+    options: CLI_OPTIONS,
     strict: false,
   });
 
-  setStringEnv('GEMINI_MODEL', values[ARG_OPTION_MODEL]);
-  setStringEnv('MAX_DIFF_CHARS', values[ARG_OPTION_MAX_DIFF_CHARS]);
+  for (const [arg, envName] of Object.entries(ENV_BY_ARG)) {
+    setStringEnv(envName, values[arg]);
+  }
 }
 
 let shuttingDown = false;

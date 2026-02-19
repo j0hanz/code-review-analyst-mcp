@@ -15,6 +15,8 @@ const CONSTRAINT_KEYS = new Set([
   'maxItems',
   'multipleOf',
 ]);
+const INTEGER_JSON_TYPE = 'integer';
+const NUMBER_JSON_TYPE = 'number';
 type JsonRecord = Record<string, unknown>;
 
 function isJsonRecord(value: unknown): value is JsonRecord {
@@ -23,9 +25,7 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 
 function stripConstraintValue(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.map((item: unknown) =>
-      isJsonRecord(item) ? stripJsonSchemaConstraints(item) : item
-    );
+    return value.map((item: unknown) => stripConstraintValue(item));
   }
 
   if (isJsonRecord(value)) {
@@ -52,8 +52,8 @@ export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
 
     // Relax integer → number so Gemini is not forced into integer-only
     // output; the stricter result schema still validates integrality.
-    if (key === 'type' && value === 'integer') {
-      result[key] = 'number';
+    if (key === 'type' && value === INTEGER_JSON_TYPE) {
+      result[key] = NUMBER_JSON_TYPE;
       continue;
     }
 
