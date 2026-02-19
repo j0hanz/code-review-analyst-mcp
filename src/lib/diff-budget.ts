@@ -6,7 +6,7 @@ const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
 const numberFormatter = new Intl.NumberFormat('en-US');
 
 // Lazy-cached: first call happens after parseCommandLineArgs() sets MAX_DIFF_CHARS.
-let _maxDiffChars: number | undefined;
+let cachedMaxDiffChars: number | undefined;
 
 function parsePositiveInteger(value: string): number | undefined {
   const parsed = Number.parseInt(value, 10);
@@ -17,14 +17,20 @@ function parsePositiveInteger(value: string): number | undefined {
   return parsed;
 }
 
-export function getMaxDiffChars(): number {
-  if (_maxDiffChars !== undefined) return _maxDiffChars;
-
-  const value =
+function getConfiguredMaxDiffChars(): number {
+  return (
     parsePositiveInteger(process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '') ??
-    DEFAULT_MAX_DIFF_CHARS;
-  _maxDiffChars = value;
-  return value;
+    DEFAULT_MAX_DIFF_CHARS
+  );
+}
+
+export function getMaxDiffChars(): number {
+  if (cachedMaxDiffChars !== undefined) {
+    return cachedMaxDiffChars;
+  }
+
+  cachedMaxDiffChars = getConfiguredMaxDiffChars();
+  return cachedMaxDiffChars;
 }
 
 export function exceedsDiffBudget(diff: string): boolean {

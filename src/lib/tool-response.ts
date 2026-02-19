@@ -40,14 +40,23 @@ interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
   isError: true;
 }
 
+function optionalProperty<T>(
+  value: T | undefined,
+  key: string
+): Record<string, T> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return { [key]: value };
+}
+
 function toTextContent(
   structured: ToolStructuredContent,
   textContent?: string
 ): ToolTextContent[] {
-  if (textContent) {
-    return [{ type: 'text', text: textContent }];
-  }
-  return [{ type: 'text', text: JSON.stringify(structured) }];
+  const text = textContent ?? JSON.stringify(structured);
+  return [{ type: 'text', text }];
 }
 
 function createErrorStructuredContent(
@@ -59,10 +68,8 @@ function createErrorStructuredContent(
   const error: ToolError = {
     code,
     message,
-    ...(meta?.retryable !== undefined
-      ? { retryable: meta.retryable }
-      : undefined),
-    ...(meta?.kind !== undefined ? { kind: meta.kind } : undefined),
+    ...optionalProperty(meta?.retryable, 'retryable'),
+    ...optionalProperty(meta?.kind, 'kind'),
   };
 
   if (result === undefined) {

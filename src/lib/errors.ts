@@ -4,7 +4,7 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function isErrorWithMessage(error: unknown): error is { message: string } {
+function hasMessageProperty(error: unknown): error is { message: string } {
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -14,7 +14,7 @@ function isErrorWithMessage(error: unknown): error is { message: string } {
 }
 
 export function getErrorMessage(error: unknown): string {
-  if (isErrorWithMessage(error)) {
+  if (hasMessageProperty(error)) {
     return error.message;
   }
 

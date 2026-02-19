@@ -7,12 +7,12 @@ import { getErrorMessage } from './lib/errors.js';
 import { createServer } from './server.js';
 
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+const ARG_OPTION_MODEL = 'model';
+const ARG_OPTION_MAX_DIFF_CHARS = 'max-diff-chars';
+
 type ServerInstance = ReturnType<typeof createServer>;
 
-function setEnvFromArg(
-  name: string,
-  value: string | boolean | undefined
-): void {
+function setStringEnv(name: string, value: string | boolean | undefined): void {
   if (typeof value === 'string') {
     process.env[name] = value;
   }
@@ -33,8 +33,8 @@ function parseCommandLineArgs(): void {
     strict: false,
   });
 
-  setEnvFromArg('GEMINI_MODEL', values.model);
-  setEnvFromArg('MAX_DIFF_CHARS', values['max-diff-chars']);
+  setStringEnv('GEMINI_MODEL', values[ARG_OPTION_MODEL]);
+  setStringEnv('MAX_DIFF_CHARS', values[ARG_OPTION_MAX_DIFF_CHARS]);
 }
 
 let shuttingDown = false;

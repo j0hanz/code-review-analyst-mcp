@@ -18,6 +18,7 @@ interface PackageJsonMetadata {
 const SERVER_NAME = 'code-review-analyst';
 const INSTRUCTIONS_FILENAME = 'instructions.md';
 const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
+const UTF8_ENCODING = 'utf8';
 
 function isPackageJsonMetadata(value: unknown): value is PackageJsonMetadata {
   return (
@@ -52,13 +53,11 @@ function parsePackageJson(
   return parsed;
 }
 
-function readPackageJson(packageJsonPath: string): string {
+function readUtf8File(path: string): string {
   try {
-    return readFileSync(packageJsonPath, 'utf8');
+    return readFileSync(path, UTF8_ENCODING);
   } catch (error: unknown) {
-    throw new Error(
-      `Unable to read ${packageJsonPath}: ${getErrorMessage(error)}`
-    );
+    throw new Error(`Unable to read ${path}: ${getErrorMessage(error)}`);
   }
 }
 
@@ -68,18 +67,22 @@ function loadVersion(): string {
     throw new Error(`Unable to locate package.json for ${SERVER_NAME}.`);
   }
 
-  return parsePackageJson(readPackageJson(packageJsonPath), packageJsonPath)
-    .version;
+  const packageJsonText = readUtf8File(packageJsonPath);
+  return parsePackageJson(packageJsonText, packageJsonPath).version;
 }
 
 const SERVER_VERSION = loadVersion();
 
-function loadInstructions(): string {
+function getInstructionsPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  const instructionsPath = join(currentDir, INSTRUCTIONS_FILENAME);
+  return join(currentDir, INSTRUCTIONS_FILENAME);
+}
+
+function loadInstructions(): string {
+  const instructionsPath = getInstructionsPath();
 
   try {
-    return readFileSync(instructionsPath, 'utf8');
+    return readUtf8File(instructionsPath);
   } catch (error: unknown) {
     process.emitWarning(
       `Failed to load ${INSTRUCTIONS_FILENAME}: ${getErrorMessage(error)}`

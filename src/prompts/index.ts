@@ -17,6 +17,7 @@ const TOOLS = [
   'suggest_search_replace',
   'generate_test_plan',
 ] as const;
+type ToolName = (typeof TOOLS)[number];
 
 const FOCUS_AREAS = [
   'security',
@@ -25,8 +26,9 @@ const FOCUS_AREAS = [
   'regressions',
   'tests',
 ] as const;
+type FocusArea = (typeof FOCUS_AREAS)[number];
 
-const TOOL_GUIDES: Record<string, string> = {
+const TOOL_GUIDES: Record<ToolName, string> = {
   analyze_pr_impact:
     'Call `analyze_pr_impact` with `diff` and `repository`. ' +
     'Get severity rating and categorization.',
@@ -41,7 +43,7 @@ const TOOL_GUIDES: Record<string, string> = {
     'Call `generate_test_plan` to create a verification strategy.',
 };
 
-const FOCUS_AREA_GUIDES: Record<string, string> = {
+const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   security:
     'Audit for injection vulnerabilities, insecure data handling, broken authentication, ' +
     'cryptographic failures, and OWASP Top 10 issues.',
@@ -59,12 +61,27 @@ const FOCUS_AREA_GUIDES: Record<string, string> = {
     'and untested error paths.',
 };
 
+function completeByPrefix<T extends string>(
+  values: readonly T[],
+  prefix: string
+): T[] {
+  return values.filter((value) => value.startsWith(prefix));
+}
+
 function getToolGuide(tool: string): string {
-  return TOOL_GUIDES[tool] ?? `Use \`${tool}\` to analyze your code changes.`;
+  if (tool in TOOL_GUIDES) {
+    return TOOL_GUIDES[tool as ToolName];
+  }
+
+  return `Use \`${tool}\` to analyze your code changes.`;
 }
 
 function getFocusAreaGuide(focusArea: string): string {
-  return FOCUS_AREA_GUIDES[focusArea] ?? `Focus on ${focusArea} concerns.`;
+  if (focusArea in FOCUS_AREA_GUIDES) {
+    return FOCUS_AREA_GUIDES[focusArea as FocusArea];
+  }
+
+  return `Focus on ${focusArea} concerns.`;
 }
 
 export function registerAllPrompts(
@@ -103,7 +120,7 @@ export function registerAllPrompts(
             .describe(
               'Which review tool to use: analyze_pr_impact, generate_review_summary, etc.'
             ),
-          (value) => TOOLS.filter((t) => t.startsWith(value))
+          (value) => completeByPrefix(TOOLS, value)
         ),
         focusArea: completable(
           z
@@ -111,7 +128,7 @@ export function registerAllPrompts(
             .describe(
               'Focus area: security, correctness, performance, regressions, or tests'
             ),
-          (value) => FOCUS_AREAS.filter((f) => f.startsWith(value))
+          (value) => completeByPrefix(FOCUS_AREAS, value)
         ),
       },
     },

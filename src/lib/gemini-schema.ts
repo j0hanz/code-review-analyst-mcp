@@ -15,9 +15,24 @@ const CONSTRAINT_KEYS = new Set([
   'maxItems',
   'multipleOf',
 ]);
+type JsonRecord = Record<string, unknown>;
 
-function isJsonRecord(value: unknown): value is Record<string, unknown> {
+function isJsonRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stripConstraintValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) =>
+      isJsonRecord(item) ? stripJsonSchemaConstraints(item) : item
+    );
+  }
+
+  if (isJsonRecord(value)) {
+    return stripJsonSchemaConstraints(value);
+  }
+
+  return value;
 }
 
 /**
@@ -29,10 +44,8 @@ function isJsonRecord(value: unknown): value is Record<string, unknown> {
  * same Zod schema that validates tool results. The tool-level result schema
  * enforces strict bounds *after* Gemini returns its response.
  */
-export function stripJsonSchemaConstraints(
-  schema: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
+  const result: JsonRecord = {};
 
   for (const [key, value] of Object.entries(schema)) {
     if (CONSTRAINT_KEYS.has(key)) continue;
@@ -44,15 +57,7 @@ export function stripJsonSchemaConstraints(
       continue;
     }
 
-    if (Array.isArray(value)) {
-      result[key] = value.map((item: unknown) =>
-        isJsonRecord(item) ? stripJsonSchemaConstraints(item) : item
-      );
-    } else if (isJsonRecord(value)) {
-      result[key] = stripJsonSchemaConstraints(value);
-    } else {
-      result[key] = value;
-    }
+    result[key] = stripConstraintValue(value);
   }
 
   return result;

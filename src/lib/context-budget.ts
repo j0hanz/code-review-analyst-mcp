@@ -1,10 +1,18 @@
 import { createErrorToolResponse } from './tool-response.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
+interface FileContent {
+  content: string;
+}
+
+function getMaxContextChars(): number {
+  const maxEnv = process.env['MAX_CONTEXT_CHARS'];
+  return maxEnv ? parseInt(maxEnv, 10) : DEFAULT_MAX_CONTEXT_CHARS;
+}
 
 export function computeContextSize(
   diff: string,
-  files?: { content: string }[]
+  files?: FileContent[]
 ): number {
   let size = diff.length;
   if (files) {
@@ -17,11 +25,10 @@ export function computeContextSize(
 
 export function validateContextBudget(
   diff: string,
-  files?: { content: string }[]
+  files?: FileContent[]
 ): ReturnType<typeof createErrorToolResponse> | undefined {
   const size = computeContextSize(diff, files);
-  const maxEnv = process.env['MAX_CONTEXT_CHARS'];
-  const max = maxEnv ? parseInt(maxEnv, 10) : DEFAULT_MAX_CONTEXT_CHARS;
+  const max = getMaxContextChars();
 
   if (size > max) {
     return createErrorToolResponse(

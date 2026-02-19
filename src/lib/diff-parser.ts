@@ -17,17 +17,27 @@ function cleanPath(path: string): string {
   return path;
 }
 
+function resolveChangedPath(file: ParsedFile): string | undefined {
+  if (file.to && file.to !== '/dev/null') {
+    return cleanPath(file.to);
+  }
+
+  if (file.from && file.from !== '/dev/null') {
+    return cleanPath(file.from);
+  }
+
+  return undefined;
+}
+
 /** Extract all unique changed file paths (renamed: returns new path). */
 export function extractChangedPaths(diff: string): string[] {
   const files = parseDiffFiles(diff);
   const paths = new Set<string>();
 
   for (const file of files) {
-    // Priority: to (new path) > from (old path)
-    if (file.to && file.to !== '/dev/null') {
-      paths.add(cleanPath(file.to));
-    } else if (file.from && file.from !== '/dev/null') {
-      paths.add(cleanPath(file.from));
+    const path = resolveChangedPath(file);
+    if (path) {
+      paths.add(path);
     }
   }
 
@@ -55,14 +65,14 @@ export function computeDiffStats(
 export function formatFileSummary(files: ParsedFile[]): string {
   if (files.length === 0) return 'No files changed.';
 
+  let totalAdded = 0;
+  let totalDeleted = 0;
   const summaries = files.map((f) => {
-    const rawPath = f.to && f.to !== '/dev/null' ? f.to : f.from;
-    const path = rawPath ? cleanPath(rawPath) : 'unknown';
+    totalAdded += f.additions;
+    totalDeleted += f.deletions;
+    const path = resolveChangedPath(f) ?? 'unknown';
     return `${path} (+${f.additions} -${f.deletions})`;
   });
-
-  const totalAdded = files.reduce((sum, f) => sum + f.additions, 0);
-  const totalDeleted = files.reduce((sum, f) => sum + f.deletions, 0);
 
   return `${summaries.join(', ')} [${files.length} files, +${totalAdded} -${totalDeleted}]`;
 }

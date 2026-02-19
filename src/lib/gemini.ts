@@ -28,6 +28,7 @@ const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
+const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
 const RETRYABLE_TRANSIENT_CODES = new Set([
   'RESOURCE_EXHAUSTED',
@@ -36,6 +37,13 @@ const RETRYABLE_TRANSIENT_CODES = new Set([
   'INTERNAL',
   'ABORTED',
 ]);
+
+const SAFETY_CATEGORIES = [
+  HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+  HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+  HarmCategory.HARM_CATEGORY_HARASSMENT,
+  HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+] as const;
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
@@ -66,6 +74,20 @@ function getSafetyThreshold(): HarmBlockThreshold {
   return DEFAULT_SAFETY_THRESHOLD;
 }
 
+function getThinkingConfig(
+  thinkingBudget: number | undefined
+): { includeThoughts: true; thinkingBudget: number } | undefined {
+  return thinkingBudget ? { includeThoughts: true, thinkingBudget } : undefined;
+}
+
+function getSafetySettings(
+  threshold: HarmBlockThreshold
+): { category: HarmCategory; threshold: HarmBlockThreshold }[] {
+  return SAFETY_CATEGORIES.map((category) => {
+    return { category, threshold };
+  });
+}
+
 let cachedClient: GoogleGenAI | undefined;
 
 export const geminiEvents = new EventEmitter();
@@ -81,20 +103,30 @@ interface GeminiRequestContext {
   model: string;
 }
 
+type GeminiLogLevel = 'info' | 'warning' | 'error';
+
+interface GeminiLogPayload {
+  event: string;
+  details: Record<string, unknown>;
+}
+
 const geminiContext = new AsyncLocalStorage<GeminiRequestContext>({
   name: 'gemini_request',
-  defaultValue: { requestId: 'unknown', model: 'unknown' },
+  defaultValue: {
+    requestId: UNKNOWN_REQUEST_CONTEXT_VALUE,
+    model: UNKNOWN_REQUEST_CONTEXT_VALUE,
+  },
 });
 
 // Shared fallback avoids a fresh object allocation per logEvent call when outside a run context.
 const UNKNOWN_CONTEXT: GeminiRequestContext = {
-  requestId: 'unknown',
-  model: 'unknown',
+  requestId: UNKNOWN_REQUEST_CONTEXT_VALUE,
+  model: UNKNOWN_REQUEST_CONTEXT_VALUE,
 };
 
 export function getCurrentRequestId(): string {
   const context = geminiContext.getStore();
-  return context?.requestId ?? 'unknown';
+  return context?.requestId ?? UNKNOWN_REQUEST_CONTEXT_VALUE;
 }
 
 function getApiKey(): string {
@@ -140,6 +172,18 @@ async function safeCallOnLog(
   } catch {
     // Log callbacks are best-effort; never fail the tool call.
   }
+}
+
+async function emitGeminiLog(
+  onLog: GeminiStructuredRequest['onLog'],
+  level: GeminiLogLevel,
+  payload: GeminiLogPayload
+): Promise<void> {
+  logEvent(payload.event, payload.details);
+  await safeCallOnLog(onLog, level, {
+    event: payload.event,
+    ...payload.details,
+  });
 }
 
 function getNestedError(error: unknown): Record<string, unknown> | undefined {
@@ -227,40 +271,20 @@ function buildGenerationConfig(
   request: GeminiStructuredRequest,
   abortSignal: AbortSignal
 ): GenerateContentConfig {
-  const safetyThreshold = getSafetyThreshold();
-
-  const thinkingConfig = request.thinkingBudget
-    ? { includeThoughts: true, thinkingBudget: request.thinkingBudget }
+  const systemInstruction = request.systemInstruction
+    ? { systemInstruction: request.systemInstruction }
     : undefined;
+  const thinkingConfig = getThinkingConfig(request.thinkingBudget);
+  const safetySettings = getSafetySettings(getSafetyThreshold());
 
   return {
     temperature: request.temperature ?? 0.2,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
-    // Spread undefined instead of {} so no intermediate object is allocated when absent.
-    ...(request.systemInstruction
-      ? { systemInstruction: request.systemInstruction }
-      : undefined),
+    ...(systemInstruction ?? undefined),
     ...(thinkingConfig ? { thinkingConfig } : undefined),
-    safetySettings: [
-      {
-        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        threshold: safetyThreshold,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold: safetyThreshold,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold: safetyThreshold,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-        threshold: safetyThreshold,
-      },
-    ],
+    safetySettings,
     abortSignal,
   };
 }
@@ -270,6 +294,26 @@ function combineSignals(
   requestSignal?: AbortSignal
 ): AbortSignal {
   return requestSignal ? AbortSignal.any([signal, requestSignal]) : signal;
+}
+
+function parseStructuredResponse(responseText: string | undefined): unknown {
+  if (!responseText) {
+    throw new Error('Gemini returned an empty response body.');
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (error: unknown) {
+    throw new Error(`Model produced invalid JSON: ${getErrorMessage(error)}`);
+  }
+}
+
+function hasRetriesRemaining(attempt: number, maxRetries: number): boolean {
+  return attempt < maxRetries;
+}
+
+function getAttemptCount(maxRetries: number): number {
+  return maxRetries + 1;
 }
 
 async function generateContentWithTimeout(
@@ -309,6 +353,96 @@ async function generateContentWithTimeout(
   }
 }
 
+async function executeAttempt(
+  request: GeminiStructuredRequest,
+  model: string,
+  timeoutMs: number,
+  attempt: number,
+  onLog: GeminiStructuredRequest['onLog']
+): Promise<unknown> {
+  const startedAt = performance.now();
+  const response = await generateContentWithTimeout(request, model, timeoutMs);
+  const latencyMs = Math.round(performance.now() - startedAt);
+
+  await emitGeminiLog(onLog, 'info', {
+    event: 'gemini_call',
+    details: {
+      attempt,
+      latencyMs,
+      usageMetadata: response.usageMetadata ?? null,
+    },
+  });
+
+  return parseStructuredResponse(response.text);
+}
+
+async function waitBeforeRetry(
+  attempt: number,
+  error: unknown,
+  onLog: GeminiStructuredRequest['onLog']
+): Promise<void> {
+  const delayMs = getRetryDelayMs(attempt);
+  const reason = getErrorMessage(error);
+
+  await emitGeminiLog(onLog, 'warning', {
+    event: 'gemini_retry',
+    details: {
+      attempt,
+      delayMs,
+      reason,
+    },
+  });
+
+  await sleep(delayMs, undefined, { ref: false });
+}
+
+async function throwGeminiFailure(
+  maxRetries: number,
+  lastError: unknown,
+  onLog: GeminiStructuredRequest['onLog']
+): Promise<never> {
+  const attempts = getAttemptCount(maxRetries);
+  const message = getErrorMessage(lastError);
+
+  await emitGeminiLog(onLog, 'error', {
+    event: 'gemini_failure',
+    details: {
+      error: message,
+      attempts,
+    },
+  });
+
+  throw new Error(
+    `Gemini request failed after ${attempts} attempts: ${message}`,
+    { cause: lastError }
+  );
+}
+
+async function runWithRetries(
+  request: GeminiStructuredRequest,
+  model: string,
+  timeoutMs: number,
+  maxRetries: number,
+  onLog: GeminiStructuredRequest['onLog']
+): Promise<unknown> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await executeAttempt(request, model, timeoutMs, attempt, onLog);
+    } catch (error: unknown) {
+      lastError = error;
+      if (!hasRetriesRemaining(attempt, maxRetries) || !shouldRetry(error)) {
+        break;
+      }
+
+      await waitBeforeRetry(attempt, error, onLog);
+    }
+  }
+
+  return throwGeminiFailure(maxRetries, lastError, onLog);
+}
+
 export async function generateStructuredJson(
   request: GeminiStructuredRequest
 ): Promise<unknown> {
@@ -320,83 +454,7 @@ export async function generateStructuredJson(
   return geminiContext.run(
     { requestId: nextRequestId(), model },
     async (): Promise<unknown> => {
-      let lastError: unknown;
-
-      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-        const startedAt = performance.now();
-
-        try {
-          const response = await generateContentWithTimeout(
-            request,
-            model,
-            timeoutMs
-          );
-
-          const latencyMs = Math.round(performance.now() - startedAt);
-          logEvent('gemini_call', {
-            attempt,
-            latencyMs,
-            usageMetadata: response.usageMetadata ?? null,
-          });
-          await safeCallOnLog(onLog, 'info', {
-            event: 'gemini_call',
-            attempt,
-            latencyMs,
-            usageMetadata: response.usageMetadata ?? null,
-          });
-
-          if (!response.text) {
-            throw new Error('Gemini returned an empty response body.');
-          }
-
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(response.text);
-          } catch (error: unknown) {
-            throw new Error(
-              `Model produced invalid JSON: ${getErrorMessage(error)}`
-            );
-          }
-
-          return parsed;
-        } catch (error: unknown) {
-          lastError = error;
-          const retryable = shouldRetry(error);
-          if (attempt >= maxRetries || !retryable) {
-            break;
-          }
-
-          const delayMs = getRetryDelayMs(attempt);
-          logEvent('gemini_retry', {
-            attempt,
-            delayMs,
-            reason: getErrorMessage(error),
-          });
-          await safeCallOnLog(onLog, 'warning', {
-            event: 'gemini_retry',
-            attempt,
-            delayMs,
-            reason: getErrorMessage(error),
-          });
-
-          await sleep(delayMs, undefined, { ref: false });
-        }
-      }
-
-      logEvent('gemini_failure', {
-        error: getErrorMessage(lastError),
-        attempts: maxRetries + 1,
-      });
-      await safeCallOnLog(onLog, 'error', {
-        event: 'gemini_failure',
-        error: getErrorMessage(lastError),
-        attempts: maxRetries + 1,
-      });
-
-      throw new Error(
-        `Gemini request failed after ${maxRetries + 1} attempts: ${getErrorMessage(lastError)}`,
-        { cause: lastError }
-      );
+      return runWithRetries(request, model, timeoutMs, maxRetries, onLog);
     }
   );
 }

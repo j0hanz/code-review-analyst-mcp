@@ -12,3 +12,7 @@ export const PRO_THINKING_BUDGET = 16_384;
 
 /** Extended timeout for Pro model calls (ms). Pro thinks longer than Flash. */
 export const DEFAULT_TIMEOUT_PRO_MS = 120_000;
+
+export const MODEL_TIMEOUT_MS = {
+  defaultPro: DEFAULT_TIMEOUT_PRO_MS,
+} as const;

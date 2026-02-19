@@ -4,6 +4,23 @@ const RESOURCE_ID = 'server-instructions';
 const RESOURCE_URI = 'internal://instructions';
 const RESOURCE_MIME_TYPE = 'text/markdown';
 
+function createInstructionsContents(
+  uri: URL,
+  instructions: string
+): {
+  uri: string;
+  mimeType: string;
+  text: string;
+}[] {
+  return [
+    {
+      uri: uri.href,
+      mimeType: RESOURCE_MIME_TYPE,
+      text: instructions,
+    },
+  ];
+}
+
 export function registerAllResources(
   server: McpServer,
   instructions: string
@@ -21,13 +38,7 @@ export function registerAllResources(
       },
     },
     (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: RESOURCE_MIME_TYPE,
-          text: instructions,
-        },
-      ],
+      contents: createInstructionsContents(uri, instructions),
     })
   );
 }

@@ -21,6 +21,9 @@ export interface PromptParts {
   prompt: string;
 }
 
+const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
+const TASK_PROGRESS_TOTAL = 4;
+
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
 > {
@@ -89,6 +92,60 @@ function parseToolInput<TInput extends object>(
   return fullInputSchema.parse(input);
 }
 
+async function sendTaskProgress(
+  extra: {
+    _meta?: { progressToken?: string | number | undefined };
+    sendNotification: (notification: {
+      method: 'notifications/progress';
+      params: {
+        progressToken: string | number;
+        progress: number;
+        total: number;
+      };
+    }) => Promise<void>;
+  },
+  progress: number
+): Promise<void> {
+  const progressToken = extra._meta?.progressToken;
+  if (progressToken == null) {
+    return;
+  }
+
+  try {
+    await extra.sendNotification({
+      method: 'notifications/progress',
+      params: {
+        progressToken,
+        progress,
+        total: TASK_PROGRESS_TOTAL,
+      },
+    });
+  } catch {
+    // Progress is best-effort; never fail the tool call.
+  }
+}
+
+function createGeminiLogger(
+  server: McpServer,
+  taskId: string
+): (level: string, data: unknown) => Promise<void> {
+  return async (level: string, data: unknown): Promise<void> => {
+    try {
+      await server.sendLoggingMessage({
+        level: level as LoggingLevel,
+        logger: 'gemini',
+        data: {
+          requestId: getCurrentRequestId(),
+          taskId,
+          ...(data as object),
+        },
+      });
+    } catch {
+      // Logging is best-effort; never fail the tool call.
+    }
+  };
+}
+
 export function registerStructuredToolTask<TInput extends object>(
   server: McpServer,
   config: StructuredToolTaskConfig<TInput>
@@ -115,27 +172,10 @@ export function registerStructuredToolTask<TInput extends object>(
     },
     {
       createTask: async (input, extra) => {
-        const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
         const task = await extra.taskStore.createTask({
           ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
         void (async () => {
-          const progressToken = extra._meta?.progressToken;
-          const sendProgress = async (
-            progress: number,
-            total: number
-          ): Promise<void> => {
-            if (progressToken == null) return;
-            try {
-              await extra.sendNotification({
-                method: 'notifications/progress',
-                params: { progressToken, progress, total },
-              });
-            } catch {
-              // Progress is best-effort; never fail the tool call.
-            }
-          };
-
           const updateStatusMessage = async (
             message: string
           ): Promise<void> => {
@@ -151,24 +191,7 @@ export function registerStructuredToolTask<TInput extends object>(
           };
 
           try {
-            const onLog = async (
-              level: string,
-              data: unknown
-            ): Promise<void> => {
-              try {
-                await server.sendLoggingMessage({
-                  level: level as LoggingLevel,
-                  logger: 'gemini',
-                  data: {
-                    requestId: getCurrentRequestId(),
-                    taskId: task.taskId,
-                    ...(data as object),
-                  },
-                });
-              } catch {
-                // Logging is best-effort; never fail the tool call.
-              }
-            };
+            const onLog = createGeminiLogger(server, task.taskId);
 
             const inputRecord = parseToolInput<TInput>(
               input,
@@ -195,12 +218,12 @@ export function registerStructuredToolTask<TInput extends object>(
               }
             }
 
-            await sendProgress(1, 4);
+            await sendTaskProgress(extra, 1);
 
             const { systemInstruction, prompt } =
               config.buildPrompt(inputRecord);
 
-            await sendProgress(2, 4);
+            await sendTaskProgress(extra, 2);
 
             const raw = await generateStructuredJson({
               systemInstruction,
@@ -213,7 +236,7 @@ export function registerStructuredToolTask<TInput extends object>(
               onLog,
             });
 
-            await sendProgress(3, 4);
+            await sendTaskProgress(extra, 3);
 
             const parsed: unknown = config.resultSchema.parse(raw);
 
@@ -239,7 +262,7 @@ export function registerStructuredToolTask<TInput extends object>(
               )
             );
 
-            await sendProgress(4, 4);
+            await sendTaskProgress(extra, 4);
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             await updateStatusMessage(errorMessage);
