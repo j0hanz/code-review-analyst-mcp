@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const INPUT_LIMITS = {
-  diff: { min: 10, max: 120_000 },
+  diff: { min: 10 },
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
   fileContext: {
@@ -42,11 +42,12 @@ function createLanguageSchema(description: string): z.ZodOptional<z.ZodString> {
 }
 
 function createDiffSchema(description: string): z.ZodString {
-  return createBoundedString(
-    INPUT_LIMITS.diff.min,
-    INPUT_LIMITS.diff.max,
-    `${description} Default limit 120,000 chars; override via MAX_DIFF_CHARS env var.`
-  );
+  return z
+    .string()
+    .min(INPUT_LIMITS.diff.min)
+    .describe(
+      `${description} Budget is enforced at runtime via MAX_DIFF_CHARS (default 120,000 chars).`
+    );
 }
 
 export const FileContextSchema = z.strictObject({

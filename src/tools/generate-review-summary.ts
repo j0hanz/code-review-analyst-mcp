@@ -25,7 +25,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     name: 'generate_review_summary',
     title: 'Generate Review Summary',
     description: 'Summarize a pull request diff and assess high-level risk.',
-    inputSchema: GenerateReviewSummaryInputSchema.shape,
+    inputSchema: GenerateReviewSummaryInputSchema,
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
     errorCode: 'E_REVIEW_SUMMARY',

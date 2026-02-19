@@ -1,3 +1,7 @@
+import type {
+  CreateTaskRequestHandlerExtra,
+  TaskRequestHandlerExtra,
+} from '@modelcontextprotocol/sdk/experimental/tasks/interfaces.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import type {
@@ -14,6 +18,7 @@ import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
 import {
   createErrorToolResponse,
   createToolResponse,
+  type ErrorMeta,
 } from './tool-response.js';
 
 export interface PromptParts {
@@ -24,6 +29,9 @@ export interface PromptParts {
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 const TASK_PROGRESS_TOTAL = 4;
 const INPUT_VALIDATION_FAILED = 'Input validation failed';
+const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+const RETRYABLE_UPSTREAM_ERROR_PATTERN =
+  /(429|500|502|503|504|rate limit|unavailable|timeout|timed out|connection|reset|econn|enotfound|temporary|transient)/i;
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
@@ -37,10 +45,10 @@ export interface StructuredToolTaskConfig<
   /** Short description of the tool's purpose. */
   description: string;
 
-  /** Zod schema shape for the tool input. Used by the MCP SDK to strip unknown fields before the handler runs. */
-  inputSchema: ZodRawShapeCompat;
+  /** Zod schema or raw shape for MCP request validation at the transport boundary. */
+  inputSchema: z.ZodType<TInput> | ZodRawShapeCompat;
 
-  /** Zod schema for validating the complete tool input, including all expected fields. This is used within the handler to validate the actual input shape after the MCP SDK has stripped unknown fields. */
+  /** Zod schema for validating the complete tool input inside the handler. */
   fullInputSchema: z.ZodType<TInput>;
 
   /** Zod schema for parsing and validating the Gemini structured response. */
@@ -97,7 +105,8 @@ function createGenerationRequest<TInput extends object>(
   config: StructuredToolTaskConfig<TInput>,
   promptParts: PromptParts,
   responseSchema: Record<string, unknown>,
-  onLog: (level: string, data: unknown) => Promise<void>
+  onLog: (level: string, data: unknown) => Promise<void>,
+  signal?: AbortSignal
 ): {
   model?: string;
   thinkingBudget?: number;
@@ -105,6 +114,7 @@ function createGenerationRequest<TInput extends object>(
   systemInstruction: string;
   prompt: string;
   responseSchema: Record<string, unknown>;
+  signal?: AbortSignal;
 } {
   return {
     systemInstruction: promptParts.systemInstruction,
@@ -114,7 +124,54 @@ function createGenerationRequest<TInput extends object>(
     ...(config.thinkingBudget
       ? { thinkingBudget: config.thinkingBudget }
       : undefined),
+    ...(signal ? { signal } : undefined),
     onLog,
+  };
+}
+
+function isTerminalTaskStatus(status: string): boolean {
+  return TERMINAL_TASK_STATUSES.has(status);
+}
+
+function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
+  if (error instanceof z.ZodError || /validation/i.test(message)) {
+    return {
+      kind: 'validation',
+      retryable: false,
+    };
+  }
+
+  if (/cancelled|canceled/i.test(message)) {
+    return {
+      kind: 'cancelled',
+      retryable: false,
+    };
+  }
+
+  if (/timed out|timeout/i.test(message)) {
+    return {
+      kind: 'timeout',
+      retryable: true,
+    };
+  }
+
+  if (/exceeds limit|max allowed size|input too large/i.test(message)) {
+    return {
+      kind: 'budget',
+      retryable: false,
+    };
+  }
+
+  if (RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message)) {
+    return {
+      kind: 'upstream',
+      retryable: true,
+    };
+  }
+
+  return {
+    kind: 'internal',
+    retryable: false,
   };
 }
 
@@ -197,11 +254,15 @@ export function registerStructuredToolTask<TInput extends object>(
       },
     },
     {
-      createTask: async (input, extra) => {
+      createTask: async (
+        input: unknown,
+        extra: CreateTaskRequestHandlerExtra
+      ) => {
         const task = await extra.taskStore.createTask({
           ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
-        void (async () => {
+
+        const runTask = async (): Promise<void> => {
           const updateStatusMessage = async (
             message: string
           ): Promise<void> => {
@@ -213,6 +274,33 @@ export function registerStructuredToolTask<TInput extends object>(
               );
             } catch {
               // statusMessage is best-effort; task may already be terminal.
+            }
+          };
+
+          const storeResultIfTaskActive = async (
+            status: 'completed' | 'failed',
+            result: CallToolResult
+          ): Promise<boolean> => {
+            try {
+              const currentTask = await extra.taskStore.getTask(task.taskId);
+              if (isTerminalTaskStatus(currentTask.status)) {
+                return false;
+              }
+            } catch {
+              // Task may have been cancelled/cleaned up.
+              return false;
+            }
+
+            try {
+              await extra.taskStore.storeTaskResult(
+                task.taskId,
+                status,
+                result
+              );
+              return true;
+            } catch {
+              // Ignore race conditions between cancellation and result persistence.
+              return false;
             }
           };
 
@@ -230,16 +318,8 @@ export function registerStructuredToolTask<TInput extends object>(
                 const validationMessage =
                   validationError.structuredContent.error?.message ??
                   INPUT_VALIDATION_FAILED;
-                await extra.taskStore.updateTaskStatus(
-                  task.taskId,
-                  'failed',
-                  validationMessage
-                );
-                await extra.taskStore.storeTaskResult(
-                  task.taskId,
-                  'failed',
-                  validationError
-                );
+                await updateStatusMessage(validationMessage);
+                await storeResultIfTaskActive('failed', validationError);
                 return;
               }
             }
@@ -256,7 +336,8 @@ export function registerStructuredToolTask<TInput extends object>(
                 config,
                 { systemInstruction, prompt },
                 responseSchema,
-                onLog
+                onLog,
+                extra.signal
               )
             );
 
@@ -272,10 +353,9 @@ export function registerStructuredToolTask<TInput extends object>(
               ? config.formatOutput(finalResult)
               : undefined;
 
-            await extra.taskStore.updateTaskStatus(task.taskId, 'completed');
+            await sendTaskProgress(extra, 4);
 
-            await extra.taskStore.storeTaskResult(
-              task.taskId,
+            await storeResultIfTaskActive(
               'completed',
               createToolResponse(
                 {
@@ -285,38 +365,39 @@ export function registerStructuredToolTask<TInput extends object>(
                 textContent
               )
             );
-
-            await sendTaskProgress(extra, 4);
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
+            const errorMeta = classifyErrorMeta(error, errorMessage);
             await updateStatusMessage(errorMessage);
-            await extra.taskStore.updateTaskStatus(
-              task.taskId,
-              'failed',
-              errorMessage
-            );
-            await extra.taskStore.storeTaskResult(
-              task.taskId,
+            await storeResultIfTaskActive(
               'failed',
               createErrorToolResponse(
                 config.errorCode,
                 errorMessage,
                 undefined,
-                {
-                  kind: 'upstream',
-                  retryable: true,
-                }
+                errorMeta
               )
             );
           }
-        })();
+        };
+
+        setImmediate(() => {
+          void runTask().catch((error: unknown) => {
+            console.error(
+              `[task-runner:${config.name}] ${getErrorMessage(error)}`
+            );
+          });
+        });
 
         return { task };
       },
-      getTask: async (_input, extra) => {
+      getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) => {
         return await extra.taskStore.getTask(extra.taskId);
       },
-      getTaskResult: async (_input, extra) => {
+      getTaskResult: async (
+        _input: unknown,
+        extra: TaskRequestHandlerExtra
+      ) => {
         return (await extra.taskStore.getTaskResult(
           extra.taskId
         )) as CallToolResult;

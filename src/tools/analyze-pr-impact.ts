@@ -4,7 +4,7 @@ import { type z } from 'zod';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
-  computeDiffStats,
+  computeDiffStatsFromFiles,
   formatFileSummary,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
@@ -27,7 +27,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     name: 'analyze_pr_impact',
     title: 'Analyze PR Impact',
     description: 'Assess the impact and risk of a pull request diff.',
-    inputSchema: AnalyzePrImpactInputSchema.shape,
+    inputSchema: AnalyzePrImpactInputSchema,
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
     errorCode: 'E_ANALYZE_IMPACT',
@@ -38,8 +38,8 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
       return `Impact Analysis (${typed.severity}): ${typed.summary}`;
     },
     buildPrompt: (input) => {
-      const stats = computeDiffStats(input.diff);
       const files = parseDiffFiles(input.diff);
+      const stats = computeDiffStatsFromFiles(files);
       const fileSummary = formatFileSummary(files);
 
       const prompt = `

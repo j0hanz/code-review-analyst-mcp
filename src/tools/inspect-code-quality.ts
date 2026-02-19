@@ -12,6 +12,7 @@ import { CodeQualityResultSchema } from '../schemas/outputs.js';
 
 const DEFAULT_LANGUAGE = 'detect';
 const DEFAULT_FOCUS_AREAS = 'General';
+const DEFAULT_MAX_FINDINGS = 'auto';
 const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
 const SYSTEM_INSTRUCTION = `
 You are a principal software engineer performing a deep code review.
@@ -20,6 +21,20 @@ Consider interactions between changed code and surrounding code.
 Prioritize correctness and maintainability.
 Return strict JSON only.
 `;
+
+function sanitizePath(path: string): string {
+  return path
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\n', ' ')
+    .replaceAll('\r', ' ');
+}
+
+function sanitizeContent(content: string): string {
+  return content.replaceAll('<<END_FILE>>', '<END_FILE_ESCAPED>');
+}
 
 function formatFileContext(
   files: readonly { path: string; content: string }[] | undefined
@@ -31,9 +46,9 @@ function formatFileContext(
   const fileBlocks = files
     .map(
       (file) => `
-<file path="${file.path}">
-${file.content}
-</file>
+<<FILE path="${sanitizePath(file.path)}">>
+${sanitizeContent(file.content)}
+<<END_FILE>>
 `
     )
     .join('\n');
@@ -46,7 +61,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     name: 'inspect_code_quality',
     title: 'Inspect Code Quality',
     description: 'Deep-dive code review with optional file context.',
-    inputSchema: InspectCodeQualityInputSchema.shape,
+    inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
     resultSchema: CodeQualityResultSchema,
     errorCode: 'E_INSPECT_QUALITY',
@@ -61,6 +76,18 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const typed = result as z.infer<typeof CodeQualityResultSchema>;
       return `Code Quality Inspection: ${typed.summary}\n${typed.findings.length} findings reported.`;
     },
+    transformResult: (input, result) => {
+      const typed = result as z.infer<typeof CodeQualityResultSchema>;
+      const cappedFindings = typed.findings.slice(
+        0,
+        input.maxFindings ?? typed.findings.length
+      );
+
+      return {
+        ...typed,
+        findings: cappedFindings,
+      };
+    },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
       const fileSummary = formatFileSummary(files);
@@ -69,6 +96,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
 Repository: ${input.repository}
 Language: ${input.language ?? DEFAULT_LANGUAGE}
 Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}
+Max Findings: ${input.maxFindings ?? DEFAULT_MAX_FINDINGS}
 Changed Files:
 ${fileSummary}
 

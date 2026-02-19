@@ -136,7 +136,7 @@ test('prompt review-guide returns workflow guide', async () => {
   try {
     const result = await client.getPrompt({
       name: 'review-guide',
-      arguments: { tool: 'review_diff', focusArea: 'security' },
+      arguments: { tool: 'analyze_pr_impact', focusArea: 'security' },
     });
 
     assert.ok(result.messages.length > 0, 'Should return at least one message');
@@ -147,7 +147,7 @@ test('prompt review-guide returns workflow guide', async () => {
     assert.equal(message.content.type, 'text');
     assert.ok(
       typeof message.content.text === 'string' &&
-        message.content.text.includes('review_diff'),
+        message.content.text.includes('analyze_pr_impact'),
       'Guide text should reference the tool'
     );
   } finally {

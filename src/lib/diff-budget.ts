@@ -31,6 +31,10 @@ export function getMaxDiffChars(): number {
   return cachedMaxDiffChars;
 }
 
+export function resetMaxDiffCharsCacheForTesting(): void {
+  cachedMaxDiffChars = undefined;
+}
+
 export function exceedsDiffBudget(diff: string): boolean {
   return diff.length > getMaxDiffChars();
 }

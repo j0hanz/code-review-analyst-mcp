@@ -2,6 +2,7 @@ import { createErrorToolResponse } from './tool-response.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
 const MAX_CONTEXT_CHARS_ENV_VAR = 'MAX_CONTEXT_CHARS';
+const BUDGET_ERROR_META = { retryable: false, kind: 'budget' } as const;
 interface FileContent {
   content: string;
 }
@@ -40,7 +41,9 @@ export function validateContextBudget(
   if (size > max) {
     return createErrorToolResponse(
       'E_INPUT_TOO_LARGE',
-      `Combined context size ${size} chars exceeds limit of ${max} chars.`
+      `Combined context size ${size} chars exceeds limit of ${max} chars.`,
+      { providedChars: size, maxChars: max },
+      BUDGET_ERROR_META
     );
   }
   return undefined;

@@ -23,7 +23,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     name: 'suggest_search_replace',
     title: 'Suggest Search & Replace',
     description: 'Generate search-and-replace blocks to fix a finding.',
-    inputSchema: SuggestSearchReplaceInputSchema.shape,
+    inputSchema: SuggestSearchReplaceInputSchema,
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',

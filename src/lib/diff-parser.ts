@@ -35,8 +35,9 @@ function resolveChangedPath(file: ParsedFile): string | undefined {
 }
 
 /** Extract all unique changed file paths (renamed: returns new path). */
-export function extractChangedPaths(diff: string): string[] {
-  const files = parseDiffFiles(diff);
+export function extractChangedPathsFromFiles(
+  files: readonly ParsedFile[]
+): string[] {
   const paths = new Set<string>();
 
   for (const file of files) {
@@ -49,18 +50,30 @@ export function extractChangedPaths(diff: string): string[] {
   return Array.from(paths).sort((a, b) => a.localeCompare(b));
 }
 
-/** Count changed files, added lines, and deleted lines. */
-export function computeDiffStats(
-  diff: string
+/** Extract all unique changed file paths (renamed: returns new path). */
+export function extractChangedPaths(diff: string): string[] {
+  return extractChangedPathsFromFiles(parseDiffFiles(diff));
+}
+
+export function computeDiffStatsFromFiles(
+  files: readonly ParsedFile[]
 ): Readonly<{ files: number; added: number; deleted: number }> {
-  const files = parseDiffFiles(diff);
   let added = 0;
   let deleted = 0;
+
   for (const file of files) {
     added += file.additions;
     deleted += file.deletions;
   }
+
   return { files: files.length, added, deleted };
+}
+
+/** Count changed files, added lines, and deleted lines. */
+export function computeDiffStats(
+  diff: string
+): Readonly<{ files: number; added: number; deleted: number }> {
+  return computeDiffStatsFromFiles(parseDiffFiles(diff));
 }
 
 /**

@@ -106,9 +106,9 @@ function loadInstructions(): string {
 }
 
 const SERVER_INSTRUCTIONS = loadInstructions();
-const SERVER_TASK_STORE = new InMemoryTaskStore();
 
 export function createServer(): McpServer {
+  const taskStore = new InMemoryTaskStore();
   const server = new McpServer(
     {
       name: SERVER_NAME,
@@ -116,7 +116,7 @@ export function createServer(): McpServer {
     },
     {
       instructions: SERVER_INSTRUCTIONS,
-      taskStore: SERVER_TASK_STORE,
+      taskStore,
       capabilities: SERVER_CAPABILITIES,
     }
   );
@@ -124,6 +124,11 @@ export function createServer(): McpServer {
   registerAllTools(server);
   registerAllResources(server, SERVER_INSTRUCTIONS);
   registerAllPrompts(server, SERVER_INSTRUCTIONS);
+  const close = server.close.bind(server);
+  server.close = async (): Promise<void> => {
+    await close();
+    taskStore.cleanup();
+  };
 
   return server;
 }
