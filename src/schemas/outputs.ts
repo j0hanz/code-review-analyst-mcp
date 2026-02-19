@@ -39,6 +39,21 @@ export const DefaultOutputSchema = z.strictObject({
     .strictObject({
       code: z.string().describe('Stable error code for callers.'),
       message: z.string().describe('Human readable error details.'),
+      retryable: z
+        .boolean()
+        .optional()
+        .describe('Whether the client should retry this request.'),
+      kind: z
+        .enum([
+          'validation',
+          'budget',
+          'upstream',
+          'timeout',
+          'cancelled',
+          'internal',
+        ])
+        .optional()
+        .describe('Machine-readable error category.'),
     })
     .optional()
     .describe('Error payload when ok is false.'),

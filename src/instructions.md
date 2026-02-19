@@ -68,7 +68,8 @@ These instructions are available as a resource (internal://instructions) or prom
 - Purpose: Generate structured review findings, overall risk, and test recommendations from a unified diff.
 - Input: `maxFindings` defaults to 10; `focusAreas` defaults to security/correctness/regressions/performance when omitted.
 - Output: `ok/result/error` envelope; successful payload includes `summary`, `overallRisk`, `findings[]`, and `testsNeeded[]`.
-- Gotcha: Schema allows `diff` up to 400,000 chars, but runtime rejects payloads above `MAX_DIFF_CHARS` (default 120,000) with `E_INPUT_TOO_LARGE`.
+- Gotcha: Both schema and runtime limit `diff` to 120,000 chars by default (overridable via `MAX_DIFF_CHARS`). Oversized diffs fail with `E_INPUT_TOO_LARGE`; the error `result` payload contains `{providedChars, maxChars}` for automated handling.
+- Gotcha: `maxFindings` is enforced server-side — findings are sorted by severity (critical→high→medium→low) and clamped to the requested limit before returning.
 - Side effects: Calls external Gemini API (`openWorldHint: true`); does not mutate local state (`readOnlyHint: true`).
 
 `risk_score`
@@ -95,6 +96,7 @@ These instructions are available as a resource (internal://instructions) or prom
 - Use `risk_score` after `review_diff` when you need both defect-level detail and a release gate score.
 - All tools share the same Gemini adapter, retry policy, timeout policy, and diff-size guard.
 - All tool responses include both `structuredContent` and JSON-string `content` for client compatibility.
+- Error payloads include a machine-readable `error.kind` field (`'validation'|'budget'|'upstream'|'timeout'|'cancelled'|'internal'`) and an `error.retryable` boolean when set; use these for automated retry logic.
 
 ---
 
@@ -103,7 +105,8 @@ These instructions are available as a resource (internal://instructions) or prom
 - Transport: stdio only in current server entrypoint.
 - API credentials: Require `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - Model selection: Uses `GEMINI_MODEL` if set; defaults to `gemini-2.5-flash`.
-- Diff size: Runtime limit defaults to 120,000 chars (`MAX_DIFF_CHARS` env override). Input schema max is 400,000 chars.
+- Diff size: Both schema and runtime default to 120,000 chars (`MAX_DIFF_CHARS` env override). All three tools share the same limit.
+- Task TTL: Tasks default to a 30-minute lifetime. Cancelled tasks have `status: 'cancelled'` with no result payload.
 - Timeout/retries: Per-call timeout defaults to 60,000 ms; retry count defaults to 1 with exponential backoff.
 - Output tokens: `maxOutputTokens` defaults to 16,384 to prevent unbounded responses.
 - Safety config: Gemini safety thresholds default to `BLOCK_NONE` for configured harm categories and can be overridden with `GEMINI_HARM_BLOCK_THRESHOLD` (`BLOCK_NONE`, `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE`).
@@ -114,7 +117,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 ## ERROR HANDLING STRATEGY
 
-- `E_INPUT_TOO_LARGE`: Diff exceeded runtime budget. → Split the diff into smaller chunks or raise `MAX_DIFF_CHARS` safely.
+- `E_INPUT_TOO_LARGE`: Diff exceeded runtime budget. Error `result` contains `{providedChars, maxChars}`. → Split the diff into smaller chunks or raise `MAX_DIFF_CHARS` safely.
 - `E_REVIEW_DIFF`: Review generation failed. → Check API key env vars, reduce diff size, and retry; inspect stderr Gemini logs.
 - `E_RISK_SCORE`: Risk scoring failed. → Check connectivity/model availability and retry with same diff.
 - `E_SUGGEST_PATCH`: Patch generation failed. → Verify finding inputs are specific and retry with narrower details.

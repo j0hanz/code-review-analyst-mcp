@@ -16,6 +16,13 @@ const DEFAULT_FOCUS_AREAS = 'security, correctness, regressions, performance';
 const SYSTEM_INSTRUCTION =
   'You are a senior staff engineer performing pull request review.\nReturn strict JSON only with no markdown fences.';
 
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
 type ReviewPromptInput = z.infer<typeof ReviewDiffInputSchema>;
 
 function joinPromptLines(lines: readonly string[]): string {
@@ -44,6 +51,19 @@ function buildReviewPrompt(input: ReviewPromptInput): PromptParts {
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
+export function applyFindingsTransform(
+  input: ReviewPromptInput,
+  result: unknown
+): unknown {
+  const r = result as z.infer<typeof ReviewDiffResultSchema>;
+  const maxFindings = input.maxFindings ?? DEFAULT_MAX_FINDINGS;
+  const sorted = [...r.findings].sort(
+    (a, b) =>
+      (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
+  );
+  return { ...r, findings: sorted.slice(0, maxFindings) };
+}
+
 export function registerReviewDiffTool(server: McpServer): void {
   registerStructuredToolTask<ReviewPromptInput>(server, {
     name: 'review_diff',
@@ -56,5 +76,6 @@ export function registerReviewDiffTool(server: McpServer): void {
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_REVIEW_DIFF',
     buildPrompt: buildReviewPrompt,
+    transformResult: applyFindingsTransform,
   });
 }

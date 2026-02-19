@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const INPUT_LIMITS = {
-  diff: { min: 10, max: 400_000 },
+  diff: { min: 10, max: 120_000 },
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
   focusArea: { min: 2, max: 80, maxItems: 12 },
@@ -22,7 +22,7 @@ function createDiffSchema(description: string): z.ZodString {
   return createBoundedString(
     INPUT_LIMITS.diff.min,
     INPUT_LIMITS.diff.max,
-    description
+    `${description} Default limit 120,000 chars; override via MAX_DIFF_CHARS env var.`
   );
 }
 

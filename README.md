@@ -255,13 +255,13 @@ For more info, see [Zed MCP docs](https://zed.dev/docs/ai/mcp).
 
 Analyze a unified diff and return structured findings, overall merge risk, and test recommendations.
 
-| Name          | Type       | Required | Default                                           | Description                                          |
-| ------------- | ---------- | -------- | ------------------------------------------------- | ---------------------------------------------------- |
-| `diff`        | `string`   | Yes      | —                                                 | Unified diff text (`10..400000` chars schema limit). |
-| `repository`  | `string`   | Yes      | —                                                 | Repository identifier (example: `org/repo`).         |
-| `language`    | `string`   | No       | `not specified`                                   | Primary language hint for analysis.                  |
-| `focusAreas`  | `string[]` | No       | `security, correctness, regressions, performance` | Optional review priorities (`1..12` items).          |
-| `maxFindings` | `integer`  | No       | `10`                                              | Max findings returned (`1..25`).                     |
+| Name          | Type       | Required | Default                                           | Description                                                             |
+| ------------- | ---------- | -------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `diff`        | `string`   | Yes      | —                                                 | Unified diff text (`10..120,000` chars; override via `MAX_DIFF_CHARS`). |
+| `repository`  | `string`   | Yes      | —                                                 | Repository identifier (example: `org/repo`).                            |
+| `language`    | `string`   | No       | `not specified`                                   | Primary language hint for analysis.                                     |
+| `focusAreas`  | `string[]` | No       | `security, correctness, regressions, performance` | Optional review priorities (`1..12` items).                             |
+| `maxFindings` | `integer`  | No       | `10`                                              | Max findings returned (`1..25`).                                        |
 
 Returns (inside `result`):
 
@@ -294,10 +294,10 @@ Example:
 
 Score deployment risk for a diff and explain the score drivers.
 
-| Name                    | Type                          | Required | Default  | Description                                          |
-| ----------------------- | ----------------------------- | -------- | -------- | ---------------------------------------------------- |
-| `diff`                  | `string`                      | Yes      | —        | Unified diff text (`10..400000` chars schema limit). |
-| `deploymentCriticality` | `"low" \| "medium" \| "high"` | No       | `medium` | Sensitivity of target deployment.                    |
+| Name                    | Type                          | Required | Default  | Description                                                             |
+| ----------------------- | ----------------------------- | -------- | -------- | ----------------------------------------------------------------------- |
+| `diff`                  | `string`                      | Yes      | —        | Unified diff text (`10..120,000` chars; override via `MAX_DIFF_CHARS`). |
+| `deploymentCriticality` | `"low" \| "medium" \| "high"` | No       | `medium` | Sensitivity of target deployment.                                       |
 
 Returns (inside `result`):
 
@@ -439,7 +439,7 @@ Releases are managed via the `Release` GitHub Actions workflow (manual dispatch)
 
 ## Troubleshooting
 
-- **`E_INPUT_TOO_LARGE`**: Split diff into smaller chunks or increase `MAX_DIFF_CHARS`.
+- **`E_INPUT_TOO_LARGE`**: Error result includes `{providedChars, maxChars}`. Split diff into smaller chunks or increase `MAX_DIFF_CHARS`.
 - **`E_REVIEW_DIFF` / `E_RISK_SCORE` / `E_SUGGEST_PATCH`**: Verify API key env vars and retry with narrower input.
 - **`Gemini request timed out after ...ms.`**: Reduce diff/prompt size or increase timeout in caller.
 - **`Gemini returned an empty response body.`**: Retry and check upstream model health.

@@ -48,6 +48,9 @@ export interface StructuredToolTaskConfig<
   /** Stable error code returned on failure (e.g. 'E_REVIEW_DIFF'). */
   errorCode: string;
 
+  /** Optional post-processing hook called after resultSchema.parse(). Returns the (possibly modified) final result. */
+  transformResult?: (input: TInput, result: unknown) => unknown;
+
   /** Optional validation hook for input parameters. */
   validateInput?: (
     input: TInput
@@ -103,8 +106,9 @@ export function registerStructuredToolTask<TInput extends object>(
     },
     {
       createTask: async (input, extra) => {
+        const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
         const task = await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? null,
+          ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
 
         const progressToken = extra._meta?.progressToken;
@@ -187,24 +191,44 @@ export function registerStructuredToolTask<TInput extends object>(
 
           const parsed: unknown = config.resultSchema.parse(raw);
 
+          const finalResult = config.transformResult
+            ? config.transformResult(inputRecord, parsed)
+            : parsed;
+
           await extra.taskStore.storeTaskResult(
             task.taskId,
             'completed',
             createToolResponse({
               ok: true as const,
-              result: parsed,
+              result: finalResult,
             })
           );
 
           await sendProgress(4, 4);
         } catch (error: unknown) {
           const errorMessage = getErrorMessage(error);
-          await updateStatusMessage(errorMessage);
-          await extra.taskStore.storeTaskResult(
-            task.taskId,
-            'failed',
-            createErrorToolResponse(config.errorCode, errorMessage)
-          );
+          if (extra.signal.aborted) {
+            await extra.taskStore.updateTaskStatus(
+              task.taskId,
+              'cancelled',
+              errorMessage
+            );
+          } else {
+            await updateStatusMessage(errorMessage);
+            await extra.taskStore.storeTaskResult(
+              task.taskId,
+              'failed',
+              createErrorToolResponse(
+                config.errorCode,
+                errorMessage,
+                undefined,
+                {
+                  kind: 'upstream',
+                  retryable: true,
+                }
+              )
+            );
+          }
         }
 
         return { task };

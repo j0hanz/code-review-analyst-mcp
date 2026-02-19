@@ -69,6 +69,17 @@ test('validateDiffBudget formats diff budget error message with en-US separators
     const message = error.structuredContent.error?.message ?? '';
     assert.ok(message.includes('120,001'), 'Expected formatted diff length');
     assert.ok(message.includes('120,000'), 'Expected formatted max diff chars');
+
+    // Enriched result with char counts
+    const result = error.structuredContent.result as Record<string, unknown>;
+    assert.ok(
+      typeof result.providedChars === 'number',
+      'Expected providedChars to be a number'
+    );
+    assert.ok(
+      typeof result.maxChars === 'number',
+      'Expected maxChars to be a number'
+    );
   } finally {
     if (oldMaxDiffChars === undefined) {
       delete process.env.MAX_DIFF_CHARS;

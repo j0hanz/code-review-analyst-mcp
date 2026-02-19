@@ -1,6 +1,21 @@
+export type ErrorKind =
+  | 'validation'
+  | 'budget'
+  | 'upstream'
+  | 'timeout'
+  | 'cancelled'
+  | 'internal';
+
+export interface ErrorMeta {
+  retryable?: boolean;
+  kind?: ErrorKind;
+}
+
 interface ToolError {
   code: string;
   message: string;
+  retryable?: boolean;
+  kind?: ErrorKind;
 }
 
 interface ToolTextContent {
@@ -32,13 +47,23 @@ function toTextContent(structured: ToolStructuredContent): ToolTextContent[] {
 function createErrorStructuredContent(
   code: string,
   message: string,
-  result?: unknown
+  result?: unknown,
+  meta?: ErrorMeta
 ): ToolStructuredContent {
+  const error: ToolError = {
+    code,
+    message,
+    ...(meta?.retryable !== undefined
+      ? { retryable: meta.retryable }
+      : undefined),
+    ...(meta?.kind !== undefined ? { kind: meta.kind } : undefined),
+  };
+
   if (result === undefined) {
-    return { ok: false, error: { code, message } };
+    return { ok: false, error };
   }
 
-  return { ok: false, error: { code, message }, result };
+  return { ok: false, error, result };
 }
 
 export function createToolResponse<
@@ -53,9 +78,10 @@ export function createToolResponse<
 export function createErrorToolResponse(
   code: string,
   message: string,
-  result?: unknown
+  result?: unknown,
+  meta?: ErrorMeta
 ): ErrorToolResponse {
-  const structured = createErrorStructuredContent(code, message, result);
+  const structured = createErrorStructuredContent(code, message, result, meta);
 
   return {
     content: toTextContent(structured),

@@ -1,4 +1,4 @@
-import { createErrorToolResponse } from './tool-response.js';
+import { createErrorToolResponse, type ErrorMeta } from './tool-response.js';
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
@@ -17,7 +17,7 @@ function parsePositiveInteger(value: string): number | undefined {
   return parsed;
 }
 
-function getMaxDiffChars(): number {
+export function getMaxDiffChars(): number {
   if (_maxDiffChars !== undefined) return _maxDiffChars;
 
   const value =
@@ -35,6 +35,8 @@ export function getDiffBudgetError(diffLength: number): string {
   return `diff exceeds max allowed size (${numberFormatter.format(diffLength)} chars > ${numberFormatter.format(getMaxDiffChars())} chars)`;
 }
 
+const BUDGET_ERROR_META: ErrorMeta = { retryable: false, kind: 'budget' };
+
 export function validateDiffBudget(
   diff: string
 ): ReturnType<typeof createErrorToolResponse> | undefined {
@@ -42,8 +44,13 @@ export function validateDiffBudget(
     return undefined;
   }
 
+  const providedChars = diff.length;
+  const maxChars = getMaxDiffChars();
+
   return createErrorToolResponse(
     'E_INPUT_TOO_LARGE',
-    getDiffBudgetError(diff.length)
+    getDiffBudgetError(providedChars),
+    { providedChars, maxChars },
+    BUDGET_ERROR_META
   );
 }
