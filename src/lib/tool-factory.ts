@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { DefaultOutputSchema } from '../schemas/outputs.js';
 import { getErrorMessage } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
-import { generateStructuredJson } from './gemini.js';
+import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
 import {
   createErrorToolResponse,
   createToolResponse,
@@ -58,6 +58,9 @@ export interface StructuredToolTaskConfig<
     | Promise<ReturnType<typeof createErrorToolResponse> | undefined>
     | ReturnType<typeof createErrorToolResponse>
     | undefined;
+
+  /** Optional formatter for human-readable text output. */
+  formatOutput?: (result: unknown) => string;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput) => PromptParts;
@@ -110,111 +113,131 @@ export function registerStructuredToolTask<TInput extends object>(
         const task = await extra.taskStore.createTask({
           ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
-
-        const progressToken = extra._meta?.progressToken;
-        const sendProgress = async (
-          progress: number,
-          total: number
-        ): Promise<void> => {
-          if (progressToken == null) return;
-          try {
-            await extra.sendNotification({
-              method: 'notifications/progress',
-              params: { progressToken, progress, total },
-            });
-          } catch {
-            // Progress is best-effort; never fail the tool call.
-          }
-        };
-
-        const updateStatusMessage = async (message: string): Promise<void> => {
-          try {
-            await extra.taskStore.updateTaskStatus(
-              task.taskId,
-              'working',
-              message
-            );
-          } catch {
-            // statusMessage is best-effort; task may already be terminal.
-          }
-        };
-
-        try {
-          const onLog = async (level: string, data: unknown): Promise<void> => {
+        void (async () => {
+          const progressToken = extra._meta?.progressToken;
+          const sendProgress = async (
+            progress: number,
+            total: number
+          ): Promise<void> => {
+            if (progressToken == null) return;
             try {
-              await server.sendLoggingMessage({
-                level: level as LoggingLevel,
-                logger: 'gemini',
-                data,
+              await extra.sendNotification({
+                method: 'notifications/progress',
+                params: { progressToken, progress, total },
               });
             } catch {
-              // Logging is best-effort; never fail the tool call.
+              // Progress is best-effort; never fail the tool call.
             }
           };
 
-          const inputRecord = parseToolInput<TInput>(
-            input,
-            config.fullInputSchema
-          );
-
-          if (config.validateInput) {
-            const validationError = await config.validateInput(inputRecord);
-            if (validationError) {
-              const validationMessage =
-                validationError.structuredContent.error?.message ??
-                'Input validation failed';
-              await updateStatusMessage(validationMessage);
-              await extra.taskStore.storeTaskResult(
+          const updateStatusMessage = async (
+            message: string
+          ): Promise<void> => {
+            try {
+              await extra.taskStore.updateTaskStatus(
                 task.taskId,
-                'failed',
-                validationError
+                'working',
+                message
               );
-              return { task };
+            } catch {
+              // statusMessage is best-effort; task may already be terminal.
             }
-          }
+          };
 
-          await sendProgress(1, 4);
+          try {
+            const onLog = async (
+              level: string,
+              data: unknown
+            ): Promise<void> => {
+              try {
+                await server.sendLoggingMessage({
+                  level: level as LoggingLevel,
+                  logger: 'gemini',
+                  data: {
+                    requestId: getCurrentRequestId(),
+                    taskId: task.taskId,
+                    ...(data as object),
+                  },
+                });
+              } catch {
+                // Logging is best-effort; never fail the tool call.
+              }
+            };
 
-          const { systemInstruction, prompt } = config.buildPrompt(inputRecord);
+            const inputRecord = parseToolInput<TInput>(
+              input,
+              config.fullInputSchema
+            );
 
-          await sendProgress(2, 4);
+            if (config.validateInput) {
+              const validationError = await config.validateInput(inputRecord);
+              if (validationError) {
+                const validationMessage =
+                  validationError.structuredContent.error?.message ??
+                  'Input validation failed';
+                await extra.taskStore.updateTaskStatus(
+                  task.taskId,
+                  'failed',
+                  validationMessage
+                );
+                await extra.taskStore.storeTaskResult(
+                  task.taskId,
+                  'failed',
+                  validationError
+                );
+                return;
+              }
+            }
 
-          const raw = await generateStructuredJson({
-            systemInstruction,
-            prompt,
-            responseSchema,
-            signal: extra.signal,
-            onLog,
-          });
+            await sendProgress(1, 4);
 
-          await sendProgress(3, 4);
+            const { systemInstruction, prompt } =
+              config.buildPrompt(inputRecord);
 
-          const parsed: unknown = config.resultSchema.parse(raw);
+            await sendProgress(2, 4);
 
-          const finalResult = config.transformResult
-            ? config.transformResult(inputRecord, parsed)
-            : parsed;
+            const raw = await generateStructuredJson({
+              systemInstruction,
+              prompt,
+              responseSchema,
+              onLog,
+            });
 
-          await extra.taskStore.storeTaskResult(
-            task.taskId,
-            'completed',
-            createToolResponse({
-              ok: true as const,
-              result: finalResult,
-            })
-          );
+            await sendProgress(3, 4);
 
-          await sendProgress(4, 4);
-        } catch (error: unknown) {
-          const errorMessage = getErrorMessage(error);
-          if (extra.signal.aborted) {
+            const parsed: unknown = config.resultSchema.parse(raw);
+
+            const finalResult = config.transformResult
+              ? config.transformResult(inputRecord, parsed)
+              : parsed;
+
+            const textContent = config.formatOutput
+              ? config.formatOutput(finalResult)
+              : undefined;
+
+            await extra.taskStore.updateTaskStatus(task.taskId, 'completed');
+
+            await extra.taskStore.storeTaskResult(
+              task.taskId,
+              'completed',
+              createToolResponse(
+                {
+                  ok: true as const,
+                  result: finalResult,
+                },
+                textContent
+              )
+            );
+
+            await sendProgress(4, 4);
+          } catch (error: unknown) {
+            const errorMessage = getErrorMessage(error);
+            await updateStatusMessage(errorMessage);
             await extra.taskStore.updateTaskStatus(
               task.taskId,
-              'cancelled',
+              'failed',
               errorMessage
             );
-          } else {
-            await updateStatusMessage(errorMessage);
             await extra.taskStore.storeTaskResult(
               task.taskId,
               'failed',
@@ -229,7 +252,7 @@ export function registerStructuredToolTask<TInput extends object>(
               )
             );
           }
-        }
+        })();
 
         return { task };
       },

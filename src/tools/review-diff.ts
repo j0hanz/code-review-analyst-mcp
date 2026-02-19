@@ -64,6 +64,21 @@ export function applyFindingsTransform(
   return { ...r, findings: sorted.slice(0, maxFindings) };
 }
 
+export function formatReviewOutput(result: unknown): string {
+  const r = result as z.infer<typeof ReviewDiffResultSchema>;
+  const findingCounts = r.findings.reduce<Record<string, number>>((acc, f) => {
+    acc[f.severity] = (acc[f.severity] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const countsStr = Object.entries(findingCounts)
+    .map(([sev, count]) => `${count} ${sev}`)
+    .join(', ');
+
+  const countsSuffix = countsStr ? ` (${countsStr})` : '';
+  return `Review Complete: ${r.overallRisk.toUpperCase()} risk. Found ${r.findings.length} issues${countsSuffix}.`;
+}
+
 export function registerReviewDiffTool(server: McpServer): void {
   registerStructuredToolTask<ReviewPromptInput>(server, {
     name: 'review_diff',
@@ -77,5 +92,6 @@ export function registerReviewDiffTool(server: McpServer): void {
     errorCode: 'E_REVIEW_DIFF',
     buildPrompt: buildReviewPrompt,
     transformResult: applyFindingsTransform,
+    formatOutput: formatReviewOutput,
   });
 }

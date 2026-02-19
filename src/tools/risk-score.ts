@@ -34,6 +34,11 @@ function buildRiskPrompt(input: RiskPromptInput): PromptParts {
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
+export function formatRiskOutput(result: unknown): string {
+  const r = result as z.infer<typeof RiskScoreResultSchema>;
+  return `Risk Score: ${r.score}/100 (${r.bucket.toUpperCase()}).`;
+}
+
 export function registerRiskScoreTool(server: McpServer): void {
   registerStructuredToolTask<RiskPromptInput>(server, {
     name: 'risk_score',
@@ -46,5 +51,6 @@ export function registerRiskScoreTool(server: McpServer): void {
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_RISK_SCORE',
     buildPrompt: buildRiskPrompt,
+    formatOutput: formatRiskOutput,
   });
 }

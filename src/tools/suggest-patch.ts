@@ -35,6 +35,11 @@ function buildPatchPrompt(input: PatchPromptInput): PromptParts {
   return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
 }
 
+export function formatPatchOutput(result: unknown): string {
+  const r = result as z.infer<typeof PatchSuggestionResultSchema>;
+  return `Patch Generated: ${r.summary}`;
+}
+
 export function registerSuggestPatchTool(server: McpServer): void {
   registerStructuredToolTask<PatchPromptInput>(server, {
     name: 'suggest_patch',
@@ -47,5 +52,6 @@ export function registerSuggestPatchTool(server: McpServer): void {
     validateInput: (input) => validateDiffBudget(input.diff),
     errorCode: 'E_SUGGEST_PATCH',
     buildPrompt: buildPatchPrompt,
+    formatOutput: formatPatchOutput,
   });
 }

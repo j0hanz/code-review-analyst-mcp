@@ -40,7 +40,13 @@ interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
   isError: true;
 }
 
-function toTextContent(structured: ToolStructuredContent): ToolTextContent[] {
+function toTextContent(
+  structured: ToolStructuredContent,
+  textContent?: string
+): ToolTextContent[] {
+  if (textContent) {
+    return [{ type: 'text', text: textContent }];
+  }
   return [{ type: 'text', text: JSON.stringify(structured) }];
 }
 
@@ -68,9 +74,12 @@ function createErrorStructuredContent(
 
 export function createToolResponse<
   TStructuredContent extends ToolStructuredContent,
->(structured: TStructuredContent): ToolResponse<TStructuredContent> {
+>(
+  structured: TStructuredContent,
+  textContent?: string
+): ToolResponse<TStructuredContent> {
   return {
-    content: toTextContent(structured),
+    content: toTextContent(structured, textContent),
     structuredContent: structured,
   };
 }

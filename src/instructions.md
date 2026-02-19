@@ -69,6 +69,7 @@ These instructions are available as a resource (internal://instructions) or prom
 - Input: `maxFindings` defaults to 10; `focusAreas` defaults to security/correctness/regressions/performance when omitted.
 - Output: `ok/result/error` envelope; successful payload includes `summary`, `overallRisk`, `findings[]`, and `testsNeeded[]`.
 - Gotcha: Both schema and runtime limit `diff` to 120,000 chars by default (overridable via `MAX_DIFF_CHARS`). Oversized diffs fail with `E_INPUT_TOO_LARGE`; the error `result` payload contains `{providedChars, maxChars}` for automated handling.
+- Gotcha: The SDK automatically strips unknown input fields before validation. Typos in optional fields (like `focusAreas`) will be silently ignored rather than rejected.
 - Gotcha: `maxFindings` is enforced server-side — findings are sorted by severity (critical→high→medium→low) and clamped to the requested limit before returning.
 - Side effects: Calls external Gemini API (`openWorldHint: true`); does not mutate local state (`readOnlyHint: true`).
 
@@ -107,6 +108,7 @@ These instructions are available as a resource (internal://instructions) or prom
 - Model selection: Uses `GEMINI_MODEL` if set; defaults to `gemini-2.5-flash`.
 - Diff size: Both schema and runtime default to 120,000 chars (`MAX_DIFF_CHARS` env override). All three tools share the same limit.
 - Task TTL: Tasks default to a 30-minute lifetime. Cancelled tasks have `status: 'cancelled'` with no result payload.
+- Task Async: `createTask` returns immediately. The heavy lifting happens in the background. Poll `tasks/get` to see progress and final result.
 - Timeout/retries: Per-call timeout defaults to 60,000 ms; retry count defaults to 1 with exponential backoff.
 - Output tokens: `maxOutputTokens` defaults to 16,384 to prevent unbounded responses.
 - Safety config: Gemini safety thresholds default to `BLOCK_NONE` for configured harm categories and can be overridden with `GEMINI_HARM_BLOCK_THRESHOLD` (`BLOCK_NONE`, `BLOCK_ONLY_HIGH`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_LOW_AND_ABOVE`).

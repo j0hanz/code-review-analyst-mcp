@@ -92,6 +92,11 @@ const UNKNOWN_CONTEXT: GeminiRequestContext = {
   model: 'unknown',
 };
 
+export function getCurrentRequestId(): string {
+  const context = geminiContext.getStore();
+  return context?.requestId ?? 'unknown';
+}
+
 function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
   if (!apiKey) {

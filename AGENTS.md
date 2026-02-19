@@ -58,6 +58,7 @@
 - **Error Handling:** Errors caught as `unknown`, extracted via `getErrorMessage()` helper (see `src/lib/errors.ts`). Tool errors returned via `createErrorToolResponse(code, message)` with `isError: true` (see `src/lib/tool-response.ts`). Uncaught exceptions avoided in tool handlers (see `src/lib/tool-factory.ts`).
 - **Patterns Observed:**
   - Generic tool-task factory pattern: all three tools use the same `registerStructuredToolTask<TInput>()` abstraction with config objects (observed in `src/tools/review-diff.ts`, `src/tools/risk-score.ts`, `src/tools/suggest-patch.ts`)
+  - Human-readable output summaries provided via `formatOutput` hook in tool config, appearing in `content[0].text`
   - Gemini response schemas are auto-derived from result schemas by stripping JSON Schema constraints (`stripJsonSchemaConstraints` in `src/lib/gemini-schema.ts`), eliminating manual duplication
   - Dual content output: every tool response includes both `content` (JSON text) and `structuredContent` for backward compatibility (observed in `src/lib/tool-response.ts`)
   - Gemini adapter with retry + exponential backoff + jitter + timeout + abort signal propagation (observed in `src/lib/gemini.ts`)
