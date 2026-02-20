@@ -33,6 +33,14 @@ const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
+const concurrencyWaitMsConfig = createCachedEnvInt(
+  'MAX_CONCURRENT_CALLS_WAIT_MS',
+  2_000
+);
+const concurrencyPollMsConfig = createCachedEnvInt(
+  'MAX_CONCURRENT_CALLS_POLL_MS',
+  25
+);
 let activeCalls = 0;
 
 const RETRYABLE_TRANSIENT_CODES = new Set([
@@ -499,6 +507,30 @@ async function runWithRetries(
   return throwGeminiFailure(maxRetries, lastError, onLog);
 }
 
+async function waitForConcurrencySlot(
+  limit: number,
+  requestSignal?: AbortSignal
+): Promise<void> {
+  const waitLimitMs = concurrencyWaitMsConfig.get();
+  const pollMs = concurrencyPollMsConfig.get();
+  const startedAt = performance.now();
+
+  while (activeCalls >= limit) {
+    if (requestSignal?.aborted) {
+      throw new Error('Gemini request was cancelled.');
+    }
+
+    const elapsedMs = performance.now() - startedAt;
+    if (elapsedMs >= waitLimitMs) {
+      throw new Error(
+        `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}; waited ${formatNumber(waitLimitMs)}ms).`
+      );
+    }
+
+    await sleep(pollMs, undefined, { ref: false });
+  }
+}
+
 export async function generateStructuredJson(
   request: GeminiStructuredRequest
 ): Promise<unknown> {
@@ -508,11 +540,7 @@ export async function generateStructuredJson(
   const { onLog } = request;
 
   const limit = maxConcurrentCallsConfig.get();
-  if (activeCalls >= limit) {
-    throw new Error(
-      `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}).`
-    );
-  }
+  await waitForConcurrencySlot(limit, request.signal);
 
   activeCalls += 1;
   try {

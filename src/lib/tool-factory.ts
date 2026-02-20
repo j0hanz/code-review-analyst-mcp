@@ -209,6 +209,30 @@ async function sendTaskProgress(
   }
 }
 
+function toLoggingLevel(level: string): LoggingLevel {
+  switch (level) {
+    case 'debug':
+    case 'info':
+    case 'notice':
+    case 'warning':
+    case 'error':
+    case 'critical':
+    case 'alert':
+    case 'emergency':
+      return level;
+    default:
+      return 'error';
+  }
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>;
+  }
+
+  return { payload: value };
+}
+
 function createGeminiLogger(
   server: McpServer,
   taskId: string
@@ -216,12 +240,12 @@ function createGeminiLogger(
   return async (level: string, data: unknown): Promise<void> => {
     try {
       await server.sendLoggingMessage({
-        level: level as LoggingLevel,
+        level: toLoggingLevel(level),
         logger: 'gemini',
         data: {
           requestId: getCurrentRequestId(),
           taskId,
-          ...(data as object),
+          ...asObjectRecord(data),
         },
       });
     } catch {

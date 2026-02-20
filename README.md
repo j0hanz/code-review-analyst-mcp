@@ -57,12 +57,15 @@ See [src/instructions.md](src/instructions.md) for detailed inputs and outputs.
 
 ## Configuration
 
-| Variable            | Description                         | Default |
-| ------------------- | ----------------------------------- | ------- |
-| `GEMINI_API_KEY`    | API Key                             | -       |
-| `GEMINI_MODEL`      | Override default model selection    | -       |
-| `MAX_DIFF_CHARS`    | Max chars for diff input            | 120,000 |
-| `MAX_CONTEXT_CHARS` | Max combined context for inspection | 500,000 |
+| Variable                       | Description                                       | Default |
+| ------------------------------ | ------------------------------------------------- | ------- |
+| `GEMINI_API_KEY`               | API Key                                           | -       |
+| `GEMINI_MODEL`                 | Override default model selection                  | -       |
+| `MAX_DIFF_CHARS`               | Max chars for diff input                          | 120,000 |
+| `MAX_CONTEXT_CHARS`            | Max combined context for inspection               | 500,000 |
+| `MAX_CONCURRENT_CALLS`         | Max concurrent Gemini requests                    | 10      |
+| `MAX_CONCURRENT_CALLS_WAIT_MS` | Max wait time for a free Gemini slot before error | 2,000   |
+| `MAX_CONCURRENT_CALLS_POLL_MS` | Poll interval while waiting for a free slot       | 25      |
 
 ## License
 

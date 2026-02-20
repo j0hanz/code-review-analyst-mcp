@@ -104,6 +104,130 @@ test('generateStructuredJson retries transient failures and succeeds', async () 
   assert.deepEqual(result, { summary: 'recovered' });
 });
 
+test('generateStructuredJson waits for an available slot at concurrency limit', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  let releaseAll: (() => void) | undefined;
+
+  const gate = new Promise<void>((resolve) => {
+    releaseAll = resolve;
+  });
+
+  setMockClient(async () => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await gate;
+    inFlight -= 1;
+
+    return {
+      text: JSON.stringify({ summary: 'queued-success' }),
+    };
+  });
+
+  const requests = Array.from({ length: 11 }, async () => {
+    return await generateStructuredJson({
+      prompt: 'user prompt',
+      responseSchema: { type: 'object' },
+      maxRetries: 0,
+    });
+  });
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 50);
+  });
+  releaseAll?.();
+
+  const results = await Promise.all(requests);
+  assert.equal(results.length, 11);
+  assert.ok(maxInFlight > 0);
+});
+
+test('generateStructuredJson times out while waiting for an available slot', async () => {
+  let releaseAll: (() => void) | undefined;
+
+  const gate = new Promise<void>((resolve) => {
+    releaseAll = resolve;
+  });
+
+  setMockClient(async () => {
+    await gate;
+    return {
+      text: JSON.stringify({ summary: 'queued-success' }),
+    };
+  });
+
+  const saturatedRequests = Array.from({ length: 10 }, async () => {
+    return await generateStructuredJson({
+      prompt: 'slot-holder',
+      responseSchema: { type: 'object' },
+      maxRetries: 0,
+    });
+  });
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 50);
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        generateStructuredJson({
+          prompt: 'timeout-candidate',
+          responseSchema: { type: 'object' },
+          maxRetries: 0,
+        }),
+      /Too many concurrent Gemini calls \(limit: 10; waited \d{1,3}(?:,\d{3})*ms\)\./
+    );
+  } finally {
+    releaseAll?.();
+    await Promise.all(saturatedRequests);
+  }
+});
+
+test('generateStructuredJson aborts while waiting for an available slot', async () => {
+  let releaseAll: (() => void) | undefined;
+
+  const gate = new Promise<void>((resolve) => {
+    releaseAll = resolve;
+  });
+
+  setMockClient(async () => {
+    await gate;
+    return {
+      text: JSON.stringify({ summary: 'queued-success' }),
+    };
+  });
+
+  const saturatedRequests = Array.from({ length: 10 }, async () => {
+    return await generateStructuredJson({
+      prompt: 'slot-holder',
+      responseSchema: { type: 'object' },
+      maxRetries: 0,
+    });
+  });
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 50);
+  });
+
+  const controller = new AbortController();
+  const waitingRequest = generateStructuredJson({
+    prompt: 'abort-candidate',
+    responseSchema: { type: 'object' },
+    maxRetries: 0,
+    signal: controller.signal,
+  });
+
+  controller.abort();
+
+  try {
+    await assert.rejects(waitingRequest, /Gemini request was cancelled\./);
+  } finally {
+    releaseAll?.();
+    await Promise.all(saturatedRequests);
+  }
+});
+
 test('generateStructuredJson does not retry non-transient failures', async () => {
   const generateContentMock = setMockClient(async () => {
     throw new Error('input validation failed');
