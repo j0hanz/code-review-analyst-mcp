@@ -1,10 +1,11 @@
 import {
   DEFAULT_TIMEOUT_PRO_MS,
+  FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
+  FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
   FLASH_MODEL,
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
   FLASH_THINKING_BUDGET,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
-  PRO_COMPLEXITY_MAX_OUTPUT_TOKENS,
   PRO_MODEL,
   PRO_PATCH_MAX_OUTPUT_TOKENS,
   PRO_REVIEW_MAX_OUTPUT_TOKENS,
@@ -272,10 +273,10 @@ export const TOOL_CONTRACTS = [
     name: 'analyze_time_space_complexity',
     purpose:
       'Analyze Big-O complexity and detect degradations in changed code.',
-    model: PRO_MODEL,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
-    thinkingBudget: PRO_THINKING_BUDGET,
-    maxOutputTokens: PRO_COMPLEXITY_MAX_OUTPUT_TOKENS,
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    thinkingBudget: FLASH_THINKING_BUDGET,
+    maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
     params: [
       {
         name: 'diff',
@@ -302,7 +303,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Detect breaking API/interface changes in a diff.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
     params: [
       {
         name: 'diff',

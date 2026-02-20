@@ -1,8 +1,11 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  type McpServer,
+  ResourceTemplate,
+} from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { buildServerConfig } from './server-config.js';
 import { buildToolCatalog } from './tool-catalog.js';
-import { getToolInfo, getToolInfoNames, getToolPurpose } from './tool-info.js';
+import { getToolInfo, getToolInfoNames } from './tool-info.js';
 import { buildWorkflowGuide } from './workflows.js';
 
 const RESOURCE_MIME_TYPE = 'text/markdown';
@@ -84,26 +87,30 @@ function registerStaticResource(
 function registerToolInfoResources(server: McpServer): void {
   const toolNames = getToolInfoNames();
 
-  for (const toolName of toolNames) {
-    server.registerResource(
-      `tool-info-${toolName}`,
-      `internal://tool-info/${toolName}`,
-      {
-        title: toolName,
-        description: getToolPurpose(toolName),
-        mimeType: RESOURCE_MIME_TYPE,
-        annotations: {
-          audience: RESOURCE_AUDIENCE,
-          priority: 0.6,
-        },
+  server.registerResource(
+    'tool-info',
+    new ResourceTemplate('internal://tool-info/{toolName}', {
+      list: undefined,
+      complete: {
+        toolName: (value) => toolNames.filter((name) => name.startsWith(value)),
       },
-      (uri) => {
-        const info = getToolInfo(toolName);
-        const text = info ?? `Unknown tool: ${toolName}`;
-        return { contents: [createMarkdownContent(uri, text)] };
-      }
-    );
-  }
+    }),
+    {
+      title: 'Tool Info',
+      description: 'Per-tool reference: model, params, output, gotchas.',
+      mimeType: RESOURCE_MIME_TYPE,
+      annotations: {
+        audience: RESOURCE_AUDIENCE,
+        priority: 0.6,
+      },
+    },
+    (uri, { toolName }) => {
+      const name = typeof toolName === 'string' ? toolName : '';
+      const info = getToolInfo(name);
+      const text = info ?? `Unknown tool: ${name}`;
+      return { contents: [createMarkdownContent(uri, text)] };
+    }
+  );
 }
 
 export function registerAllResources(

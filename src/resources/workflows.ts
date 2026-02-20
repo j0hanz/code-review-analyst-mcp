@@ -1,6 +1,18 @@
+import { getToolContracts } from '../lib/tool-contracts.js';
 import { getSharedConstraints } from './tool-info.js';
 
-const WORKFLOW_GUIDE_CONTENT = `# Workflow Reference
+function buildWorkflowToolReference(): string {
+  const contracts = getToolContracts();
+  return contracts
+    .map(
+      (c) =>
+        `### \`${c.name}\`\n- **Purpose:** ${c.purpose}\n- **Model:** ${c.model}\n- **Output:** \`${c.outputShape}\``
+    )
+    .join('\n\n');
+}
+
+export function buildWorkflowGuide(): string {
+  return `# Workflow Reference
 
 ## A: Full PR Review
 
@@ -44,6 +56,10 @@ ${getSharedConstraints()
   .map((constraint) => `- ${constraint}`)
   .join('\n')}
 
+## Tool Reference
+
+${buildWorkflowToolReference()}
+
 ## Output Shape Reference
 
 ### Finding
@@ -58,7 +74,4 @@ ${getSharedConstraints()
 ### Breaking Change
 \`{element, natureOfChange, consumerImpact, suggestedMitigation}\`
 `;
-
-export function buildWorkflowGuide(): string {
-  return WORKFLOW_GUIDE_CONTENT;
 }

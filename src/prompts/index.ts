@@ -108,6 +108,16 @@ function buildReviewGuideText(tool: string, focusArea: string): string {
     `# Code Review Guide\n\n` +
     `## Tool: \`${tool}\`\n${getToolGuide(tool)}\n\n` +
     `## Focus Area: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
+    `## Example: Finding → Patch\n\n` +
+    `Given a finding from \`inspect_code_quality\`:\n` +
+    `- **title:** "Uncaught promise rejection in retry loop"\n` +
+    `- **details:** "The catch block swallows errors without logging."\n\n` +
+    `Call \`suggest_search_replace\` with those values. It returns:\n` +
+    '```\n' +
+    `blocks[0].search: "  } catch {\\n  }"\n` +
+    `blocks[0].replace: "  } catch (err) {\\n    logger.error(err);\\n  }"\n` +
+    '```\n\n' +
+    `Validate that \`blocks[].search\` matches file content verbatim before applying.\n\n` +
     `> Tip: Run \`get-help\` for full server documentation.`
   );
 }

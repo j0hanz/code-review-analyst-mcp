@@ -35,7 +35,7 @@ const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
-const MAX_SCHEMA_RETRIES = 0;
+const MAX_SCHEMA_RETRIES = 1;
 
 type ProgressToken = string | number;
 
@@ -432,6 +432,7 @@ export function registerStructuredToolTask<
       outputSchema: DefaultOutputSchema,
       annotations: {
         readOnlyHint: true,
+        idempotentHint: true,
         openWorldHint: true,
       },
     },
@@ -537,13 +538,14 @@ export function registerStructuredToolTask<
             );
 
             let parsed: TResult | undefined;
+            let retryPrompt = prompt;
 
             for (let attempt = 0; attempt <= MAX_SCHEMA_RETRIES; attempt += 1) {
               try {
                 const raw = await generateStructuredJson(
                   createGenerationRequest(
                     config,
-                    { systemInstruction, prompt },
+                    { systemInstruction, prompt: retryPrompt },
                     responseSchema,
                     onLog,
                     extra.signal
@@ -575,6 +577,8 @@ export function registerStructuredToolTask<
                   event: 'schema_validation_failed',
                   details: { attempt, error: errorMessage },
                 });
+
+                retryPrompt = `${prompt}\n\nCRITICAL: The previous response failed schema validation. Error: ${errorMessage}`;
               }
             }
 
