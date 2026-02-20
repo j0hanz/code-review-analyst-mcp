@@ -36,8 +36,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     model: FLASH_MODEL,
     thinkingBudget: FLASH_THINKING_BUDGET,
     validateInput: (input) => validateDiffBudget(input.diff),
-    progressContext: (input) =>
-      `repo: ${input.repository}, framework: ${input.testFramework ?? DEFAULT_TEST_FRAMEWORK}, max-cases: ${input.maxTestCases ?? DEFAULT_MAX_TEST_CASES}`,
+    formatOutcome: (result) => `${result.testCases.length} test cases`,
     formatOutput: (result) => {
       return `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`;
     },

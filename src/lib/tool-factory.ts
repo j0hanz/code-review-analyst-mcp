@@ -91,6 +91,9 @@ export interface StructuredToolTaskConfig<
   /** Optional context text used in progress messages. */
   progressContext?: (input: TInput) => string;
 
+  /** Optional short outcome suffix for the completion progress message (e.g., "3 findings"). */
+  formatOutcome?: (result: TFinal) => string;
+
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput) => PromptParts;
 }
@@ -310,12 +313,20 @@ function formatProgressStep(
   return `${prefix} ${toolName}: ${context} [${metadata}]`;
 }
 
+function friendlyModelName(model: string | undefined): string {
+  if (!model) return 'model';
+  if (model.includes('pro')) return 'Pro';
+  if (model.includes('flash')) return 'Flash';
+  return 'model';
+}
+
 function formatProgressCompletion(
   toolName: string,
   context: string,
-  outcome: string
+  outcome: string,
+  success = true
 ): string {
-  const prefix = outcome === 'completed' ? '◈' : '‣';
+  const prefix = success ? '◈' : '‣';
   return `${prefix} ${toolName}: ${context} • ${outcome}`;
 }
 
@@ -432,16 +443,6 @@ export function registerStructuredToolTask<
           };
 
           try {
-            await reportProgress({
-              current: 0,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressStep(
-                config.name,
-                progressContext,
-                'start'
-              ),
-            });
-
             const onLog = createGeminiLogger(server, task.taskId);
 
             const inputRecord = parseToolInput<TInput>(
@@ -451,6 +452,16 @@ export function registerStructuredToolTask<
             progressContext = normalizeProgressContext(
               config.progressContext?.(inputRecord)
             );
+
+            await reportProgress({
+              current: 0,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressStep(
+                config.name,
+                progressContext,
+                'starting'
+              ),
+            });
 
             if (config.validateInput) {
               const validationError = await config.validateInput(inputRecord);
@@ -465,7 +476,8 @@ export function registerStructuredToolTask<
                   message: formatProgressCompletion(
                     config.name,
                     progressContext,
-                    'failed'
+                    'rejected',
+                    false
                   ),
                 });
                 await storeResultSafely('completed', validationError);
@@ -479,20 +491,22 @@ export function registerStructuredToolTask<
               message: formatProgressStep(
                 config.name,
                 progressContext,
-                'input validated'
+                'preparing'
               ),
             });
 
-            const { systemInstruction } = config.buildPrompt(inputRecord);
-            let { prompt } = config.buildPrompt(inputRecord);
+            const promptParts = config.buildPrompt(inputRecord);
+            let { prompt } = promptParts;
+            const { systemInstruction } = promptParts;
 
+            const modelLabel = friendlyModelName(config.model);
             await reportProgress({
               current: 2,
               total: TASK_PROGRESS_TOTAL,
               message: formatProgressStep(
                 config.name,
                 progressContext,
-                'prompt prepared'
+                `awaiting ${modelLabel}`
               ),
             });
 
@@ -519,7 +533,7 @@ export function registerStructuredToolTask<
                     message: formatProgressStep(
                       config.name,
                       progressContext,
-                      'model response received'
+                      'processing response'
                     ),
                   });
                 }
@@ -558,13 +572,14 @@ export function registerStructuredToolTask<
               ? config.formatOutput(finalResult)
               : undefined;
 
+            const outcome = config.formatOutcome?.(finalResult) ?? 'completed';
             await reportProgress({
               current: TASK_PROGRESS_TOTAL,
               total: TASK_PROGRESS_TOTAL,
               message: formatProgressCompletion(
                 config.name,
                 progressContext,
-                'completed'
+                outcome
               ),
             });
             await storeResultSafely(
@@ -586,7 +601,8 @@ export function registerStructuredToolTask<
               message: formatProgressCompletion(
                 config.name,
                 progressContext,
-                'failed'
+                'failed',
+                false
               ),
             });
             await updateStatusMessage(errorMessage);

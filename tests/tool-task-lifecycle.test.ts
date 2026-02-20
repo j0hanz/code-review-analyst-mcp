@@ -99,7 +99,7 @@ function assertProgressLifecycle(
   const first = updates[0];
   assert.equal(first?.progress, 0);
   assert.equal(first?.total, 4);
-  assert.match(first?.message ?? '', /\[start\]/);
+  assert.match(first?.message ?? '', /\[starting\]/);
 
   let previous = -1;
   for (const update of updates) {
@@ -159,7 +159,7 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     assert.notEqual(result.isError, true);
     assert.ok(result.structuredContent);
     assert.equal(result.structuredContent.ok, true);
-    assertProgressLifecycle(progressUpdates, 'completed');
+    assertProgressLifecycle(progressUpdates, 'severity: low');
   } finally {
     await close();
   }
@@ -195,7 +195,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
       (result.structuredContent.error as { code: string }).code,
       'E_INPUT_TOO_LARGE'
     );
-    assertProgressLifecycle(progressUpdates, 'failed');
+    assertProgressLifecycle(progressUpdates, 'rejected');
   } finally {
     await close();
     delete process.env.MAX_DIFF_CHARS;
