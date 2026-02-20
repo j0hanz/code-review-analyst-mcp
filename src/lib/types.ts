@@ -18,5 +18,5 @@ export interface GeminiStructuredRequestOptions extends GeminiRequestExecutionOp
 export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {
   systemInstruction?: string;
   prompt: string;
-  responseSchema: JsonObject;
+  responseSchema: Readonly<JsonObject>;
 }

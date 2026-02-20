@@ -35,6 +35,7 @@ const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
+const MAX_SCHEMA_RETRIES = 1;
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
@@ -278,11 +279,19 @@ function createProgressReporter(extra: {
         ? Math.max(payload.total, current)
         : undefined;
 
-    await sendTaskProgress(extra, {
-      current,
-      ...(total !== undefined ? { total } : {}),
-      ...(payload.message !== undefined ? { message: payload.message } : {}),
-    });
+    const progressPayload: {
+      current: number;
+      total?: number;
+      message?: string;
+    } = { current };
+    if (total !== undefined) {
+      progressPayload.total = total;
+    }
+    if (payload.message !== undefined) {
+      progressPayload.message = payload.message;
+    }
+
+    await sendTaskProgress(extra, progressPayload);
 
     lastCurrent = current;
     if (total !== undefined && total === current) {
@@ -506,17 +515,15 @@ export function registerStructuredToolTask<
               message: formatProgressStep(
                 config.name,
                 progressContext,
-                `awaiting ${modelLabel}`
+                modelLabel
               ),
             });
 
-            const MAX_SCHEMA_RETRIES = 1;
-            let raw: unknown;
             let parsed: TResult | undefined;
 
             for (let attempt = 0; attempt <= MAX_SCHEMA_RETRIES; attempt += 1) {
               try {
-                raw = await generateStructuredJson(
+                const raw = await generateStructuredJson(
                   createGenerationRequest(
                     config,
                     { systemInstruction, prompt },

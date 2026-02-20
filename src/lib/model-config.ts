@@ -20,6 +20,8 @@ export const MODEL_TIMEOUT_MS = {
   defaultPro: DEFAULT_TIMEOUT_PRO_MS,
 } as const;
 
+Object.freeze(MODEL_TIMEOUT_MS);
+
 /** Default language hint when not specified by the user. Tells the model to auto-detect. */
 export const DEFAULT_LANGUAGE = 'detect';
 

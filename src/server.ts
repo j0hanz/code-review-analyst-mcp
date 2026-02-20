@@ -19,6 +19,7 @@ const SERVER_NAME = 'code-review-analyst';
 const INSTRUCTIONS_FILENAME = 'instructions.md';
 const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
 const UTF8_ENCODING = 'utf8';
+const PACKAGE_VERSION_FIELD = 'version';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const INSTRUCTIONS_PATH = join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
 
@@ -42,7 +43,7 @@ function isPackageJsonMetadata(value: unknown): value is PackageJsonMetadata {
   return (
     typeof value === 'object' &&
     value !== null &&
-    'version' in value &&
+    PACKAGE_VERSION_FIELD in value &&
     typeof value.version === 'string' &&
     value.version.trim().length > 0
   );

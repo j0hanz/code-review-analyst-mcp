@@ -40,9 +40,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
       const count = result.blocks.length;
       return `${count} ${count === 1 ? 'patch' : 'patches'}`;
     },
-    formatOutput: (result) => {
-      return `Search/Replace Suggestion: ${result.summary}`;
-    },
+    formatOutput: (result) => `Search/Replace Suggestion: ${result.summary}`,
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
       const paths = extractChangedPathsFromFiles(files);

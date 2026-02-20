@@ -31,6 +31,8 @@ const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
 const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
+const DIGITS_ONLY_PATTERN = /^\d+$/;
+const SLEEP_UNREF_OPTIONS = { ref: false } as const;
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
 const concurrencyWaitMsConfig = createCachedEnvInt(
@@ -122,11 +124,9 @@ function getSafetySettings(
   const settings = new Array<{
     category: HarmCategory;
     threshold: HarmBlockThreshold;
-  }>(SAFETY_CATEGORIES.length);
-  let index = 0;
+  }>();
   for (const category of SAFETY_CATEGORIES) {
-    settings[index] = { category, threshold };
-    index += 1;
+    settings.push({ category, threshold });
   }
   safetySettingsCache.set(threshold, settings);
   return settings;
@@ -265,7 +265,7 @@ function toNumericCode(candidate: unknown): number | undefined {
     return candidate;
   }
 
-  if (typeof candidate === 'string' && /^\d+$/.test(candidate)) {
+  if (typeof candidate === 'string' && DIGITS_ONLY_PATTERN.test(candidate)) {
     return Number.parseInt(candidate, 10);
   }
 
@@ -362,22 +362,25 @@ function buildGenerationConfig(
   request: GeminiStructuredRequest,
   abortSignal: AbortSignal
 ): GenerateContentConfig {
-  const systemInstruction = request.systemInstruction
-    ? { systemInstruction: request.systemInstruction }
-    : undefined;
   const thinkingConfig = getThinkingConfig(request.thinkingBudget);
-  const safetySettings = getSafetySettings(getSafetyThreshold());
-
-  return {
+  const config: GenerateContentConfig = {
     temperature: request.temperature ?? 0.2,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
-    ...(systemInstruction ?? undefined),
-    ...(thinkingConfig ? { thinkingConfig } : undefined),
-    safetySettings,
+    safetySettings: getSafetySettings(getSafetyThreshold()),
     abortSignal,
   };
+
+  if (request.systemInstruction) {
+    config.systemInstruction = request.systemInstruction;
+  }
+
+  if (thinkingConfig) {
+    config.thinkingConfig = thinkingConfig;
+  }
+
+  return config;
 }
 
 function combineSignals(
@@ -476,7 +479,7 @@ async function waitBeforeRetry(
     },
   });
 
-  await sleep(delayMs, undefined, { ref: false });
+  await sleep(delayMs, undefined, SLEEP_UNREF_OPTIONS);
 }
 
 async function throwGeminiFailure(
@@ -532,21 +535,20 @@ async function waitForConcurrencySlot(
 ): Promise<void> {
   const waitLimitMs = concurrencyWaitMsConfig.get();
   const pollMs = concurrencyPollMsConfig.get();
-  const startedAt = performance.now();
+  const deadline = performance.now() + waitLimitMs;
 
   while (activeCalls >= limit) {
     if (requestSignal?.aborted) {
       throw new Error('Gemini request was cancelled.');
     }
 
-    const elapsedMs = performance.now() - startedAt;
-    if (elapsedMs >= waitLimitMs) {
+    if (performance.now() >= deadline) {
       throw new Error(
         `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}; waited ${formatNumber(waitLimitMs)}ms).`
       );
     }
 
-    await sleep(pollMs, undefined, { ref: false });
+    await sleep(pollMs, undefined, SLEEP_UNREF_OPTIONS);
   }
 }
 
@@ -563,11 +565,8 @@ export async function generateStructuredJson(
 
   activeCalls += 1;
   try {
-    return await geminiContext.run(
-      { requestId: nextRequestId(), model },
-      async (): Promise<unknown> => {
-        return runWithRetries(request, model, timeoutMs, maxRetries, onLog);
-      }
+    return await geminiContext.run({ requestId: nextRequestId(), model }, () =>
+      runWithRetries(request, model, timeoutMs, maxRetries, onLog)
     );
   } finally {
     activeCalls -= 1;

@@ -149,7 +149,11 @@ export const PrImpactResultSchema = z.strictObject({
 });
 
 export const ReviewSummaryResultSchema = z.strictObject({
-  summary: z.string().min(1).max(2000).describe('Human-readable PR summary.'),
+  summary: z
+    .string()
+    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
+    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
+    .describe('Human-readable PR summary.'),
   overallRisk: z
     .enum(['low', 'medium', 'high'])
     .describe('High-level merge risk.'),
@@ -179,7 +183,11 @@ export const ReviewSummaryResultSchema = z.strictObject({
 });
 
 export const CodeQualityResultSchema = z.strictObject({
-  summary: z.string().min(1).max(2000).describe('Deep-dive review summary.'),
+  summary: z
+    .string()
+    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
+    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
+    .describe('Deep-dive review summary.'),
   overallRisk: z
     .enum(['low', 'medium', 'high', 'critical'])
     .describe('Overall risk with full context.'),
@@ -205,7 +213,11 @@ export const CodeQualityResultSchema = z.strictObject({
 });
 
 export const CodeQualityOutputSchema = z.object({
-  summary: z.string().min(1).max(2000).describe('Deep-dive review summary.'),
+  summary: z
+    .string()
+    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
+    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
+    .describe('Deep-dive review summary.'),
   overallRisk: z
     .enum(['low', 'medium', 'high', 'critical'])
     .describe('Overall risk with full context.'),

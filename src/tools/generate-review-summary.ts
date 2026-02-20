@@ -68,9 +68,8 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
         },
       };
     },
-    formatOutput: (result) => {
-      return `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`;
-    },
+    formatOutput: (result) =>
+      `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
     buildPrompt: (input) => {
       const stats = getCachedStats(input);
       const prompt = `

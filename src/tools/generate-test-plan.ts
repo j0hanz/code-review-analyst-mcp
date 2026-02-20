@@ -37,9 +37,8 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     thinkingBudget: FLASH_THINKING_BUDGET,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => `${result.testCases.length} test cases`,
-    formatOutput: (result) => {
-      return `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`;
-    },
+    formatOutput: (result) =>
+      `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`,
     transformResult: (input, result) => {
       const cappedTestCases = result.testCases.slice(
         0,

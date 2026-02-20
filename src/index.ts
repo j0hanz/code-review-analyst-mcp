@@ -9,6 +9,7 @@ import { createServer } from './server.js';
 const SHUTDOWN_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 const ARG_OPTION_MODEL = 'model';
 const ARG_OPTION_MAX_DIFF_CHARS = 'max-diff-chars';
+const PROCESS_ARGS_START_INDEX = 2;
 const CLI_OPTIONS = {
   [ARG_OPTION_MODEL]: {
     type: 'string',
@@ -29,7 +30,7 @@ function setStringEnv(name: string, value: string | boolean | undefined): void {
 
 function parseCommandLineArgs(): void {
   const { values } = parseArgs({
-    args: process.argv.slice(2),
+    args: process.argv.slice(PROCESS_ARGS_START_INDEX),
     options: CLI_OPTIONS,
     strict: false,
   });

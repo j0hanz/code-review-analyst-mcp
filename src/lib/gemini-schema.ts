@@ -19,8 +19,9 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 
 function stripConstraintValue(value: unknown): unknown {
   if (Array.isArray(value)) {
-    const stripped = new Array<unknown>(value.length);
-    for (let index = 0; index < value.length; index += 1) {
+    const { length } = value;
+    const stripped = new Array<unknown>(length);
+    for (let index = 0; index < length; index += 1) {
       stripped[index] = stripConstraintValue(value[index]);
     }
     return stripped;

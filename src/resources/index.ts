@@ -21,7 +21,7 @@ export function registerAllResources(
     RESOURCE_ID,
     RESOURCE_URI,
     RESOURCE_METADATA,
-    (uri: URL) => ({
+    (uri) => ({
       contents: [
         {
           uri: uri.href,

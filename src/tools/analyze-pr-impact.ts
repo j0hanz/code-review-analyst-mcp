@@ -31,9 +31,8 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     model: FLASH_MODEL,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => `severity: ${result.severity}`,
-    formatOutput: (result) => {
-      return `Impact Analysis (${result.severity}): ${result.summary}`;
-    },
+    formatOutput: (result) =>
+      `Impact Analysis (${result.severity}): ${result.summary}`,
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
       const insights = computeDiffStatsAndSummaryFromFiles(files);

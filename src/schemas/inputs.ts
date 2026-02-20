@@ -106,8 +106,8 @@ export const InspectCodeQualityInputSchema = z.strictObject({
   maxFindings: z
     .number()
     .int()
-    .min(1)
-    .max(25)
+    .min(INPUT_LIMITS.maxFindings.min)
+    .max(INPUT_LIMITS.maxFindings.max)
     .optional()
     .describe('Maximum number of findings to return.'),
   files: z

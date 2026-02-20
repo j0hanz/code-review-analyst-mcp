@@ -20,7 +20,8 @@ export function resetMaxDiffCharsCacheForTesting(): void {
 }
 
 export function exceedsDiffBudget(diff: string): boolean {
-  return diff.length > getMaxDiffChars();
+  const maxChars = getMaxDiffChars();
+  return diff.length > maxChars;
 }
 
 function formatDiffBudgetError(diffLength: number, maxChars: number): string {

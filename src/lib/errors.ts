@@ -4,10 +4,6 @@ import { inspect } from 'node:util';
 export const RETRYABLE_UPSTREAM_ERROR_PATTERN =
   /(429|500|502|503|504|rate.?limit|quota|overload|unavailable|gateway|timeout|timed.out|connection|reset|econn|enotfound|temporary|transient|invalid.json)/i;
 
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
 function hasStringProperty<K extends string>(
   value: unknown,
   key: K
@@ -25,7 +21,7 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (isString(error)) {
+  if (typeof error === 'string') {
     return error;
   }
 
