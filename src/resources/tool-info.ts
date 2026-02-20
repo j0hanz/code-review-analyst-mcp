@@ -232,3 +232,7 @@ export function getToolInfo(toolName: string): string | undefined {
   }
   return formatToolInfo(entry);
 }
+
+export function getToolPurpose(toolName: string): string | undefined {
+  return TOOL_INFO_ENTRIES[toolName]?.purpose;
+}
