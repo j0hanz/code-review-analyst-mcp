@@ -80,6 +80,9 @@ export interface StructuredToolTaskConfig<
   /** Optional thinking budget in tokens. */
   thinkingBudget?: number;
 
+  /** Optional timeout in ms for the Gemini call. Defaults to 60,000 ms. Use DEFAULT_TIMEOUT_PRO_MS for Pro model calls. */
+  timeoutMs?: number;
+
   /** Optional formatter for human-readable text output. */
   formatOutput?: (result: unknown) => string;
 
@@ -113,6 +116,7 @@ function createGenerationRequest<TInput extends object>(
 ): {
   model?: string;
   thinkingBudget?: number;
+  timeoutMs?: number;
   onLog: (level: string, data: unknown) => Promise<void>;
   systemInstruction: string;
   prompt: string;
@@ -122,6 +126,7 @@ function createGenerationRequest<TInput extends object>(
   const request: {
     model?: string;
     thinkingBudget?: number;
+    timeoutMs?: number;
     onLog: (level: string, data: unknown) => Promise<void>;
     systemInstruction: string;
     prompt: string;
@@ -140,6 +145,10 @@ function createGenerationRequest<TInput extends object>(
 
   if (config.thinkingBudget) {
     request.thinkingBudget = config.thinkingBudget;
+  }
+
+  if (config.timeoutMs) {
+    request.timeoutMs = config.timeoutMs;
   }
 
   if (signal) {

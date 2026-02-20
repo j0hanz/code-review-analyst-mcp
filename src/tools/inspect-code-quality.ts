@@ -5,7 +5,11 @@ import type { z } from 'zod';
 import { validateContextBudget } from '../lib/context-budget.js';
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import { formatFileSummary, parseDiffFiles } from '../lib/diff-parser.js';
-import { PRO_MODEL, PRO_THINKING_BUDGET } from '../lib/model-config.js';
+import {
+  DEFAULT_TIMEOUT_PRO_MS,
+  PRO_MODEL,
+  PRO_THINKING_BUDGET,
+} from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import { CodeQualityResultSchema } from '../schemas/outputs.js';
@@ -81,6 +85,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     errorCode: 'E_INSPECT_QUALITY',
     model: PRO_MODEL,
     thinkingBudget: PRO_THINKING_BUDGET,
+    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     validateInput: (input) => {
       const diffError = validateDiffBudget(input.diff);
       if (diffError) return diffError;

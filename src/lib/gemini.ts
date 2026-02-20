@@ -95,7 +95,9 @@ function getSafetyThreshold(): HarmBlockThreshold {
 function getThinkingConfig(
   thinkingBudget: number | undefined
 ): { includeThoughts: true; thinkingBudget: number } | undefined {
-  return thinkingBudget ? { includeThoughts: true, thinkingBudget } : undefined;
+  return thinkingBudget !== undefined
+    ? { includeThoughts: true, thinkingBudget }
+    : undefined;
 }
 
 function getSafetySettings(

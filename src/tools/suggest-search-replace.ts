@@ -4,7 +4,11 @@ import type { z } from 'zod';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import { extractChangedPaths } from '../lib/diff-parser.js';
-import { FLASH_THINKING_BUDGET, PRO_MODEL } from '../lib/model-config.js';
+import {
+  DEFAULT_TIMEOUT_PRO_MS,
+  PRO_MODEL,
+  PRO_THINKING_BUDGET,
+} from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
@@ -28,7 +32,8 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     resultSchema: SearchReplaceResultSchema,
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',
     model: PRO_MODEL,
-    thinkingBudget: FLASH_THINKING_BUDGET,
+    thinkingBudget: PRO_THINKING_BUDGET,
+    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
       const typed = result as z.infer<typeof SearchReplaceResultSchema>;
