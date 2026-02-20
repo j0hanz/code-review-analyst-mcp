@@ -335,8 +335,6 @@ export function registerStructuredToolTask<
 
             const parsed = config.resultSchema.parse(raw);
 
-            // When transformResult is absent, TFinal = TResult (by the generic default).
-            // The cast is sound by construction; TypeScript cannot verify this statically.
             const finalResult = (
               config.transformResult
                 ? config.transformResult(inputRecord, parsed)
