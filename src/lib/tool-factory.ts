@@ -122,20 +122,27 @@ function createGenerationRequest<
   onLog: (level: string, data: unknown) => Promise<void>,
   signal?: AbortSignal
 ): GeminiStructuredRequest {
-  return {
+  const request: GeminiStructuredRequest = {
     systemInstruction: promptParts.systemInstruction,
     prompt: promptParts.prompt,
     responseSchema,
     onLog,
-    ...(config.model !== undefined ? { model: config.model } : undefined),
-    ...(config.thinkingBudget !== undefined
-      ? { thinkingBudget: config.thinkingBudget }
-      : undefined),
-    ...(config.timeoutMs !== undefined
-      ? { timeoutMs: config.timeoutMs }
-      : undefined),
-    ...(signal !== undefined ? { signal } : undefined),
   };
+
+  if (config.model !== undefined) {
+    request.model = config.model;
+  }
+  if (config.thinkingBudget !== undefined) {
+    request.thinkingBudget = config.thinkingBudget;
+  }
+  if (config.timeoutMs !== undefined) {
+    request.timeoutMs = config.timeoutMs;
+  }
+  if (signal !== undefined) {
+    request.signal = signal;
+  }
+
+  return request;
 }
 
 function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
@@ -205,14 +212,25 @@ async function sendTaskProgress(
   }
 
   try {
+    const params: {
+      progressToken: string | number;
+      progress: number;
+      total?: number;
+      message?: string;
+    } = {
+      progressToken,
+      progress: payload.current,
+    };
+    if (payload.total !== undefined) {
+      params.total = payload.total;
+    }
+    if (payload.message !== undefined) {
+      params.message = payload.message;
+    }
+
     await extra.sendNotification({
       method: 'notifications/progress',
-      params: {
-        progressToken,
-        progress: payload.current,
-        ...(payload.total !== undefined ? { total: payload.total } : {}),
-        ...(payload.message !== undefined ? { message: payload.message } : {}),
-      },
+      params,
     });
   } catch {
     // Progress is best-effort; never fail the tool call.

@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
-  computeDiffStatsFromFiles,
-  formatFileSummary,
+  computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
 import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
@@ -36,8 +35,8 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
-      const stats = computeDiffStatsFromFiles(files);
-      const fileSummary = formatFileSummary(files);
+      const insights = computeDiffStatsAndSummaryFromFiles(files);
+      const { stats, summary: fileSummary } = insights;
 
       const prompt = `
 Repository: ${input.repository}

@@ -15,13 +15,12 @@ function hasStringProperty<K extends string>(
   value: unknown,
   key: K
 ): value is Record<K, string> {
+  if (typeof value !== 'object' || value === null || !(key in value)) {
+    return false;
+  }
+
   const record = value as Record<K, unknown>;
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    key in value &&
-    typeof record[key] === 'string'
-  );
+  return typeof record[key] === 'string';
 }
 
 export function getErrorMessage(error: unknown): string {

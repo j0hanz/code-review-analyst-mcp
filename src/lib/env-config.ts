@@ -5,7 +5,7 @@ export interface CachedEnvInt {
 
 function parsePositiveInteger(value: string): number | undefined {
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (Number.isNaN(parsed) || parsed <= 0) {
     return undefined;
   }
 

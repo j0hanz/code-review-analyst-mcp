@@ -1,7 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { extractChangedPaths } from '../lib/diff-parser.js';
+import {
+  extractChangedPathsFromFiles,
+  parseDiffFiles,
+} from '../lib/diff-parser.js';
 import {
   DEFAULT_TIMEOUT_PRO_MS,
   PRO_MODEL,
@@ -38,7 +41,8 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
       return `Search/Replace Suggestion: ${result.summary}`;
     },
     buildPrompt: (input) => {
-      const paths = extractChangedPaths(input.diff);
+      const files = parseDiffFiles(input.diff);
+      const paths = extractChangedPathsFromFiles(files);
       const prompt = `
 Finding: ${input.findingTitle}
 Details: ${input.findingDetails}

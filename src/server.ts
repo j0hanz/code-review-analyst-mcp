@@ -20,6 +20,7 @@ const INSTRUCTIONS_FILENAME = 'instructions.md';
 const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
 const UTF8_ENCODING = 'utf8';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+const INSTRUCTIONS_PATH = join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
 
 const SERVER_CAPABILITIES = {
   logging: {},
@@ -90,15 +91,9 @@ function loadVersion(): string {
 
 const SERVER_VERSION = loadVersion();
 
-function getInstructionsPath(): string {
-  return join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
-}
-
 function loadInstructions(): string {
-  const instructionsPath = getInstructionsPath();
-
   try {
-    return readUtf8File(instructionsPath);
+    return readUtf8File(INSTRUCTIONS_PATH);
   } catch (error: unknown) {
     process.emitWarning(
       `Failed to load ${INSTRUCTIONS_FILENAME}: ${getErrorMessage(error)}`

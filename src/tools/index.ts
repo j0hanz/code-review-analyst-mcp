@@ -16,15 +16,8 @@ const TOOL_REGISTRARS = [
   registerGenerateTestPlanTool,
 ] as const satisfies readonly ToolRegistrar[];
 
-function registerTools(
-  server: McpServer,
-  registrars: readonly ToolRegistrar[]
-): void {
-  for (const registerTool of registrars) {
+export function registerAllTools(server: McpServer): void {
+  for (const registerTool of TOOL_REGISTRARS) {
     registerTool(server);
   }
-}
-
-export function registerAllTools(server: McpServer): void {
-  registerTools(server, TOOL_REGISTRARS);
 }

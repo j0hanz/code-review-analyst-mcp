@@ -18,10 +18,6 @@ const CLI_OPTIONS = {
     type: 'string',
   },
 } as const;
-const ENV_BY_ARG = {
-  [ARG_OPTION_MODEL]: 'GEMINI_MODEL',
-  [ARG_OPTION_MAX_DIFF_CHARS]: 'MAX_DIFF_CHARS',
-} as const;
 
 type ServerInstance = ReturnType<typeof createServer>;
 
@@ -38,9 +34,8 @@ function parseCommandLineArgs(): void {
     strict: false,
   });
 
-  for (const [arg, envName] of Object.entries(ENV_BY_ARG)) {
-    setStringEnv(envName, values[arg]);
-  }
+  setStringEnv('GEMINI_MODEL', values[ARG_OPTION_MODEL]);
+  setStringEnv('MAX_DIFF_CHARS', values[ARG_OPTION_MAX_DIFF_CHARS]);
 }
 
 let shuttingDown = false;
@@ -57,7 +52,7 @@ async function shutdown(server: ServerInstance): Promise<void> {
 
 function registerShutdownHandlers(server: ServerInstance): void {
   for (const signal of SHUTDOWN_SIGNALS) {
-    process.on(signal, () => {
+    process.once(signal, () => {
       void shutdown(server);
     });
   }

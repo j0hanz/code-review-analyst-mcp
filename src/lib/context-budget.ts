@@ -26,9 +26,15 @@ export function computeContextSize(
   diff: string,
   files?: FileContent[]
 ): number {
-  const fileSize = files
-    ? files.reduce((total, file) => total + file.content.length, 0)
-    : 0;
+  if (!files || files.length === 0) {
+    return diff.length;
+  }
+
+  let fileSize = 0;
+  for (const file of files) {
+    fileSize += file.content.length;
+  }
+
   return diff.length + fileSize;
 }
 

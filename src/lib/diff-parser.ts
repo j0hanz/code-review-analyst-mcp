@@ -4,6 +4,16 @@ import type { File as ParsedFile } from 'parse-diff';
 export type { ParsedFile };
 const UNKNOWN_PATH = 'unknown';
 const NO_FILES_CHANGED = 'No files changed.';
+const EMPTY_PATHS: string[] = [];
+const EMPTY_STATS = Object.freeze({ files: 0, added: 0, deleted: 0 });
+const PATH_SORTER = (left: string, right: string): number =>
+  left.localeCompare(right);
+
+interface DiffStats {
+  files: number;
+  added: number;
+  deleted: number;
+}
 
 /** Parse unified diff string into structured file list. */
 export function parseDiffFiles(diff: string): ParsedFile[] {
@@ -34,6 +44,75 @@ function resolveChangedPath(file: ParsedFile): string | undefined {
   return undefined;
 }
 
+function sortPaths(paths: Set<string>): string[] {
+  if (paths.size === 0) {
+    return EMPTY_PATHS;
+  }
+
+  return Array.from(paths).sort(PATH_SORTER);
+}
+
+export function computeDiffStatsAndSummaryFromFiles(
+  files: readonly ParsedFile[]
+): Readonly<{ stats: DiffStats; summary: string }> {
+  if (files.length === 0) {
+    return {
+      stats: EMPTY_STATS,
+      summary: NO_FILES_CHANGED,
+    };
+  }
+
+  let added = 0;
+  let deleted = 0;
+  const summaries = new Array<string>(files.length);
+
+  let index = 0;
+  for (const file of files) {
+    added += file.additions;
+    deleted += file.deletions;
+
+    const path = resolveChangedPath(file);
+    summaries[index] =
+      `${path ?? UNKNOWN_PATH} (+${file.additions} -${file.deletions})`;
+    index += 1;
+  }
+
+  return {
+    stats: { files: files.length, added, deleted },
+    summary: `${summaries.join(', ')} [${files.length} files, +${added} -${deleted}]`,
+  };
+}
+
+export function computeDiffStatsAndPathsFromFiles(
+  files: readonly ParsedFile[]
+): Readonly<{ stats: DiffStats; paths: string[] }> {
+  if (files.length === 0) {
+    return {
+      stats: EMPTY_STATS,
+      paths: EMPTY_PATHS,
+    };
+  }
+
+  let added = 0;
+  let deleted = 0;
+  const paths = new Set<string>();
+
+  for (const file of files) {
+    added += file.additions;
+    deleted += file.deletions;
+
+    const path = resolveChangedPath(file);
+    if (path) {
+      paths.add(path);
+    }
+  }
+
+  return {
+    stats: { files: files.length, added, deleted },
+    paths: sortPaths(paths),
+  };
+}
+
 /** Extract all unique changed file paths (renamed: returns new path). */
 export function extractChangedPathsFromFiles(
   files: readonly ParsedFile[]
@@ -47,7 +126,7 @@ export function extractChangedPathsFromFiles(
     }
   }
 
-  return Array.from(paths).sort((a, b) => a.localeCompare(b));
+  return sortPaths(paths);
 }
 
 /** Extract all unique changed file paths (renamed: returns new path). */
@@ -81,20 +160,5 @@ export function computeDiffStats(
  * Example: "src/foo.ts (+12 -3), src/bar.ts (+0 -5) [2 files, +12 -8]"
  */
 export function formatFileSummary(files: ParsedFile[]): string {
-  if (files.length === 0) {
-    return NO_FILES_CHANGED;
-  }
-
-  let totalAdded = 0;
-  let totalDeleted = 0;
-  const summaries: string[] = [];
-
-  for (const file of files) {
-    totalAdded += file.additions;
-    totalDeleted += file.deletions;
-    const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
-    summaries.push(`${path} (+${file.additions} -${file.deletions})`);
-  }
-
-  return `${summaries.join(', ')} [${files.length} files, +${totalAdded} -${totalDeleted}]`;
+  return computeDiffStatsAndSummaryFromFiles(files).summary;
 }

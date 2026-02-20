@@ -67,7 +67,13 @@ function completeByPrefix<T extends string>(
   values: readonly T[],
   prefix: string
 ): T[] {
-  return values.filter((value) => value.startsWith(prefix));
+  const matches: T[] = [];
+  for (const value of values) {
+    if (value.startsWith(prefix)) {
+      matches.push(value);
+    }
+  }
+  return matches;
 }
 
 function getGuide<T extends string>(

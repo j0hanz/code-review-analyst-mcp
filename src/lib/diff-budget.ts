@@ -23,8 +23,15 @@ export function exceedsDiffBudget(diff: string): boolean {
   return diff.length > getMaxDiffChars();
 }
 
-export function getDiffBudgetError(diffLength: number): string {
-  return `diff exceeds max allowed size (${numberFormatter.format(diffLength)} chars > ${numberFormatter.format(getMaxDiffChars())} chars)`;
+function formatDiffBudgetError(diffLength: number, maxChars: number): string {
+  return `diff exceeds max allowed size (${numberFormatter.format(diffLength)} chars > ${numberFormatter.format(maxChars)} chars)`;
+}
+
+export function getDiffBudgetError(
+  diffLength: number,
+  maxChars = getMaxDiffChars()
+): string {
+  return formatDiffBudgetError(diffLength, maxChars);
 }
 
 const BUDGET_ERROR_META: ErrorMeta = { retryable: false, kind: 'budget' };
@@ -33,15 +40,14 @@ export function validateDiffBudget(
   diff: string
 ): ReturnType<typeof createErrorToolResponse> | undefined {
   const providedChars = diff.length;
-  if (!exceedsDiffBudget(diff)) {
+  const maxChars = getMaxDiffChars();
+  if (providedChars <= maxChars) {
     return undefined;
   }
 
-  const maxChars = getMaxDiffChars();
-
   return createErrorToolResponse(
     'E_INPUT_TOO_LARGE',
-    getDiffBudgetError(providedChars),
+    formatDiffBudgetError(providedChars, maxChars),
     { providedChars, maxChars },
     BUDGET_ERROR_META
   );

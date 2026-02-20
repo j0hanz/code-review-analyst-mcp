@@ -2,7 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateContextBudget } from '../lib/context-budget.js';
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { formatFileSummary, parseDiffFiles } from '../lib/diff-parser.js';
+import {
+  computeDiffStatsAndSummaryFromFiles,
+  parseDiffFiles,
+} from '../lib/diff-parser.js';
 import {
   DEFAULT_LANGUAGE,
   DEFAULT_TIMEOUT_PRO_MS,
@@ -105,7 +108,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
-      const fileSummary = formatFileSummary(files);
+      const { summary: fileSummary } =
+        computeDiffStatsAndSummaryFromFiles(files);
       const fileContext = formatFileContext(input.files);
       const prompt = `
 Repository: ${input.repository}

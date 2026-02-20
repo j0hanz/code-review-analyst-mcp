@@ -13,23 +13,6 @@ const RESOURCE_METADATA = {
   },
 };
 
-function createInstructionsContents(
-  uri: URL,
-  instructions: string
-): {
-  uri: string;
-  mimeType: string;
-  text: string;
-}[] {
-  return [
-    {
-      uri: uri.href,
-      mimeType: RESOURCE_MIME_TYPE,
-      text: instructions,
-    },
-  ];
-}
-
 export function registerAllResources(
   server: McpServer,
   instructions: string
@@ -39,7 +22,13 @@ export function registerAllResources(
     RESOURCE_URI,
     RESOURCE_METADATA,
     (uri: URL) => ({
-      contents: createInstructionsContents(uri, instructions),
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: instructions,
+        },
+      ],
     })
   );
 }

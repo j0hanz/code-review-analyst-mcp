@@ -3,7 +3,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { z } from 'zod';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { computeDiffStats } from '../lib/diff-parser.js';
+import {
+  computeDiffStatsFromFiles,
+  parseDiffFiles,
+} from '../lib/diff-parser.js';
 import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
@@ -33,7 +36,8 @@ function getCachedStats(input: ReviewSummaryInput): CachedStats {
     return cached;
   }
 
-  const stats = computeDiffStats(input.diff);
+  const parsedFiles = parseDiffFiles(input.diff);
+  const stats = computeDiffStatsFromFiles(parsedFiles);
   statsCache.set(input, stats);
   return stats;
 }

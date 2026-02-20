@@ -119,9 +119,15 @@ function getSafetySettings(
     return cached;
   }
 
-  const settings = SAFETY_CATEGORIES.map((category) => {
-    return { category, threshold };
-  });
+  const settings = new Array<{
+    category: HarmCategory;
+    threshold: HarmBlockThreshold;
+  }>(SAFETY_CATEGORIES.length);
+  let index = 0;
+  for (const category of SAFETY_CATEGORIES) {
+    settings[index] = { category, threshold };
+    index += 1;
+  }
   safetySettingsCache.set(threshold, settings);
   return settings;
 }
@@ -130,10 +136,14 @@ let cachedClient: GoogleGenAI | undefined;
 
 export const geminiEvents = new EventEmitter();
 
-const debug = debuglog('gemini');
+const debug = debuglog('gemini') as ReturnType<typeof debuglog> & {
+  enabled?: boolean;
+};
 
 geminiEvents.on('log', (payload: unknown) => {
-  debug(JSON.stringify(payload));
+  if (debug.enabled) {
+    debug('%j', payload);
+  }
 });
 
 interface GeminiRequestContext {
@@ -274,12 +284,19 @@ function getNumericErrorCode(error: unknown): number | undefined {
     return undefined;
   }
 
-  const candidates = [record.status, record.statusCode, record.code];
-  for (const candidate of candidates) {
-    const numericCode = toNumericCode(candidate);
-    if (numericCode !== undefined) {
-      return numericCode;
-    }
+  const fromStatus = toNumericCode(record.status);
+  if (fromStatus !== undefined) {
+    return fromStatus;
+  }
+
+  const fromStatusCode = toNumericCode(record.statusCode);
+  if (fromStatusCode !== undefined) {
+    return fromStatusCode;
+  }
+
+  const fromCode = toNumericCode(record.code);
+  if (fromCode !== undefined) {
+    return fromCode;
   }
 
   return undefined;
@@ -291,12 +308,19 @@ function getTransientErrorCode(error: unknown): string | undefined {
     return undefined;
   }
 
-  const candidates = [record.code, record.status, record.statusText];
-  for (const candidate of candidates) {
-    const transientCode = toUpperStringCode(candidate);
-    if (transientCode !== undefined) {
-      return transientCode;
-    }
+  const fromCode = toUpperStringCode(record.code);
+  if (fromCode !== undefined) {
+    return fromCode;
+  }
+
+  const fromStatus = toUpperStringCode(record.status);
+  if (fromStatus !== undefined) {
+    return fromStatus;
+  }
+
+  const fromStatusText = toUpperStringCode(record.statusText);
+  if (fromStatusText !== undefined) {
+    return fromStatusText;
   }
 
   return undefined;
@@ -370,14 +394,6 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
   } catch (error: unknown) {
     throw new Error(`Model produced invalid JSON: ${getErrorMessage(error)}`);
   }
-}
-
-function hasRetriesRemaining(attempt: number, maxRetries: number): boolean {
-  return attempt < maxRetries;
-}
-
-function getAttemptCount(maxRetries: number): number {
-  return maxRetries + 1;
 }
 
 async function generateContentWithTimeout(
@@ -465,7 +481,7 @@ async function throwGeminiFailure(
   lastError: unknown,
   onLog: GeminiStructuredRequest['onLog']
 ): Promise<never> {
-  const attempts = getAttemptCount(maxRetries);
+  const attempts = maxRetries + 1;
   const message = getErrorMessage(lastError);
 
   await emitGeminiLog(onLog, 'error', {
@@ -496,7 +512,7 @@ async function runWithRetries(
       return await executeAttempt(request, model, timeoutMs, attempt, onLog);
     } catch (error: unknown) {
       lastError = error;
-      if (!hasRetriesRemaining(attempt, maxRetries) || !shouldRetry(error)) {
+      if (attempt >= maxRetries || !shouldRetry(error)) {
         break;
       }
 

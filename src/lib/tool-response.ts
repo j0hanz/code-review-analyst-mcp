@@ -98,9 +98,11 @@ export function createErrorToolResponse(
   meta?: ErrorMeta
 ): ErrorToolResponse {
   const structured = createErrorStructuredContent(code, message, result, meta);
+  const base = buildToolResponse(structured);
 
   return {
-    ...buildToolResponse(structured),
+    content: base.content,
+    structuredContent: base.structuredContent,
     isError: true,
   };
 }

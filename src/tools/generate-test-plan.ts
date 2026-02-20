@@ -2,8 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
-  computeDiffStatsFromFiles,
-  extractChangedPathsFromFiles,
+  computeDiffStatsAndPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
 import {
@@ -54,8 +53,8 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     },
     buildPrompt: (input) => {
       const parsedFiles = parseDiffFiles(input.diff);
-      const stats = computeDiffStatsFromFiles(parsedFiles);
-      const paths = extractChangedPathsFromFiles(parsedFiles);
+      const insights = computeDiffStatsAndPathsFromFiles(parsedFiles);
+      const { stats, paths } = insights;
       const prompt = `
 Repository: ${input.repository}
 Language: ${input.language ?? DEFAULT_LANGUAGE}
