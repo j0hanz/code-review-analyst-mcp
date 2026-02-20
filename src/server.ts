@@ -26,7 +26,6 @@ const VERSION_FIELD_ERROR = 'missing or invalid version field';
 
 const SERVER_CAPABILITIES = {
   logging: {},
-  completions: {},
   resources: {},
   tools: {},
   tasks: {
