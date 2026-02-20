@@ -187,7 +187,10 @@ function getApiKey(): string {
 }
 
 function getClient(): GoogleGenAI {
-  cachedClient ??= new GoogleGenAI({ apiKey: getApiKey() });
+  cachedClient ??= new GoogleGenAI({
+    apiKey: getApiKey(),
+    apiVersion: 'v1beta',
+  });
 
   return cachedClient;
 }

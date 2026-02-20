@@ -483,8 +483,8 @@ export function registerStructuredToolTask<
               ),
             });
 
-            const { systemInstruction, prompt } =
-              config.buildPrompt(inputRecord);
+            const { systemInstruction } = config.buildPrompt(inputRecord);
+            let { prompt } = config.buildPrompt(inputRecord);
 
             await reportProgress({
               current: 2,
@@ -496,27 +496,57 @@ export function registerStructuredToolTask<
               ),
             });
 
-            const raw = await generateStructuredJson(
-              createGenerationRequest(
-                config,
-                { systemInstruction, prompt },
-                responseSchema,
-                onLog,
-                extra.signal
-              )
-            );
+            const MAX_SCHEMA_RETRIES = 1;
+            let raw: unknown;
+            let parsed: TResult | undefined;
 
-            await reportProgress({
-              current: 3,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressStep(
-                config.name,
-                progressContext,
-                'model response received'
-              ),
-            });
+            for (let attempt = 0; attempt <= MAX_SCHEMA_RETRIES; attempt += 1) {
+              try {
+                raw = await generateStructuredJson(
+                  createGenerationRequest(
+                    config,
+                    { systemInstruction, prompt },
+                    responseSchema,
+                    onLog,
+                    extra.signal
+                  )
+                );
 
-            const parsed = config.resultSchema.parse(raw);
+                if (attempt === 0) {
+                  await reportProgress({
+                    current: 3,
+                    total: TASK_PROGRESS_TOTAL,
+                    message: formatProgressStep(
+                      config.name,
+                      progressContext,
+                      'model response received'
+                    ),
+                  });
+                }
+
+                parsed = config.resultSchema.parse(raw);
+                break;
+              } catch (error: unknown) {
+                if (
+                  attempt >= MAX_SCHEMA_RETRIES ||
+                  !(error instanceof z.ZodError)
+                ) {
+                  throw error;
+                }
+
+                const errorMessage = getErrorMessage(error);
+                await onLog('warning', {
+                  event: 'schema_validation_failed',
+                  details: { attempt, error: errorMessage },
+                });
+
+                prompt += `\n\nCRITICAL: The previous response was invalid JSON schema. Error: ${errorMessage}. Please fix and return valid JSON matching the schema.`;
+              }
+            }
+
+            if (!parsed) {
+              throw new Error('Unexpected state: parsed result is undefined');
+            }
 
             const finalResult = (
               config.transformResult
