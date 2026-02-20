@@ -4,116 +4,88 @@
 
 ## 1) Project Context
 
-- **Domain:** Gemini-powered MCP server for pull request code review analysis with structured outputs for findings, release risk scoring, and focused patch suggestions (see `README.md`, `package.json#description`).
+- **Domain:** Gemini-powered MCP server for automated code review analysis — accepts unified diffs and returns structured findings, risk scores, impact analysis, test plans, and search/replace fixes (see `package.json` description, `server.json`).
 - **Tech Stack (Verified):**
-  - **Languages:** TypeScript 5.9+ (see `package.json` devDependencies `"typescript": "^5.9.3"`), Node.js >=24 (see `package.json#engines`)
-  - **Frameworks:** `@modelcontextprotocol/sdk` v1.26+ (see `package.json` dependencies), stdio transport (see `src/index.ts`)
+  - **Languages:** TypeScript 5.9+ (see `devDependencies` in `package.json`), Node.js ≥24 (see `engines` in `package.json`)
+  - **Frameworks:** `@modelcontextprotocol/sdk` v1.26+ (see `dependencies` in `package.json`)
   - **Key Libraries:**
-    - `@google/genai` ^1.41.0 — Gemini API client (see `package.json`)
-    - `zod` ^4.3.6 — Schema validation for inputs/outputs (see `package.json`)
-    - `zod-to-json-schema` ^3.25.1 — Used internally by MCP SDK; project uses Zod v4's built-in `z.toJSONSchema()` (see `src/lib/tool-factory.ts`)
-    - `tsx` ^4.21.0 — TypeScript execution for tests (see `package.json` devDependencies)
-- **Architecture:** Single-package MCP server using a layered module structure: entrypoint → server → tools/resources/prompts → lib (shared adapters, schemas, helpers). One tool per file, one schema file for inputs and one for outputs, shared Gemini adapter with retry/timeout logic (see `src/` tree).
+    - `@google/genai` ^1.42.0 — Gemini Developer API client (see `package.json`)
+    - `zod` ^4.3.6 — schema validation (see `package.json`)
+    - `parse-diff` ^0.11.1 — unified diff parsing (see `package.json`)
+- **Architecture:** Single-package MCP server using stdio transport. Tools are registered via a factory pattern (`registerStructuredToolTask`) that wires Zod input validation → prompt building → Gemini structured JSON generation → Zod output parsing → MCP response with both `content` and `structuredContent`. Supports MCP task lifecycle with `InMemoryTaskStore` (see `src/server.ts`, `src/lib/tool-factory.ts`).
 
 ## 2) Repository Map (High-Level)
 
-- `src/` — Main source root (see `tsconfig.json#rootDir`)
-  - `src/index.ts` — CLI entrypoint with shebang, stdio transport wiring, signal shutdown handlers
-  - `src/server.ts` — `McpServer` instance creation, capability declaration, version loading, instructions loading
-  - `src/tools/` — Tool implementations, one file per tool (`analyze-pr-impact.ts`, `generate-review-summary.ts`, `inspect-code-quality.ts`, `suggest-search-replace.ts`, `generate-test-plan.ts`), plus `index.ts` registrar
-  - `src/schemas/` — Zod schemas: `inputs.ts` (tool input validation), `outputs.ts` (tool result schemas; Gemini schemas auto-derived via `stripJsonSchemaConstraints` in `tool-factory.ts`)
-  - `src/lib/` — Shared infrastructure: `gemini.ts` (API adapter with retry/timeout), `gemini-schema.ts` (JSON Schema constraint stripping for Gemini), `tool-factory.ts` (generic tool-task registrar), `tool-response.ts` (response helpers), `errors.ts` (error extraction), `diff-budget.ts` (diff size guard), `context-budget.ts` (context size guard), `diff-parser.ts` (unified diff parsing), `model-config.ts` (model name constants, default values), `env-config.ts` (cached env-var integer factory), `types.ts` (shared type definitions)
+- `src/` — Main source code (see `tsconfig.json` `rootDir`)
+  - `src/index.ts` — CLI entrypoint with shebang, stdio transport, shutdown handlers
+  - `src/server.ts` — `McpServer` creation, capability declaration, registration orchestration
+  - `src/tools/` — One file per tool, each exports a `register*Tool(server)` function
+  - `src/schemas/` — Zod input/output schemas (`inputs.ts`, `outputs.ts`)
+  - `src/lib/` — Shared utilities: Gemini client, tool factory, error helpers, diff parsing, budget validation
+  - `src/prompts/` — MCP prompt registration (`get-help`, `review-guide`)
   - `src/resources/` — MCP resource registration (`internal://instructions`)
-  - `src/prompts/` — MCP prompt registration (`get-help`)
-  - `src/instructions.md` — Server usage guide bundled into `dist/` and served as a resource
-- `tests/` — Test files for tool schemas and server discovery (`node:test` runner)
-- `scripts/` — Build/test task runner (`tasks.mjs`)
-- `.github/` — Workflows directory (currently empty)
-
-> Ignore: `dist/`, `node_modules/`, `coverage/`, `.cache/`, `.tsbuildinfo`
+  - `src/instructions.md` — Server instructions (copied to `dist/` at build time)
+- `tests/` — Test files using `node:test` (see `tsconfig.test.json`, `scripts/tasks.mjs`)
+- `scripts/tasks.mjs` — Custom build orchestrator (clean, compile, validate, copy assets, test runner)
+- `.github/workflows/release.yml` — Release CI: lint, type-check, test, build, publish to npm/Docker/MCP Registry
 
 ## 3) Operational Commands (Verified)
 
-- **Environment:** Node.js >=24, npm (see `package.json#engines`, `package-lock.json` present)
-- **Install:** `npm install` (see `README.md` "Development" section)
-- **Dev:** `npm run dev` → `tsc --watch --preserveWatchOutput` (see `package.json#scripts.dev`)
-- **Dev run:** `npm run dev:run` → `node --env-file=.env --watch dist/index.js` (see `package.json#scripts.dev:run`)
-- **Build:** `npm run build` → `node scripts/tasks.mjs build` — cleans, compiles via `tsc -p tsconfig.build.json`, validates `instructions.md`, copies assets, sets executable bit (see `package.json#scripts.build`, `scripts/tasks.mjs`)
-- **Test:** `npm test` → `node scripts/tasks.mjs test` — runs full build first, then `node --test --import tsx/esm` on `tests/**/*.test.ts` (see `package.json#scripts.test`, `scripts/tasks.mjs`)
-- **Test (fast, no build):** `npm run test:fast` → `node --test --import tsx/esm src/__tests__/**/*.test.ts tests/**/*.test.ts` (see `package.json#scripts.test:fast`)
-- **Type-check:** `npm run type-check` → `node scripts/tasks.mjs type-check` → `tsc -p tsconfig.json --noEmit` (see `package.json#scripts.type-check`)
-- **Lint:** `npm run lint` → `eslint .` (see `package.json#scripts.lint`)
-- **Lint fix:** `npm run lint:fix` → `eslint . --fix` (see `package.json#scripts.lint:fix`)
-- **Format:** `npm run format` → `prettier --write .` (see `package.json#scripts.format`)
-- **Inspector:** `npm run inspector` → builds then runs `npx @modelcontextprotocol/inspector node dist/index.js` (see `package.json#scripts.inspector`)
+- **Environment:** Node.js ≥24, npm (see `package.json` `engines`, `package-lock.json` present)
+- **Install:** `npm ci` (see `.github/workflows/release.yml` line 83)
+- **Dev:** `npm run dev` — `tsc --watch` (see `package.json` scripts); `npm run dev:run` — runs built server with `--env-file=.env --watch`
+- **Test:** `npm test` — runs `node scripts/tasks.mjs test` which does a full build then `node --test --import tsx/esm` on `src/__tests__/**/*.test.ts tests/**/*.test.ts` (see `scripts/tasks.mjs`); `npm run test:fast` — skips build
+- **Build:** `npm run build` — runs `node scripts/tasks.mjs build` (clean → tsc → validate instructions → copy assets → chmod) (see `scripts/tasks.mjs`, `package.json`)
+- **Lint:** `npm run lint` — `eslint .` (see `package.json`); `npm run lint:fix` — `eslint . --fix`
+- **Format:** `npm run format` — `prettier --write .` (see `package.json`)
+- **Type-check:** `npm run type-check` — `tsc -p tsconfig.json --noEmit` (see `package.json`, `scripts/tasks.mjs`)
+- **Inspect:** `npm run inspector` — builds then runs MCP Inspector (see `package.json`)
 
 ## 4) Coding Standards (Style & Patterns)
 
-- **Naming:** camelCase for variables/functions, PascalCase for types/interfaces/enums, UPPER_CASE for constants. Enforced via `@typescript-eslint/naming-convention` (see `eslint.config.mjs`).
-- **Imports:** Type-only imports required (`import type { X }`) enforced via `@typescript-eslint/consistent-type-imports` (see `eslint.config.mjs`). Import order sorted by Prettier plugin `@trivago/prettier-plugin-sort-imports` with groups: node builtins → MCP SDK → zod → third-party → local (see `.prettierrc`). `.js` extensions used in local imports for NodeNext resolution (observed in all `src/` files).
-- **Exports:** Named exports only, no default exports (observed across all modules). Explicit return types on exported functions enforced via `@typescript-eslint/explicit-function-return-type` (see `eslint.config.mjs`).
-- **Structure:** Business logic lives in `src/tools/*.ts` (one tool per file). Shared infrastructure in `src/lib/`. Schemas separated into `src/schemas/inputs.ts` and `src/schemas/outputs.ts`. Each tool uses the generic `registerStructuredToolTask` factory from `src/lib/tool-factory.ts`.
-- **Typing/Strictness:** TypeScript `strict: true` with additional flags: `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `isolatedModules`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`, `noFallthroughCasesInSwitch` (see `tsconfig.json`). ESLint extends `tseslint.configs.strictTypeChecked` and `tseslint.configs.stylisticTypeChecked` (see `eslint.config.mjs`).
-- **Schemas:** All object schemas use `z.strictObject()` (rejects unknown fields). All parameters have `.describe()` annotations and explicit bounds (`.min()`, `.max()`). Observed in `src/schemas/inputs.ts` and `src/schemas/outputs.ts`.
-- **Error Handling:** Errors caught as `unknown`, extracted via `getErrorMessage()` helper (see `src/lib/errors.ts`). Tool errors returned via `createErrorToolResponse(code, message)` with `isError: true` (see `src/lib/tool-response.ts`). Uncaught exceptions avoided in tool handlers (see `src/lib/tool-factory.ts`).
+- **Naming:** camelCase default, PascalCase for types/enums, UPPER_CASE for constants — enforced via `@typescript-eslint/naming-convention` (see `eslint.config.mjs`)
+- **Structure:** Business logic in `src/lib/`; each tool in its own file under `src/tools/` exporting a single `register*Tool` function; schemas separated from tool logic in `src/schemas/` (observed in `src/tools/index.ts`, `src/tools/inspect-code-quality.ts`)
+- **Typing/Strictness:** TypeScript strict mode with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedModules` enabled (see `tsconfig.json`). `@typescript-eslint/no-explicit-any: error` enforced (see `eslint.config.mjs`).
+- **Imports:** Type-only imports enforced via `@typescript-eslint/consistent-type-imports` (see `eslint.config.mjs`). `.js` extensions required for local imports (NodeNext module resolution, see `tsconfig.json`). Import order sorted by Prettier plugin `@trivago/prettier-plugin-sort-imports` (see `.prettierrc`).
+- **Exports:** Named exports only, no default exports. Explicit return types required on exported functions via `@typescript-eslint/explicit-function-return-type` (see `eslint.config.mjs`).
 - **Patterns Observed:**
-  - Generic tool-task factory pattern: all five tools use the same `registerStructuredToolTask<TInput, TResult>()` abstraction with config objects (observed in `src/tools/analyze-pr-impact.ts`, `src/tools/generate-review-summary.ts`, `src/tools/inspect-code-quality.ts`, `src/tools/suggest-search-replace.ts`, `src/tools/generate-test-plan.ts`)
-  - Human-readable output summaries provided via `formatOutput` hook in tool config, appearing in `content[0].text`
-  - Gemini response schemas are auto-derived from result schemas by stripping JSON Schema constraints (`stripJsonSchemaConstraints` in `src/lib/gemini-schema.ts`), eliminating manual duplication
-  - Dual content output: every tool response includes both `content` (JSON text) and `structuredContent` for backward compatibility (observed in `src/lib/tool-response.ts`)
-  - Gemini adapter with retry + exponential backoff + jitter + timeout + abort signal propagation (observed in `src/lib/gemini.ts`)
-  - `maxOutputTokens` capped at 16,384 by default to prevent unbounded Gemini responses (observed in `src/lib/gemini.ts`)
-  - AsyncLocalStorage for per-request context (request ID, model) in Gemini calls (observed in `src/lib/gemini.ts`)
-  - Diff budget guard applied before Gemini calls via `validateDiffBudget()` (observed in `src/lib/diff-budget.ts`, used in all tools)
-- **Formatting:** Prettier with: single quotes, semicolons, trailing commas (es5), 2-space indent, 80 char print width, LF line endings (see `.prettierrc`).
+  - **Tool Factory pattern:** All tools use `registerStructuredToolTask()` which handles input validation, prompt building, Gemini call with retries, output parsing, progress reporting, and MCP task lifecycle — observed in `src/lib/tool-factory.ts`, used by all tools in `src/tools/`
+  - **Zod `z.strictObject()` for all schemas:** Rejects unknown keys at validation boundary — observed in `src/schemas/inputs.ts`, `src/schemas/outputs.ts`
+  - **Dual output (`content` + `structuredContent`):** Every tool response includes both JSON text and structured content for backward compatibility — observed in `src/lib/tool-response.ts`
+  - **Cached env config:** `createCachedEnvInt()` pattern for lazy-evaluated, cached environment variable parsing — observed in `src/lib/env-config.ts`, used by `src/lib/diff-budget.ts`, `src/lib/gemini.ts`
+  - **Error classification:** Errors are classified by kind (validation/budget/upstream/timeout/cancelled/internal) with retryability metadata — observed in `src/lib/tool-factory.ts`, `src/lib/tool-response.ts`
+- **Formatting:** Prettier with single quotes, trailing commas (es5), 2-space indent, LF line endings (see `.prettierrc`)
 
 ## 5) Agent Behavioral Rules (Do Nots)
 
-- Do not introduce new dependencies without running `npm install` to update `package-lock.json` (see `package-lock.json` presence, `package.json`).
-- Do not edit `package-lock.json` manually (see lockfile presence).
-- Do not commit secrets; never print `.env` values or API keys. The repo uses `GEMINI_API_KEY`/`GOOGLE_API_KEY` env vars and `.env` is gitignored (see `.gitignore`).
-- Do not write to `stdout` in server code — it corrupts JSON-RPC over stdio. Use `console.error()` for logging (see `src/lib/gemini.ts` logging pattern, `.github/instructions/typescript-mcp-server.instructions.md` rule).
-- Do not use default exports; use named exports only (see `eslint.config.mjs`, observed convention throughout `src/`).
-- Do not use `any` type — `@typescript-eslint/no-explicit-any: 'error'` is enforced (see `eslint.config.mjs`).
-- Do not use `z.object()`; use `z.strictObject()` for all schemas (see `.github/instructions/typescript-mcp-server.instructions.md`, observed in `src/schemas/`).
-- Do not use `z.ZodTypeAny`; use `z.ZodType` (without generics) — `ZodTypeAny` is deprecated in Zod v4 (see `src/lib/tool-factory.ts`).
-- Do not import `zod-to-json-schema` directly; use Zod v4's built-in `z.toJSONSchema()` instead (see `src/lib/tool-factory.ts`).
-- Do not disable or bypass existing lint/type rules without explicit approval (see `eslint.config.mjs`, `tsconfig.json`).
-- Do not change public tool APIs (`analyze_pr_impact`, `generate_review_summary`, `inspect_code_quality`, `suggest_search_replace`, `generate_test_plan`) without updating `README.md`, `src/instructions.md`, schemas, and tests.
-- Do not omit `.js` extensions in local imports — required for NodeNext module resolution (see `tsconfig.json#module`, observed in all source files).
-- Do not omit `.describe()` on Zod schema fields — required for LLM parameter guidance (see `.github/instructions/typescript-mcp-server.instructions.md`).
+- Do not introduce new dependencies without updating `package.json` and running `npm install` to regenerate `package-lock.json`. (see `package-lock.json` present)
+- Do not edit `package-lock.json` manually. (see `package-lock.json` presence)
+- Do not commit secrets; never print `.env` values; use `process.env` with existing `env-config.ts` mechanisms. API keys read from `GEMINI_API_KEY` or `GOOGLE_API_KEY` at runtime only (see `src/lib/gemini.ts`).
+- Do not use default exports; use named exports only. (see `eslint.config.mjs` and codebase convention)
+- Do not use `any`; `@typescript-eslint/no-explicit-any` is set to `error`. (see `eslint.config.mjs`)
+- Do not write to `stdout` in server code — it corrupts JSON-RPC over stdio. Use `console.error()` or MCP logging. (see `src/index.ts` using stderr for fatal errors)
+- Do not disable or bypass existing lint/type rules without explicit approval. (see `eslint.config.mjs`, `tsconfig.json`)
+- Do not skip the shebang line `#!/usr/bin/env node` in `src/index.ts`. (see `src/index.ts` first line; binary exposed via `package.json` `bin`)
+- Do not use Zod v3 APIs; the project uses Zod v4 (`z.strictObject`, `z.toJSONSchema`). (see `package.json` `zod: ^4.3.6`)
+- Do not add tools without registering them in `src/tools/index.ts` via the `TOOL_REGISTRARS` array.
 
 ## 6) Testing Strategy (Verified)
 
-- **Framework:** Node.js built-in `node:test` runner with `tsx/esm` loader for TypeScript (see `package.json#scripts.test`, `scripts/tasks.mjs`, test file imports).
-- **Assertions:** `node:assert/strict` (observed in all test files).
-- **Where tests live:**
-  - `tests/` — Primary test directory (see `scripts/tasks.mjs` test patterns: `tests/**/*.test.ts`)
-  - `src/__tests__/` — Additional test location (pattern configured but directory currently empty)
-- **Test files:**
-  - `tests/tool-task-lifecycle.test.ts` — Tool registration smoke test, task lifecycle, input schema rejection of unknown fields, schema validation, budget error paths
-  - `tests/new-schemas.test.ts` — Input schema validation tests
-  - `tests/diff-parser.test.ts` — Unit tests for diff parsing and stats utilities
-  - `tests/gemini-schema.test.ts` — Unit + integration tests for `stripJsonSchemaConstraints` utility
-  - `tests/gemini-thinking.test.ts` — Gemini thinking budget integration tests
-  - `tests/server-discovery.test.ts` — Integration tests using `InMemoryTransport` client/server pairs: resource discoverability, resource content reading, prompt discoverability, prompt content, completion RPC
-  - `tests/inspect-file-context.test.ts` — Unit tests for `sanitizeContent` and `sanitizePath` in `inspect-code-quality.ts`
-  - `tests/gemini.integration.test.ts` — Gemini adapter integration tests (requires API key)
-- **Approach:** Unit tests for schema validation (parse/safeParse), smoke tests for tool registration, integration tests for MCP server discovery using in-memory transport (no external services required for unit/integration tests). No mocking framework — tests use direct schema validation and `InMemoryTransport` from MCP SDK.
-- **Running single test files:** `node --test --import tsx/esm tests/<file>.test.ts`
+- **Framework:** `node:test` (Node.js built-in test runner) with `tsx/esm` loader for TypeScript (see `scripts/tasks.mjs`, `package.json` `test:fast` script)
+- **Where tests live:** `tests/` directory and `src/__tests__/` (see `scripts/tasks.mjs` `CONFIG.test.patterns`, `tsconfig.test.json`)
+- **Approach:** Unit tests with `node:assert/strict`; test files follow `*.test.ts` naming convention. Tests cover diff parsing, schema validation, Gemini integration (with mock via `setClientForTesting`), server discovery, and task lifecycle (see `tests/diff-parser.test.ts`, `tests/server-discovery.test.ts`, `tests/tool-task-lifecycle.test.ts`)
+- **Running tests:** `npm test` triggers a full build before running tests; `npm run test:fast` skips the build step
+- **Coverage:** `npm run test:coverage` uses `--experimental-test-coverage` (see `scripts/tasks.mjs`)
 
 ## 7) Common Pitfalls (Verified Only)
 
-- Forgetting the shebang `#!/usr/bin/env node` as the first line of `src/index.ts` breaks `npx` execution (see `src/index.ts` line 1, `.github/instructions/typescript-mcp-server.instructions.md`).
-- Omitting `.js` extensions in local imports causes `ERR_MODULE_NOT_FOUND` at runtime under NodeNext resolution (see `tsconfig.json#module: "NodeNext"`).
-- Using `z.object()` instead of `z.strictObject()` allows unexpected fields through; all schemas must reject unknown keys (see `src/schemas/inputs.ts`, `src/schemas/outputs.ts`).
-- The `npm test` command runs a full build before tests (`scripts/tasks.mjs` → `Pipeline.fullBuild()` → test); use `npm run test:fast` to skip rebuild during iteration.
-- Writing to `stdout` in library code (e.g., `console.log()`) corrupts the stdio JSON-RPC stream; always use `console.error()` (see `src/lib/gemini.ts`).
-- Diff inputs exceeding `MAX_DIFF_CHARS` (default 120,000) are rejected before reaching Gemini with `E_INPUT_TOO_LARGE` (see `src/lib/diff-budget.ts`).
+- **Diff budget enforcement:** Diffs exceeding `MAX_DIFF_CHARS` (default 120,000) are rejected before reaching the Gemini API. Always call `validateDiffBudget()` before generating prompts. (see `src/lib/diff-budget.ts`)
+- **Context budget enforcement:** Combined diff + file context exceeding `MAX_CONTEXT_CHARS` (default 500,000) is rejected. (see `src/lib/context-budget.ts`)
+- **Gemini schema constraints:** JSON Schema constraints (`minLength`, `maxLength`, `minimum`, `maximum`, etc.) are stripped before passing to Gemini via `stripJsonSchemaConstraints()`. The strict Zod result schema validates after Gemini returns. Do not rely on Gemini enforcing bounds. (see `src/lib/gemini-schema.ts`)
+- **Build required before `npm test`:** The default `npm test` task runs a full build first. Use `npm run test:fast` to skip. (see `scripts/tasks.mjs`)
 
 ## 8) Evolution Rules
 
 - If conventions change, include an `AGENTS.md` update in the same PR.
 - If a command is corrected after failures, record the final verified command here.
 - If a new critical path or pattern is discovered, add it to the relevant section with evidence.
-- If a new tool is added, add a corresponding file in `src/tools/`, register it in `src/tools/index.ts`, add schemas in `src/schemas/`, add tests in `tests/`, and update `README.md` and `src/instructions.md`.
