@@ -1,3 +1,5 @@
+import { getSharedConstraints } from './tool-info.js';
+
 const WORKFLOW_GUIDE_CONTENT = `# Workflow Reference
 
 ## A: Full PR Review
@@ -6,7 +8,7 @@ const WORKFLOW_GUIDE_CONTENT = `# Workflow Reference
 2. \`inspect_code_quality\` → \`{findings[], overallRisk, contextualInsights[]}\`
 3. For each finding: \`suggest_search_replace\` → \`{blocks[]}\`
 
-> One finding per \`suggest_search_replace\` call. Pre-check diff < 120K chars.
+> One finding per \`suggest_search_replace\` call.
 
 ## B: Impact Assessment
 
@@ -36,6 +38,11 @@ const WORKFLOW_GUIDE_CONTENT = `# Workflow Reference
 2. \`detect_api_breaking_changes\` → \`{hasBreakingChanges, breakingChanges[]}\`
 
 > Use for algorithm or API changes. Diff-only input.
+
+## Shared Constraints
+${getSharedConstraints()
+  .map((constraint) => `- ${constraint}`)
+  .join('\n')}
 
 ## Output Shape Reference
 

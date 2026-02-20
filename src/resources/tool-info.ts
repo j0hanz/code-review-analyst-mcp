@@ -8,6 +8,7 @@ interface ToolInfoEntry {
   outputShape: string;
   gotchas: string[];
   crossToolFlow: string[];
+  constraints?: string[];
 }
 
 const TOOL_INFO_ENTRIES: Record<string, ToolInfoEntry> = {
@@ -91,6 +92,7 @@ const TOOL_INFO_ENTRIES: Record<string, ToolInfoEntry> = {
       'findings[].explanation → suggest_search_replace.findingDetails',
       'Combine with generate_test_plan.',
     ],
+    constraints: ['Context budget (diff + files) < 500K chars.'],
   },
   suggest_search_replace: {
     name: 'suggest_search_replace',
@@ -118,6 +120,7 @@ const TOOL_INFO_ENTRIES: Record<string, ToolInfoEntry> = {
       'Input: findingDetails from inspect_code_quality',
       'Validate blocks[].search before apply.',
     ],
+    constraints: ['One finding per call; verbatim `search` match required.'],
   },
   generate_test_plan: {
     name: 'generate_test_plan',
@@ -196,7 +199,27 @@ const TOOL_INFO_ENTRIES: Record<string, ToolInfoEntry> = {
   },
 };
 
-const TOOL_NAMES = Object.keys(TOOL_INFO_ENTRIES);
+const TOOL_NAMES = Object.keys(TOOL_INFO_ENTRIES).sort((a, b) =>
+  a.localeCompare(b)
+);
+const GLOBAL_CONSTRAINTS = [
+  'Diff budget: < 120K chars.',
+  'Structured output: tools return both `structuredContent` and JSON text `content`.',
+] as const;
+
+function collectToolConstraints(
+  entries: Record<string, ToolInfoEntry>
+): string[] {
+  const constraints = new Set<string>();
+
+  for (const [toolName, entry] of Object.entries(entries)) {
+    for (const constraint of entry.constraints ?? []) {
+      constraints.add(`\`${toolName}\`: ${constraint}`);
+    }
+  }
+
+  return Array.from(constraints).sort((a, b) => a.localeCompare(b));
+}
 
 function formatToolInfo(entry: ToolInfoEntry): string {
   return `# ${entry.name}
@@ -219,6 +242,40 @@ ${entry.gotchas.map((g) => `- ${g}`).join('\n')}
 ## Cross-Tool Flow
 ${entry.crossToolFlow.map((f) => `- ${f}`).join('\n')}
 `;
+}
+
+function formatCompactToolRow(entry: ToolInfoEntry): string {
+  return `| \`${entry.name}\` | ${entry.model} | ${entry.timeout} | ${entry.purpose} |`;
+}
+
+export function buildCoreContextPack(): string {
+  const rows = TOOL_NAMES.flatMap((toolName) => {
+    const entry = TOOL_INFO_ENTRIES[toolName];
+    return entry ? [formatCompactToolRow(entry)] : [];
+  });
+
+  return `# Core Context Pack
+
+## Server Essentials
+- Domain: Gemini-powered MCP server for diff-based code review.
+- Surface: 7 review tools + internal resources + guided prompts.
+- Transport: stdio with task lifecycle support.
+
+## Tool Matrix
+| Tool | Model | Timeout | Purpose |
+|------|-------|---------|---------|
+${rows.join('\n')}
+
+## Shared Constraints
+${getSharedConstraints()
+  .map((constraint) => `- ${constraint}`)
+  .join('\n')}
+`;
+}
+
+export function getSharedConstraints(): readonly string[] {
+  const toolConstraints = collectToolConstraints(TOOL_INFO_ENTRIES);
+  return [...GLOBAL_CONSTRAINTS, ...toolConstraints];
 }
 
 export function getToolInfoNames(): string[] {

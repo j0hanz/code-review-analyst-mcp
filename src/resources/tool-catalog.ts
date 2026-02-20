@@ -1,16 +1,6 @@
-const TOOL_CATALOG_CONTENT = `# Tool Catalog
+import { buildCoreContextPack } from './tool-info.js';
 
-## Quick Reference
-
-| Tool | Model | Think | Time | Params | Outputs |
-|------|-------|-------|------|--------|---------|
-| \`analyze_pr_impact\` | Flash | — | 90s | diff, repository | severity, categories[], rollbackComplexity |
-| \`generate_review_summary\` | Flash | — | 90s | diff, repository | overallRisk, keyChanges[], recommendation, stats |
-| \`inspect_code_quality\` | Pro | 16K | 120s | diff, repository | findings[], contextualInsights[], testsNeeded[] |
-| \`suggest_search_replace\` | Pro | 16K | 120s | diff, findingTitle, findingDetails | blocks[] (file, search, replace), validationChecklist[] |
-| \`generate_test_plan\` | Flash | 8K | 90s | diff, repository | testCases[] (name, type, pseudoCode, priority), coverageSummary |
-| \`analyze_time_space_complexity\` | Pro | 16K | 120s | diff | timeComplexity, spaceComplexity, isDegradation, potentialBottlenecks[] |
-| \`detect_api_breaking_changes\` | Flash | — | 90s | diff | hasBreakingChanges, breakingChanges[] |
+const TOOL_CATALOG_CONTENT = `# Tool Catalog Details
 
 ## Optional Parameters
 
@@ -44,15 +34,8 @@ generate_review_summary ──→ overallRisk ──────┤
 - **Tests**: \`generate_test_plan\`.
 - **Complexity**: \`analyze_time_space_complexity\`.
 - **Breaking API**: \`detect_api_breaking_changes\`.
-
-## Key Constraints
-
-- Diff limit: < 120K chars (shared).
-- Context limit: diff + files < 500K chars.
-- \`suggest_search_replace\`: One finding/call. Verbatim match required.
-- Stats: Computed locally (accurate).
 `;
 
 export function buildToolCatalog(): string {
-  return TOOL_CATALOG_CONTENT;
+  return `${buildCoreContextPack()}\n\n${TOOL_CATALOG_CONTENT}`;
 }
