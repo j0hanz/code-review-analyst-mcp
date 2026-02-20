@@ -204,6 +204,40 @@ export const CodeQualityResultSchema = z.strictObject({
   ),
 });
 
+export const CodeQualityOutputSchema = z.object({
+  summary: z.string().min(1).max(2000).describe('Deep-dive review summary.'),
+  overallRisk: z
+    .enum(['low', 'medium', 'high', 'critical'])
+    .describe('Overall risk with full context.'),
+  findings: z
+    .array(ReviewFindingSchema)
+    .min(0)
+    .max(30)
+    .describe('Findings ordered by severity, highest first.'),
+  testsNeeded: createBoundedStringArray(
+    1,
+    300,
+    0,
+    12,
+    'Test cases needed to validate this change.'
+  ),
+  contextualInsights: createBoundedStringArray(
+    1,
+    500,
+    0,
+    5,
+    'Insights only possible with full file context that diff alone cannot reveal.'
+  ),
+  totalFindings: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Total findings returned by Gemini before maxFindings capping was applied.'
+    ),
+});
+
 export const SearchReplaceBlockSchema = z.strictObject({
   file: z.string().min(1).max(500).describe('File path to modify.'),
   search: z

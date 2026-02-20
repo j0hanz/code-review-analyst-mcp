@@ -14,7 +14,10 @@ import {
 } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
-import { CodeQualityResultSchema } from '../schemas/outputs.js';
+import {
+  CodeQualityOutputSchema,
+  CodeQualityResultSchema,
+} from '../schemas/outputs.js';
 
 const DEFAULT_FOCUS_AREAS = 'General';
 const DEFAULT_MAX_FINDINGS = 'auto';
@@ -81,7 +84,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     description: 'Deep-dive code review with optional file context.',
     inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
-    resultSchema: CodeQualityResultSchema,
+    resultSchema: CodeQualityOutputSchema,
+    geminiSchema: CodeQualityResultSchema,
     errorCode: 'E_INSPECT_QUALITY',
     model: PRO_MODEL,
     thinkingBudget: PRO_THINKING_BUDGET,
@@ -93,18 +97,22 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       return validateContextBudget(input.diff, input.files);
     },
     formatOutput: (result) => {
-      return `Code Quality Inspection: ${result.summary}\n${result.findings.length} findings reported.`;
+      const count = result.findings.length;
+      const total = result.totalFindings ?? count;
+      const findingsSuffix =
+        count < total
+          ? `${count} of ${total} findings reported.`
+          : `${count} findings reported.`;
+      return `Code Quality Inspection: ${result.summary}\n${findingsSuffix}`;
     },
     transformResult: (input, result) => {
+      const totalFindings = result.findings.length;
       const cappedFindings = result.findings.slice(
         0,
-        input.maxFindings ?? result.findings.length
+        input.maxFindings ?? totalFindings
       );
 
-      return {
-        ...result,
-        findings: cappedFindings,
-      };
+      return { ...result, findings: cappedFindings, totalFindings };
     },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
