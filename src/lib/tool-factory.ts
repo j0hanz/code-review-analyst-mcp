@@ -34,6 +34,7 @@ const DEFAULT_PROGRESS_CONTEXT = 'request';
 const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
+const BUSY_ERROR_PATTERN = /too many concurrent/i;
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
@@ -175,6 +176,13 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
   }
 
   if (RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message)) {
+    return {
+      kind: 'upstream',
+      retryable: true,
+    };
+  }
+
+  if (BUSY_ERROR_PATTERN.test(message)) {
     return {
       kind: 'upstream',
       retryable: true,
