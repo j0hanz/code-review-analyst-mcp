@@ -28,8 +28,8 @@ function getDefaultModel(): string {
   return value;
 }
 
-const DEFAULT_MAX_RETRIES = 1;
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_TIMEOUT_MS = 90_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
 const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
@@ -384,6 +384,8 @@ function buildGenerationConfig(
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
     safetySettings: getSafetySettings(getSafetyThreshold()),
+    topP: 0.95,
+    topK: 40,
     abortSignal,
   };
 
