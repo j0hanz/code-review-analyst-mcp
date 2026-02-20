@@ -316,7 +316,7 @@ function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  const prefix = metadata === 'start' ? '▸' : '◆';
+  const prefix = metadata === 'starting' ? '▸' : '◦';
   return `${prefix} ${toolName}: ${context} [${metadata}]`;
 }
 
@@ -333,7 +333,7 @@ function formatProgressCompletion(
   outcome: string,
   success = true
 ): string {
-  const prefix = success ? '◈' : '‣';
+  const prefix = success ? '◆' : '◇';
   return `${prefix} ${toolName}: ${context} • ${outcome}`;
 }
 
