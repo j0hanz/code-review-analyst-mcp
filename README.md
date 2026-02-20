@@ -6,20 +6,22 @@
 
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D&quality=insiders) [![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-review-analyst%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D)
 
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-review-analyst&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1yZXZpZXctYW5hbHlzdC1tY3BAbGF0ZXN0Il19)
+
 Gemini-powered MCP server for pull request analysis with structured outputs for findings, release risk, and focused patch suggestions.
 
 ## Overview
 
-This server runs over **stdio transport** and exposes five review-focused tools. It leverages Gemini Thinking models for deep analysis.
+This server accepts unified diffs and returns structured JSON results — findings with severity, impact categories, merge risk, test plans, and verbatim search/replace fixes. It uses Gemini Thinking models (Flash for fast tools, Pro for deep analysis) and runs over **stdio transport**.
 
 ## Key Features
 
-- **Analyze PR Impact**: Objective severity scoring and categorization.
-- **Review Summary**: Concise digest and merge recommendation.
-- **Code Quality Inspection**: Deep-dive analysis using Pro models with thinking.
-- **Search & Replace**: Reliable, verbatim code fixes.
-- **Test Planning**: Systematic test case generation.
-- **Progress Notifications**: Async task support with progress tracking.
+- **Impact Analysis** — Objective severity scoring, breaking change detection, and rollback complexity assessment.
+- **Review Summary** — Concise PR digest with merge recommendation and change statistics.
+- **Deep Code Inspection** — Pro model with 16K thinking budget for context-aware analysis using full file contents.
+- **Search & Replace Fixes** — Verbatim, copy-paste-ready code fixes tied to specific findings.
+- **Test Plan Generation** — Systematic test case generation with priority ranking and pseudocode.
+- **Async Task Support** — All tools support MCP task lifecycle with progress notifications.
 
 ## Requirements
 
@@ -43,29 +45,418 @@ This server runs over **stdio transport** and exposes five review-focused tools.
 }
 ```
 
+## Client Configuration
+
+<details>
+<summary><b>VS Code / VS Code Insiders</b></summary>
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D&quality=insiders)
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "code-review-analyst": {
+      "command": "npx",
+      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Or via CLI:
+
+```bash
+code --add-mcp '{"name":"code-review-analyst","command":"npx","args":["-y","@j0hanz/code-review-analyst-mcp@latest"]}'
+```
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-review-analyst&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1yZXZpZXctYW5hbHlzdC1tY3BAbGF0ZXN0Il19)
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "code-review-analyst": {
+      "command": "npx",
+      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Visual Studio</b></summary>
+
+[![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-review-analyst%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D)
+
+For more info, see [Visual Studio MCP docs](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers).
+
+</details>
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "code-review-analyst": {
+      "command": "npx",
+      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+For more info, see [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user).
+
+</details>
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add code-review-analyst -- npx -y @j0hanz/code-review-analyst-mcp@latest
+```
+
+For more info, see [Claude Code MCP docs](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/tutorials#set-up-model-context-protocol-mcp).
+
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+Add to MCP config:
+
+```json
+{
+  "mcpServers": {
+    "code-review-analyst": {
+      "command": "npx",
+      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+For more info, see [Windsurf MCP docs](https://docs.windsurf.com/windsurf/mcp).
+
+</details>
+
+<details>
+<summary><b>Amp</b></summary>
+
+```bash
+amp mcp add code-review-analyst -- npx -y @j0hanz/code-review-analyst-mcp@latest
+```
+
+For more info, see [Amp MCP docs](https://docs.amp.dev/mcp).
+
+</details>
+
+<details>
+<summary><b>Cline</b></summary>
+
+Add to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "code-review-analyst": {
+      "command": "npx",
+      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "env": {
+        "GEMINI_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+For more info, see [Cline MCP docs](https://docs.cline.bot/mcp-servers/configuring-mcp-servers).
+
+</details>
+
+<details>
+<summary><b>Zed</b></summary>
+
+Add to Zed `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "code-review-analyst": {
+      "command": {
+        "path": "npx",
+        "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+        "env": {
+          "GEMINI_API_KEY": "YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
+
+For more info, see [Zed MCP docs](https://zed.dev/docs/assistant/model-context-protocol).
+
+</details>
+
+<details>
+<summary><b>Augment</b></summary>
+
+Add to `settings.json`:
+
+```json
+{
+  "augment.advanced": {
+    "mcpServers": [
+      {
+        "name": "code-review-analyst",
+        "command": "npx",
+        "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+        "env": {
+          "GEMINI_API_KEY": "YOUR_API_KEY"
+        }
+      }
+    ]
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Docker</b></summary>
+
+```json
+{
+  "mcpServers": {
+    "code-review-analyst": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GEMINI_API_KEY=YOUR_API_KEY",
+        "ghcr.io/j0hanz/code-review-analyst-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+Or build locally:
+
+```bash
+docker build -t code-review-analyst-mcp .
+```
+
+</details>
+
 ## Tools
 
-| Tool                      | Purpose                         | Model            |
-| ------------------------- | ------------------------------- | ---------------- |
-| `analyze_pr_impact`       | Assess severity and categories  | Flash            |
-| `generate_review_summary` | Summary and risk assessment     | Flash            |
-| `inspect_code_quality`    | Deep analysis with file context | Pro (Thinking)   |
-| `suggest_search_replace`  | Generate exact fixes            | Pro (Thinking)   |
-| `generate_test_plan`      | Create test strategy            | Flash (Thinking) |
+### `analyze_pr_impact`
 
-See [src/instructions.md](src/instructions.md) for detailed inputs and outputs.
+Assess the impact and risk of a pull request diff using the Flash model.
+
+| Parameter    | Type     | Required | Description                              |
+| ------------ | -------- | -------- | ---------------------------------------- |
+| `diff`       | `string` | Yes      | Unified diff text.                       |
+| `repository` | `string` | Yes      | Repository identifier (e.g. `org/repo`). |
+| `language`   | `string` | No       | Primary language hint.                   |
+
+**Returns:** `severity` (low/medium/high/critical), `categories[]`, `breakingChanges[]`, `affectedAreas[]`, `rollbackComplexity`, `summary`.
+
+### `generate_review_summary`
+
+Summarize a pull request diff and assess high-level risk using the Flash model.
+
+| Parameter    | Type     | Required | Description                              |
+| ------------ | -------- | -------- | ---------------------------------------- |
+| `diff`       | `string` | Yes      | Unified diff text.                       |
+| `repository` | `string` | Yes      | Repository identifier (e.g. `org/repo`). |
+| `language`   | `string` | No       | Primary language hint.                   |
+
+**Returns:** `summary`, `overallRisk` (low/medium/high), `keyChanges[]`, `recommendation`, `stats` (filesChanged, linesAdded, linesRemoved).
+
+### `inspect_code_quality`
+
+Deep-dive code review with optional file context using the Pro model with thinking (16K token budget).
+
+| Parameter     | Type       | Required | Description                                         |
+| ------------- | ---------- | -------- | --------------------------------------------------- |
+| `diff`        | `string`   | Yes      | Unified diff text.                                  |
+| `repository`  | `string`   | Yes      | Repository identifier (e.g. `org/repo`).            |
+| `language`    | `string`   | No       | Primary language hint.                              |
+| `focusAreas`  | `string[]` | No       | Areas to inspect: security, correctness, etc.       |
+| `maxFindings` | `number`   | No       | Maximum findings to return (1-25).                  |
+| `files`       | `object[]` | No       | Full file contents (`path`, `content`) for context. |
+
+**Returns:** `summary`, `overallRisk` (low/medium/high/critical), `findings[]` (severity, file, line, title, explanation, recommendation), `testsNeeded[]`, `contextualInsights[]`.
+
+> [!NOTE]
+> Enforces `MAX_CONTEXT_CHARS` (default 500,000) on combined diff + files size. Expect 60-120s latency due to deep thinking.
+
+### `suggest_search_replace`
+
+Generate verbatim search-and-replace blocks to fix a specific finding using the Pro model with thinking.
+
+| Parameter        | Type     | Required | Description                              |
+| ---------------- | -------- | -------- | ---------------------------------------- |
+| `diff`           | `string` | Yes      | Unified diff that contains the issue.    |
+| `findingTitle`   | `string` | Yes      | Short title of the finding to fix.       |
+| `findingDetails` | `string` | Yes      | Detailed explanation of the bug or risk. |
+
+**Returns:** `summary`, `blocks[]` (file, search, replace, explanation), `validationChecklist[]`.
+
+### `generate_test_plan`
+
+Create a test plan covering the changes in the diff using the Flash model with thinking (8K token budget).
+
+| Parameter       | Type     | Required | Description                                 |
+| --------------- | -------- | -------- | ------------------------------------------- |
+| `diff`          | `string` | Yes      | Unified diff to generate tests for.         |
+| `repository`    | `string` | Yes      | Repository identifier (e.g. `org/repo`).    |
+| `language`      | `string` | No       | Primary language hint.                      |
+| `testFramework` | `string` | No       | Test framework (e.g. jest, vitest, pytest). |
+| `maxTestCases`  | `number` | No       | Maximum test cases to return (1-30).        |
+
+**Returns:** `summary`, `testCases[]` (name, type, file, description, pseudoCode, priority), `coverageSummary`.
+
+## Resources
+
+| URI                       | Type            | Description                |
+| ------------------------- | --------------- | -------------------------- |
+| `internal://instructions` | `text/markdown` | Server usage instructions. |
+
+## Prompts
+
+| Name           | Arguments           | Description                                         |
+| -------------- | ------------------- | --------------------------------------------------- |
+| `get-help`     | —                   | Return the server usage instructions.               |
+| `review-guide` | `tool`, `focusArea` | Guided workflow for a specific tool and focus area. |
 
 ## Configuration
 
-| Variable                       | Description                                       | Default |
-| ------------------------------ | ------------------------------------------------- | ------- |
-| `GEMINI_API_KEY`               | API Key                                           | -       |
-| `GEMINI_MODEL`                 | Override default model selection                  | -       |
-| `MAX_DIFF_CHARS`               | Max chars for diff input                          | 120,000 |
-| `MAX_CONTEXT_CHARS`            | Max combined context for inspection               | 500,000 |
-| `MAX_CONCURRENT_CALLS`         | Max concurrent Gemini requests                    | 10      |
-| `MAX_CONCURRENT_CALLS_WAIT_MS` | Max wait time for a free Gemini slot before error | 2,000   |
-| `MAX_CONCURRENT_CALLS_POLL_MS` | Poll interval while waiting for a free slot       | 25      |
+### CLI Arguments
+
+| Option             | Description            | Env Var Equivalent |
+| ------------------ | ---------------------- | ------------------ |
+| `--model`, `-m`    | Override default model | `GEMINI_MODEL`     |
+| `--max-diff-chars` | Override max diff size | `MAX_DIFF_CHARS`   |
+
+### Environment Variables
+
+| Variable                       | Description                                          | Default      | Required |
+| ------------------------------ | ---------------------------------------------------- | ------------ | -------- |
+| `GEMINI_API_KEY`               | Gemini API key                                       | —            | Yes      |
+| `GOOGLE_API_KEY`               | Alternative API key (if `GEMINI_API_KEY` not set)    | —            | No       |
+| `GEMINI_MODEL`                 | Override default model selection                     | —            | No       |
+| `GEMINI_HARM_BLOCK_THRESHOLD`  | Safety threshold (BLOCK_NONE, BLOCK_ONLY_HIGH, etc.) | `BLOCK_NONE` | No       |
+| `MAX_DIFF_CHARS`               | Max chars for diff input                             | `120000`     | No       |
+| `MAX_CONTEXT_CHARS`            | Max combined context for inspection                  | `500000`     | No       |
+| `MAX_CONCURRENT_CALLS`         | Max concurrent Gemini requests                       | `10`         | No       |
+| `MAX_CONCURRENT_CALLS_WAIT_MS` | Max wait time for a free Gemini slot                 | `2000`       | No       |
+| `MAX_CONCURRENT_CALLS_POLL_MS` | Poll interval while waiting for a free slot          | `25`         | No       |
+
+### Models
+
+| Tool                      | Model              | Thinking Budget |
+| ------------------------- | ------------------ | --------------- |
+| `analyze_pr_impact`       | `gemini-2.5-flash` | —               |
+| `generate_review_summary` | `gemini-2.5-flash` | —               |
+| `inspect_code_quality`    | `gemini-2.5-pro`   | 16,384 tokens   |
+| `suggest_search_replace`  | `gemini-2.5-pro`   | 16,384 tokens   |
+| `generate_test_plan`      | `gemini-2.5-flash` | 8,192 tokens    |
+
+## Workflows
+
+### Quick PR Triage
+
+1. Call `analyze_pr_impact` to get severity and category breakdown.
+2. If low/medium — call `generate_review_summary` for a quick digest.
+3. If high/critical — proceed to deep inspection.
+
+### Deep Code Inspection
+
+1. Call `inspect_code_quality` with the diff and critical files in `files[]`.
+2. Use `focusAreas` to target specific concerns (security, performance).
+3. Review `findings` and `contextualInsights`.
+
+### Remediation & Testing
+
+1. For each finding, call `suggest_search_replace` with `findingTitle` and `findingDetails`.
+2. Call `generate_test_plan` to create a verification strategy.
+3. Apply fixes and implement tests.
+
+## Development
+
+```bash
+npm ci            # Install dependencies
+npm run dev       # TypeScript watch mode
+npm run dev:run   # Run built server with .env and --watch
+```
+
+| Script               | Command                             | Purpose                        |
+| -------------------- | ----------------------------------- | ------------------------------ |
+| `npm run build`      | `node scripts/tasks.mjs build`      | Clean, compile, validate, copy |
+| `npm test`           | `node scripts/tasks.mjs test`       | Build + run all tests          |
+| `npm run test:fast`  | `node --test --import tsx/esm ...`  | Run tests without build        |
+| `npm run lint`       | `eslint .`                          | Lint all files                 |
+| `npm run lint:fix`   | `eslint . --fix`                    | Lint and auto-fix              |
+| `npm run format`     | `prettier --write .`                | Format all files               |
+| `npm run type-check` | `node scripts/tasks.mjs type-check` | Type-check without emitting    |
+| `npm run inspector`  | Build + launch MCP Inspector        | Debug with MCP Inspector       |
+
+### Debugging with MCP Inspector
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+## Build & Release
+
+Releases are triggered via GitHub Actions `workflow_dispatch` with version bump selection (patch/minor/major/custom).
+
+The pipeline runs lint, type-check, test, and build, then publishes to three targets in parallel:
+
+- **npm** — `@j0hanz/code-review-analyst-mcp` with OIDC trusted publishing and provenance
+- **Docker** — `ghcr.io/j0hanz/code-review-analyst-mcp` (linux/amd64, linux/arm64)
+- **MCP Registry** — `io.github.j0hanz/code-review-analyst`
+
+## Troubleshooting
+
+| Issue                                      | Solution                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `Missing GEMINI_API_KEY or GOOGLE_API_KEY` | Set one of the API key env vars in your MCP client config.                           |
+| `E_INPUT_TOO_LARGE`                        | Diff or combined context exceeds budget. Split into smaller diffs or reduce files.   |
+| `Gemini request timed out`                 | Pro model tasks may take 60-120s. Increase your client timeout.                      |
+| `Too many concurrent Gemini calls`         | Reduce parallel tool calls or increase `MAX_CONCURRENT_CALLS`.                       |
+| No tool output visible                     | Ensure your MCP client is not swallowing `stderr` — the server uses stdio transport. |
 
 ## License
 
