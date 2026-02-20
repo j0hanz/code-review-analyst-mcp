@@ -8,7 +8,7 @@ These instructions are available as a resource (internal://instructions) or prom
 
 - Domain: Gemini-powered code review analysis — accepts unified diffs and returns structured findings, impact assessments, test plans, and search/replace fixes.
 - Primary Resources: Unified diff text, structured JSON review results, impact assessments, test plans.
-- Tools: READ: `analyze_pr_impact`, `generate_review_summary`, `inspect_code_quality`, `suggest_search_replace`, `generate_test_plan`. WRITE: none.
+- Tools: READ: `analyze_pr_impact`, `generate_review_summary`, `inspect_code_quality`, `suggest_search_replace`, `generate_test_plan`, `analyze_time_space_complexity`, `detect_api_breaking_changes`. WRITE: none.
 
 ---
 
@@ -22,13 +22,17 @@ These instructions are available as a resource (internal://instructions) or prom
 ## RESOURCES & RESOURCE LINKS
 
 - `internal://instructions`: This document.
+- `internal://tool-catalog`: Quick reference of all tools with models, parameters, output shapes, and cross-tool data flow.
+- `internal://workflows`: Golden-path workflows with step-by-step tool sequences and data flow annotations.
+- `internal://server-config`: Runtime limits, model assignments, timeouts, and safety settings (resolved from env).
+- `internal://tool-info/{toolName}`: Per-tool detailed reference (parameters, output shape, gotchas, cross-tool flow). Replace `{toolName}` with a tool name.
 
 ---
 
 ## PROGRESS & TASKS
 
 - Include `_meta.progressToken` in requests to receive `notifications/progress` updates during Gemini processing.
-- Task-augmented tool calls are supported for all five tools:
+- Task-augmented tool calls are supported for all seven tools:
   - Send `tools/call` with `task` to get a task id.
   - Poll `tasks/get` and fetch results via `tasks/result`.
   - Use `tasks/cancel` to abort.
@@ -107,6 +111,22 @@ These instructions are available as a resource (internal://instructions) or prom
 - Input: `diff` (required), `repository` (required), `language` (optional), `testFramework` (optional, defaults to auto-detect), `maxTestCases` (optional, 1–30).
 - Output: `summary`, `testCases[]` (each with `name`, `type`, `file`, `description`, `pseudoCode`, `priority`), `coverageSummary`.
 - Gotcha: `maxTestCases` caps results AFTER Gemini returns. Uses Flash model with thinking budget.
+
+`analyze_time_space_complexity`
+
+- Purpose: Analyze time and space complexity of changed code in a unified diff.
+- Input: `diff` (required), `repository` (required), `language` (optional).
+- Output: Complexity analysis per function/method with time and space assessments.
+- Side effects: Calls external Gemini API (Flash model); does not mutate local state.
+- Gotcha: Analyzes only the changed code in the diff, not entire files.
+
+`detect_api_breaking_changes`
+
+- Purpose: Detect breaking changes to public APIs, interfaces, and contracts in a unified diff.
+- Input: `diff` (required), `repository` (required), `language` (optional).
+- Output: `hasBreakingChanges`, `breakingChanges[]` with change details and migration guidance.
+- Side effects: Calls external Gemini API (Flash model); does not mutate local state.
+- Gotcha: Focuses on public API surface changes — internal refactors may not be flagged.
 
 ---
 

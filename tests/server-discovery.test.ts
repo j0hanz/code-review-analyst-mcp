@@ -82,7 +82,7 @@ test('prompt get-help is discoverable', async () => {
     const prompt = result.prompts.find((p) => p.name === 'get-help');
 
     assert.ok(prompt, 'get-help prompt should exist');
-    assert.equal(prompt.description, 'Return the server usage instructions.');
+    assert.equal(prompt.description, 'Server instructions.');
   } finally {
     await close();
   }
@@ -120,10 +120,7 @@ test('prompt review-guide is discoverable', async () => {
     const prompt = result.prompts.find((p) => p.name === 'review-guide');
 
     assert.ok(prompt, 'review-guide prompt should exist');
-    assert.equal(
-      prompt.description,
-      'Guided workflow instructions for a specific code review tool and focus area.'
-    );
+    assert.equal(prompt.description, 'Workflow guide for tool/focus area.');
   } finally {
     await close();
   }

@@ -5,12 +5,11 @@ import { z } from 'zod';
 
 const HELP_PROMPT_NAME = 'get-help';
 const HELP_PROMPT_TITLE = 'Get Help';
-const HELP_PROMPT_DESCRIPTION = 'Return the server usage instructions.';
+const HELP_PROMPT_DESCRIPTION = 'Server instructions.';
 
 const REVIEW_GUIDE_PROMPT_NAME = 'review-guide';
 const REVIEW_GUIDE_PROMPT_TITLE = 'Review Guide';
-const REVIEW_GUIDE_PROMPT_DESCRIPTION =
-  'Guided workflow instructions for a specific code review tool and focus area.';
+const REVIEW_GUIDE_PROMPT_DESCRIPTION = 'Workflow guide for tool/focus area.';
 
 const TOOLS = [
   'analyze_pr_impact',
@@ -18,6 +17,8 @@ const TOOLS = [
   'inspect_code_quality',
   'suggest_search_replace',
   'generate_test_plan',
+  'analyze_time_space_complexity',
+  'detect_api_breaking_changes',
 ] as const;
 type ToolName = (typeof TOOLS)[number];
 
@@ -29,42 +30,46 @@ const FOCUS_AREAS = [
   'tests',
 ] as const;
 type FocusArea = (typeof FOCUS_AREAS)[number];
-const TOOL_DESCRIPTION_TEXT =
-  'Which review tool to use: analyze_pr_impact, generate_review_summary, etc.';
-const FOCUS_DESCRIPTION_TEXT =
-  'Focus area: security, correctness, performance, regressions, or tests';
+const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
+const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
 
 const TOOL_GUIDES: Record<ToolName, string> = {
   analyze_pr_impact:
-    'Call `analyze_pr_impact` with `diff` and `repository`. ' +
-    'Get severity rating and categorization.',
+    'Tool: analyze_pr_impact\n' +
+    'Model: Flash. Output: severity, categories, breakingChanges, rollbackComplexity.\n' +
+    'Use: Triage, breaking change check.',
   generate_review_summary:
-    'Call `generate_review_summary` for a concise digest and merge recommendation.',
+    'Tool: generate_review_summary\n' +
+    'Model: Flash. Output: summary, risk, recommendations, stats.\n' +
+    'Use: Triage, merge gate.',
   inspect_code_quality:
-    'Call `inspect_code_quality` for deep review with optional file context. ' +
-    'Uses thinking model for complex reasoning.',
+    'Tool: inspect_code_quality\n' +
+    'Model: Pro (Thinking). Output: findings, testsNeeded, overallRisk.\n' +
+    'Use: Deep review. Feed findings to suggest_search_replace.',
   suggest_search_replace:
-    'Call `suggest_search_replace` to generate verbatim search/replace fixes.',
+    'Tool: suggest_search_replace\n' +
+    'Model: Pro (Thinking). Output: patch blocks.\n' +
+    'Use: Fix generation. One finding per call. Verbatim match required.',
   generate_test_plan:
-    'Call `generate_test_plan` to create a verification strategy.',
+    'Tool: generate_test_plan\n' +
+    'Model: Flash. Output: test cases (pseudoCode), priority.\n' +
+    'Use: Test planning. Finding-aware targeting.',
+  analyze_time_space_complexity:
+    'Tool: analyze_time_space_complexity\n' +
+    'Model: Flash. Output: time/space complexity, degradation check.\n' +
+    'Use: Algorithm audit.',
+  detect_api_breaking_changes:
+    'Tool: detect_api_breaking_changes\n' +
+    'Model: Flash. Output: breaking changes list, mitigation.\n' +
+    'Use: API check before merge.',
 };
 
 const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
-  security:
-    'Audit for injection vulnerabilities, insecure data handling, broken authentication, ' +
-    'cryptographic failures, and OWASP Top 10 issues.',
-  correctness:
-    'Check for logic errors, edge case mishandling, incorrect algorithm implementations, ' +
-    'and API contract violations.',
-  performance:
-    'Identify algorithmic complexity issues, unnecessary allocations, blocking I/O, ' +
-    'and database query inefficiencies.',
-  regressions:
-    'Look for changes that could break existing behavior, removed guards, altered return types, ' +
-    'or contract changes in public APIs.',
-  tests:
-    'Assess test coverage gaps, missing edge case tests, flaky test patterns, ' +
-    'and untested error paths.',
+  security: 'Focus: Injection, auth, crypto, OWASP.',
+  correctness: 'Focus: Logic, edge cases, algorithms, contracts.',
+  performance: 'Focus: Complexity, allocations, I/O, queries.',
+  regressions: 'Focus: Behavior changes, guards, types, breaks.',
+  tests: 'Focus: Coverage, edge cases, flakes, error paths.',
 };
 
 function completeByPrefix<T extends string>(
