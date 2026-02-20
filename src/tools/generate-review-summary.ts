@@ -16,9 +16,10 @@ const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
   stats: true,
 });
 const SYSTEM_INSTRUCTION = `
-You are a senior code reviewer.
-Summarize the changes in this pull request and provide a high-level risk assessment.
-Identify key changes and provide a merge recommendation.
+You are a critical senior code reviewer.
+Summarize the changes in this pull request with high precision and provide a strict risk assessment.
+Identify key changes and provide a definitive merge recommendation (merge, squash, or block).
+Avoid generic statements; focus on the specific logic modified.
 Return strict JSON only.
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;

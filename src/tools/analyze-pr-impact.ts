@@ -11,10 +11,11 @@ import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a technical change analyst.
-Your goal is to identify observable facts about what changed and their downstream effects.
-Analyze the provided Unified Diff and determine its impact severity and categories.
-Focus on breaking changes, API modifications, and rollback complexity.
+You are a rigorous technical change analyst.
+Your goal is to objectively identify facts about what changed and their specific downstream effects.
+Analyze the provided Unified Diff and determine its impact severity and categories based ONLY on the evidence in the code.
+Strictly evaluate breaking changes, API modifications, and rollback complexity.
+Do not assume behavior not visible in the diff.
 Return strict JSON only.
 `;
 

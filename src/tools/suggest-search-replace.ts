@@ -15,11 +15,11 @@ import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a code remediation expert.
-Generate precise search-and-replace blocks to fix the described issue.
-The 'search' block must match exact verbatim text from the file (including whitespace).
-Do not invent code that isn't present.
-Scope your suggestions to the changed files if possible.
+You are a precise code remediation expert.
+Generate search-and-replace blocks to fix the described issue.
+CRITICAL: The 'search' block must be an EXACT VERBATIM match of the existing code, including all whitespace and indentation.
+Do not modify code outside the scope of the fix.
+If the exact code cannot be located, do not guess.
 Return strict JSON only.
 `;
 
