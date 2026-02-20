@@ -306,7 +306,8 @@ function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  return `${toolName}: ${context} [${metadata}]`;
+  const prefix = metadata === 'start' ? '▸' : '◆';
+  return `${prefix} ${toolName}: ${context} [${metadata}]`;
 }
 
 function formatProgressCompletion(
@@ -314,7 +315,8 @@ function formatProgressCompletion(
   context: string,
   outcome: string
 ): string {
-  return `${toolName}: ${context} • ${outcome}`;
+  const prefix = outcome === 'completed' ? '◈' : '‣';
+  return `${prefix} ${toolName}: ${context} • ${outcome}`;
 }
 
 function toLoggingLevel(level: string): LoggingLevel {

@@ -53,7 +53,8 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     errorCode: 'E_REVIEW_SUMMARY',
     model: FLASH_MODEL,
     validateInput: (input) => validateDiffBudget(input.diff),
-    progressContext: (input) => `repo: ${input.repository}`,
+    progressContext: (input) =>
+      `repo: ${input.repository}, lang: ${input.language ?? DEFAULT_LANGUAGE}`,
     transformResult: (input, result) => {
       const stats = getCachedStats(input);
       statsCache.delete(input);
