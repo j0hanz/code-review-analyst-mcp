@@ -33,6 +33,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     thinkingBudget: PRO_THINKING_BUDGET,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     validateInput: (input) => validateDiffBudget(input.diff),
+    progressContext: (input) => `finding: ${input.findingTitle}`,
     formatOutput: (result) => {
       return `Search/Replace Suggestion: ${result.summary}`;
     },

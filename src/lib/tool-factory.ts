@@ -30,6 +30,7 @@ export interface PromptParts {
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 const TASK_PROGRESS_TOTAL = 4;
 const INPUT_VALIDATION_FAILED = 'Input validation failed';
+const DEFAULT_PROGRESS_CONTEXT = 'request';
 const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
@@ -85,6 +86,9 @@ export interface StructuredToolTaskConfig<
 
   /** Optional formatter for human-readable text output. */
   formatOutput?: (result: TFinal) => string;
+
+  /** Optional context text used in progress messages. */
+  progressContext?: (input: TInput) => string;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput) => PromptParts;
@@ -178,20 +182,25 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
 
 async function sendTaskProgress(
   extra: {
-    _meta?: { progressToken?: string | number | undefined };
+    _meta?: { progressToken?: unknown };
     sendNotification: (notification: {
       method: 'notifications/progress';
       params: {
         progressToken: string | number;
         progress: number;
-        total: number;
+        total?: number;
+        message?: string;
       };
     }) => Promise<void>;
   },
-  progress: number
+  payload: {
+    current: number;
+    total?: number;
+    message?: string;
+  }
 ): Promise<void> {
   const progressToken = extra._meta?.progressToken;
-  if (progressToken == null) {
+  if (typeof progressToken !== 'string' && typeof progressToken !== 'number') {
     return;
   }
 
@@ -200,13 +209,86 @@ async function sendTaskProgress(
       method: 'notifications/progress',
       params: {
         progressToken,
-        progress,
-        total: TASK_PROGRESS_TOTAL,
+        progress: payload.current,
+        ...(payload.total !== undefined ? { total: payload.total } : {}),
+        ...(payload.message !== undefined ? { message: payload.message } : {}),
       },
     });
   } catch {
     // Progress is best-effort; never fail the tool call.
   }
+}
+
+function createProgressReporter(extra: {
+  _meta?: { progressToken?: unknown };
+  sendNotification: (notification: {
+    method: 'notifications/progress';
+    params: {
+      progressToken: string | number;
+      progress: number;
+      total?: number;
+      message?: string;
+    };
+  }) => Promise<void>;
+}): (payload: {
+  current: number;
+  total?: number;
+  message?: string;
+}) => Promise<void> {
+  let lastCurrent = 0;
+  let didSendTerminal = false;
+
+  return async (payload): Promise<void> => {
+    if (didSendTerminal) {
+      return;
+    }
+
+    const current = Math.max(payload.current, lastCurrent);
+    const total =
+      payload.total !== undefined
+        ? Math.max(payload.total, current)
+        : undefined;
+
+    await sendTaskProgress(extra, {
+      current,
+      ...(total !== undefined ? { total } : {}),
+      ...(payload.message !== undefined ? { message: payload.message } : {}),
+    });
+
+    lastCurrent = current;
+    if (total !== undefined && total === current) {
+      didSendTerminal = true;
+    }
+  };
+}
+
+function normalizeProgressContext(context: string | undefined): string {
+  const compact = context?.replace(/\s+/g, ' ').trim();
+  if (!compact) {
+    return DEFAULT_PROGRESS_CONTEXT;
+  }
+
+  if (compact.length <= 80) {
+    return compact;
+  }
+
+  return `${compact.slice(0, 77)}...`;
+}
+
+function formatProgressStep(
+  toolName: string,
+  context: string,
+  metadata: string
+): string {
+  return `${toolName}: ${context} [${metadata}]`;
+}
+
+function formatProgressCompletion(
+  toolName: string,
+  context: string,
+  outcome: string
+): string {
+  return `${toolName}: ${context} • ${outcome}`;
 }
 
 function toLoggingLevel(level: string): LoggingLevel {
@@ -289,6 +371,9 @@ export function registerStructuredToolTask<
         });
 
         const runTask = async (): Promise<void> => {
+          const reportProgress = createProgressReporter(extra);
+          let progressContext = DEFAULT_PROGRESS_CONTEXT;
+
           const updateStatusMessage = async (
             message: string
           ): Promise<void> => {
@@ -319,11 +404,24 @@ export function registerStructuredToolTask<
           };
 
           try {
+            await reportProgress({
+              current: 0,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressStep(
+                config.name,
+                progressContext,
+                'start'
+              ),
+            });
+
             const onLog = createGeminiLogger(server, task.taskId);
 
             const inputRecord = parseToolInput<TInput>(
               input,
               config.fullInputSchema
+            );
+            progressContext = normalizeProgressContext(
+              config.progressContext?.(inputRecord)
             );
 
             if (config.validateInput) {
@@ -333,17 +431,42 @@ export function registerStructuredToolTask<
                   validationError.structuredContent.error?.message ??
                   INPUT_VALIDATION_FAILED;
                 await updateStatusMessage(validationMessage);
+                await reportProgress({
+                  current: TASK_PROGRESS_TOTAL,
+                  total: TASK_PROGRESS_TOTAL,
+                  message: formatProgressCompletion(
+                    config.name,
+                    progressContext,
+                    'failed'
+                  ),
+                });
                 await storeResultSafely('completed', validationError);
                 return;
               }
             }
 
-            await sendTaskProgress(extra, 1);
+            await reportProgress({
+              current: 1,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressStep(
+                config.name,
+                progressContext,
+                'input validated'
+              ),
+            });
 
             const { systemInstruction, prompt } =
               config.buildPrompt(inputRecord);
 
-            await sendTaskProgress(extra, 2);
+            await reportProgress({
+              current: 2,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressStep(
+                config.name,
+                progressContext,
+                'prompt prepared'
+              ),
+            });
 
             const raw = await generateStructuredJson(
               createGenerationRequest(
@@ -355,7 +478,15 @@ export function registerStructuredToolTask<
               )
             );
 
-            await sendTaskProgress(extra, 3);
+            await reportProgress({
+              current: 3,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressStep(
+                config.name,
+                progressContext,
+                'model response received'
+              ),
+            });
 
             const parsed = config.resultSchema.parse(raw);
 
@@ -369,7 +500,15 @@ export function registerStructuredToolTask<
               ? config.formatOutput(finalResult)
               : undefined;
 
-            await sendTaskProgress(extra, TASK_PROGRESS_TOTAL);
+            await reportProgress({
+              current: TASK_PROGRESS_TOTAL,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressCompletion(
+                config.name,
+                progressContext,
+                'completed'
+              ),
+            });
             await storeResultSafely(
               'completed',
               createToolResponse(
@@ -383,6 +522,15 @@ export function registerStructuredToolTask<
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             const errorMeta = classifyErrorMeta(error, errorMessage);
+            await reportProgress({
+              current: TASK_PROGRESS_TOTAL,
+              total: TASK_PROGRESS_TOTAL,
+              message: formatProgressCompletion(
+                config.name,
+                progressContext,
+                'failed'
+              ),
+            });
             await updateStatusMessage(errorMessage);
             await storeResultSafely(
               'failed',

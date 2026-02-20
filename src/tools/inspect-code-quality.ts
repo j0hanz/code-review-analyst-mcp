@@ -83,6 +83,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     model: PRO_MODEL,
     thinkingBudget: PRO_THINKING_BUDGET,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    progressContext: (input) => `repo: ${input.repository}`,
     validateInput: (input) => {
       const diffError = validateDiffBudget(input.diff);
       if (diffError) return diffError;

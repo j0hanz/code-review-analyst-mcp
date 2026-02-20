@@ -30,6 +30,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     errorCode: 'E_ANALYZE_IMPACT',
     model: FLASH_MODEL,
     validateInput: (input) => validateDiffBudget(input.diff),
+    progressContext: (input) => `repo: ${input.repository}`,
     formatOutput: (result) => {
       return `Impact Analysis (${result.severity}): ${result.summary}`;
     },

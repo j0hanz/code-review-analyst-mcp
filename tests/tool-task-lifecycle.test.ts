@@ -1,7 +1,10 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  CallToolResult,
+  Progress,
+} from '@modelcontextprotocol/sdk/types.js';
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -62,12 +65,16 @@ function setMockClient(
 async function callToolAsTask(
   client: Client,
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  options?: { onprogress?: (progress: Progress) => void }
 ): Promise<CallToolResult> {
   const stream = client.experimental.tasks.callToolStream(
     { name, arguments: args },
     CallToolResultSchema,
-    { task: {} }
+    {
+      task: {},
+      ...(options?.onprogress ? { onprogress: options.onprogress } : undefined),
+    }
   );
   for await (const message of stream) {
     if (message.type === 'result') {
@@ -78,6 +85,42 @@ async function callToolAsTask(
     }
   }
   throw new Error('Task stream closed without result or error');
+}
+
+function assertProgressLifecycle(
+  updates: readonly Progress[],
+  expectedOutcome: 'completed' | 'failed'
+): void {
+  assert.ok(
+    updates.length >= 2,
+    'Expected at least start and terminal updates'
+  );
+
+  const first = updates[0];
+  assert.equal(first?.progress, 0);
+  assert.equal(first?.total, 4);
+  assert.match(first?.message ?? '', /\[start\]/);
+
+  let previous = -1;
+  for (const update of updates) {
+    assert.ok(update.progress >= previous, 'Progress must be monotonic');
+    previous = update.progress;
+  }
+
+  const terminalIndex = updates.findIndex((update) => {
+    return update.total !== undefined && update.total === update.progress;
+  });
+
+  assert.notEqual(terminalIndex, -1, 'Expected a terminal progress update');
+  assert.equal(
+    terminalIndex,
+    updates.length - 1,
+    'Terminal progress must be the final update'
+  );
+
+  const terminal = updates[updates.length - 1];
+  assert.equal(terminal?.total, terminal?.progress);
+  assert.match(terminal?.message ?? '', new RegExp(`• ${expectedOutcome}$`));
 }
 
 test('analyze_pr_impact succeeds without task persistence errors', async () => {
@@ -98,14 +141,25 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
   await connect();
 
   try {
-    const result = await callToolAsTask(client, 'analyze_pr_impact', {
-      diff: SAMPLE_DIFF,
-      repository: 'org/repo',
-    });
+    const progressUpdates: Progress[] = [];
+    const result = await callToolAsTask(
+      client,
+      'analyze_pr_impact',
+      {
+        diff: SAMPLE_DIFF,
+        repository: 'org/repo',
+      },
+      {
+        onprogress: (progress) => {
+          progressUpdates.push(progress);
+        },
+      }
+    );
 
     assert.notEqual(result.isError, true);
     assert.ok(result.structuredContent);
     assert.equal(result.structuredContent.ok, true);
+    assertProgressLifecycle(progressUpdates, 'completed');
   } finally {
     await close();
   }
@@ -119,10 +173,20 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
   await connect();
 
   try {
-    const result = await callToolAsTask(client, 'analyze_pr_impact', {
-      diff: SAMPLE_DIFF,
-      repository: 'org/repo',
-    });
+    const progressUpdates: Progress[] = [];
+    const result = await callToolAsTask(
+      client,
+      'analyze_pr_impact',
+      {
+        diff: SAMPLE_DIFF,
+        repository: 'org/repo',
+      },
+      {
+        onprogress: (progress) => {
+          progressUpdates.push(progress);
+        },
+      }
+    );
 
     assert.equal(result.isError, true);
     assert.ok(result.structuredContent);
@@ -131,6 +195,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
       (result.structuredContent.error as { code: string }).code,
       'E_INPUT_TOO_LARGE'
     );
+    assertProgressLifecycle(progressUpdates, 'failed');
   } finally {
     await close();
     delete process.env.MAX_DIFF_CHARS;
