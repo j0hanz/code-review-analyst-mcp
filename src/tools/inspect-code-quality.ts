@@ -14,6 +14,15 @@ const DEFAULT_LANGUAGE = 'detect';
 const DEFAULT_FOCUS_AREAS = 'General';
 const DEFAULT_MAX_FINDINGS = 'auto';
 const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
+const PATH_ESCAPE_REPLACEMENTS = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  '\n': ' ',
+  '\r': ' ',
+} as const;
+const PATH_ESCAPE_PATTERN = /[&<>"\n\r]/g;
 const SYSTEM_INSTRUCTION = `
 You are a principal software engineer performing a deep code review.
 Analyze the diff and provided file context to identify bugs, security issues, and quality problems.
@@ -23,13 +32,11 @@ Return strict JSON only.
 `;
 
 function sanitizePath(path: string): string {
-  return path
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('\n', ' ')
-    .replaceAll('\r', ' ');
+  return path.replace(PATH_ESCAPE_PATTERN, (match) => {
+    return PATH_ESCAPE_REPLACEMENTS[
+      match as keyof typeof PATH_ESCAPE_REPLACEMENTS
+    ];
+  });
 }
 
 function sanitizeContent(content: string): string {
@@ -43,15 +50,22 @@ function formatFileContext(
     return '';
   }
 
-  const fileBlocks = files
-    .map(
-      (file) => `
+  let fileBlocks = '';
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    if (!file) {
+      continue;
+    }
+
+    fileBlocks += `
 <<FILE path="${sanitizePath(file.path)}">>
 ${sanitizeContent(file.content)}
 <<END_FILE>>
-`
-    )
-    .join('\n');
+`;
+    if (index < files.length - 1) {
+      fileBlocks += '\n';
+    }
+  }
 
   return `${FILE_CONTEXT_HEADING}${fileBlocks}`;
 }

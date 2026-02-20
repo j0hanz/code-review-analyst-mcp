@@ -37,6 +37,8 @@ const RETRYABLE_TRANSIENT_CODES = new Set([
   'INTERNAL',
   'ABORTED',
 ]);
+const RETRYABLE_MESSAGE_PATTERN =
+  /(429|500|502|503|504|rate limit|unavailable|timeout|invalid json)/i;
 
 const SAFETY_CATEGORIES = [
   HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -58,20 +60,36 @@ const SAFETY_THRESHOLD_BY_NAME = {
   BLOCK_LOW_AND_ABOVE: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
 } as const;
 
+let cachedSafetyThresholdEnv: string | undefined;
+let cachedSafetyThreshold = DEFAULT_SAFETY_THRESHOLD;
+const safetySettingsCache = new Map<
+  HarmBlockThreshold,
+  { category: HarmCategory; threshold: HarmBlockThreshold }[]
+>();
+
 function getSafetyThreshold(): HarmBlockThreshold {
   const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
+  if (threshold === cachedSafetyThresholdEnv) {
+    return cachedSafetyThreshold;
+  }
+
+  cachedSafetyThresholdEnv = threshold;
   if (!threshold) {
-    return DEFAULT_SAFETY_THRESHOLD;
+    cachedSafetyThreshold = DEFAULT_SAFETY_THRESHOLD;
+    return cachedSafetyThreshold;
   }
 
   const normalizedThreshold = threshold.trim().toUpperCase();
   if (normalizedThreshold in SAFETY_THRESHOLD_BY_NAME) {
-    return SAFETY_THRESHOLD_BY_NAME[
-      normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
-    ];
+    cachedSafetyThreshold =
+      SAFETY_THRESHOLD_BY_NAME[
+        normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
+      ];
+    return cachedSafetyThreshold;
   }
 
-  return DEFAULT_SAFETY_THRESHOLD;
+  cachedSafetyThreshold = DEFAULT_SAFETY_THRESHOLD;
+  return cachedSafetyThreshold;
 }
 
 function getThinkingConfig(
@@ -83,9 +101,16 @@ function getThinkingConfig(
 function getSafetySettings(
   threshold: HarmBlockThreshold
 ): { category: HarmCategory; threshold: HarmBlockThreshold }[] {
-  return SAFETY_CATEGORIES.map((category) => {
+  const cached = safetySettingsCache.get(threshold);
+  if (cached) {
+    return cached;
+  }
+
+  const settings = SAFETY_CATEGORIES.map((category) => {
     return { category, threshold };
   });
+  safetySettingsCache.set(threshold, settings);
+  return settings;
 }
 
 let cachedClient: GoogleGenAI | undefined;
@@ -279,9 +304,7 @@ function shouldRetry(error: unknown): boolean {
   }
 
   const message = getErrorMessage(error);
-  return /(429|500|502|503|504|rate limit|unavailable|timeout|invalid json)/i.test(
-    message
-  );
+  return RETRYABLE_MESSAGE_PATTERN.test(message);
 }
 
 function getRetryDelayMs(attempt: number): number {

@@ -87,12 +87,14 @@ export function formatFileSummary(files: ParsedFile[]): string {
 
   let totalAdded = 0;
   let totalDeleted = 0;
-  const summaries = files.map((file) => {
+  const summaries: string[] = [];
+
+  for (const file of files) {
     totalAdded += file.additions;
     totalDeleted += file.deletions;
     const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
-    return `${path} (+${file.additions} -${file.deletions})`;
-  });
+    summaries.push(`${path} (+${file.additions} -${file.deletions})`);
+  }
 
   return `${summaries.join(', ')} [${files.length} files, +${totalAdded} -${totalDeleted}]`;
 }

@@ -32,6 +32,9 @@ const INPUT_VALIDATION_FAILED = 'Input validation failed';
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 const RETRYABLE_UPSTREAM_ERROR_PATTERN =
   /(429|500|502|503|504|rate limit|unavailable|timeout|timed out|connection|reset|econn|enotfound|temporary|transient)/i;
+const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
+const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
+const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
@@ -116,17 +119,34 @@ function createGenerationRequest<TInput extends object>(
   responseSchema: Record<string, unknown>;
   signal?: AbortSignal;
 } {
-  return {
+  const request: {
+    model?: string;
+    thinkingBudget?: number;
+    onLog: (level: string, data: unknown) => Promise<void>;
+    systemInstruction: string;
+    prompt: string;
+    responseSchema: Record<string, unknown>;
+    signal?: AbortSignal;
+  } = {
     systemInstruction: promptParts.systemInstruction,
     prompt: promptParts.prompt,
     responseSchema,
-    ...(config.model ? { model: config.model } : undefined),
-    ...(config.thinkingBudget
-      ? { thinkingBudget: config.thinkingBudget }
-      : undefined),
-    ...(signal ? { signal } : undefined),
     onLog,
   };
+
+  if (config.model) {
+    request.model = config.model;
+  }
+
+  if (config.thinkingBudget) {
+    request.thinkingBudget = config.thinkingBudget;
+  }
+
+  if (signal) {
+    request.signal = signal;
+  }
+
+  return request;
 }
 
 function isTerminalTaskStatus(status: string): boolean {
@@ -141,21 +161,21 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
     };
   }
 
-  if (/cancelled|canceled/i.test(message)) {
+  if (CANCELLED_ERROR_PATTERN.test(message)) {
     return {
       kind: 'cancelled',
       retryable: false,
     };
   }
 
-  if (/timed out|timeout/i.test(message)) {
+  if (TIMEOUT_ERROR_PATTERN.test(message)) {
     return {
       kind: 'timeout',
       retryable: true,
     };
   }
 
-  if (/exceeds limit|max allowed size|input too large/i.test(message)) {
+  if (BUDGET_ERROR_PATTERN.test(message)) {
     return {
       kind: 'budget',
       retryable: false,

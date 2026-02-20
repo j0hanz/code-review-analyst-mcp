@@ -19,6 +19,25 @@ Summarize the changes in this pull request and provide a high-level risk assessm
 Identify key changes and provide a merge recommendation.
 Return strict JSON only.
 `;
+type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
+interface CachedStats {
+  files: number;
+  added: number;
+  deleted: number;
+}
+
+const statsCache = new WeakMap<ReviewSummaryInput, CachedStats>();
+
+function getCachedStats(input: ReviewSummaryInput): CachedStats {
+  const cached = statsCache.get(input);
+  if (cached) {
+    return cached;
+  }
+
+  const stats = computeDiffStats(input.diff);
+  statsCache.set(input, stats);
+  return stats;
+}
 
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
@@ -33,7 +52,8 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     validateInput: (input) => validateDiffBudget(input.diff),
     transformResult: (input, result) => {
       const partial = result as z.infer<typeof ReviewSummaryModelSchema>;
-      const stats = computeDiffStats(input.diff);
+      const stats = getCachedStats(input);
+      statsCache.delete(input);
 
       return {
         ...partial,
@@ -49,7 +69,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
       return `Review Summary: ${typed.summary}\nRecommendation: ${typed.recommendation}`;
     },
     buildPrompt: (input) => {
-      const stats = computeDiffStats(input.diff);
+      const stats = getCachedStats(input);
       const prompt = `
 Repository: ${input.repository}
 Language: ${input.language ?? DEFAULT_LANGUAGE}

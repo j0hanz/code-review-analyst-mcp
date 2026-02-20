@@ -40,17 +40,6 @@ interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
   isError: true;
 }
 
-function optionalProperty<T>(
-  value: T | undefined,
-  key: string
-): Record<string, T> | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return { [key]: value };
-}
-
 function toTextContent(
   structured: ToolStructuredContent,
   textContent?: string
@@ -78,9 +67,13 @@ function createErrorStructuredContent(
   const error: ToolError = {
     code,
     message,
-    ...optionalProperty(meta?.retryable, 'retryable'),
-    ...optionalProperty(meta?.kind, 'kind'),
   };
+  if (meta?.retryable !== undefined) {
+    error.retryable = meta.retryable;
+  }
+  if (meta?.kind !== undefined) {
+    error.kind = meta.kind;
+  }
 
   if (result === undefined) {
     return { ok: false, error };

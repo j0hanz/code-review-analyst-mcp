@@ -3,6 +3,7 @@ import { createErrorToolResponse } from './tool-response.js';
 const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
 const MAX_CONTEXT_CHARS_ENV_VAR = 'MAX_CONTEXT_CHARS';
 const BUDGET_ERROR_META = { retryable: false, kind: 'budget' } as const;
+let cachedMaxContextChars: number | undefined;
 interface FileContent {
   content: string;
 }
@@ -17,8 +18,18 @@ function parsePositiveInteger(value: string): number | undefined {
 }
 
 function getMaxContextChars(): number {
+  if (cachedMaxContextChars !== undefined) {
+    return cachedMaxContextChars;
+  }
+
   const envValue = process.env[MAX_CONTEXT_CHARS_ENV_VAR] ?? '';
-  return parsePositiveInteger(envValue) ?? DEFAULT_MAX_CONTEXT_CHARS;
+  cachedMaxContextChars =
+    parsePositiveInteger(envValue) ?? DEFAULT_MAX_CONTEXT_CHARS;
+  return cachedMaxContextChars;
+}
+
+export function resetMaxContextCharsCacheForTesting(): void {
+  cachedMaxContextChars = undefined;
 }
 
 export function computeContextSize(
