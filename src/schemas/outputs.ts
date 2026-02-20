@@ -13,6 +13,19 @@ const OUTPUT_LIMITS = {
     findingsMax: 50,
     testsNeeded: { minItems: 0, maxItems: 20, itemMin: 1, itemMax: 300 },
   },
+  complexity: {
+    timeComplexity: { min: 1, max: 200 },
+    spaceComplexity: { min: 1, max: 200 },
+    explanation: { min: 1, max: 2_000 },
+    bottleneck: { min: 1, max: 500, maxItems: 10 },
+  },
+  apiBreaking: {
+    element: { min: 1, max: 300 },
+    natureOfChange: { min: 1, max: 500 },
+    consumerImpact: { min: 1, max: 500 },
+    suggestedMitigation: { min: 1, max: 500 },
+    maxItems: 20,
+  },
 } as const;
 
 const QUALITY_RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
@@ -302,4 +315,70 @@ export const TestPlanResultSchema = z.strictObject({
     .min(1)
     .max(500)
     .describe('Summary of coverage gaps this plan addresses.'),
+});
+
+export const AnalyzeComplexityResultSchema = z.strictObject({
+  timeComplexity: createBoundedString(
+    OUTPUT_LIMITS.complexity.timeComplexity.min,
+    OUTPUT_LIMITS.complexity.timeComplexity.max,
+    'Big-O time complexity of the changed code (e.g., O(n log n)).'
+  ),
+  spaceComplexity: createBoundedString(
+    OUTPUT_LIMITS.complexity.spaceComplexity.min,
+    OUTPUT_LIMITS.complexity.spaceComplexity.max,
+    'Big-O space complexity of the changed code (e.g., O(n)).'
+  ),
+  explanation: createBoundedString(
+    OUTPUT_LIMITS.complexity.explanation.min,
+    OUTPUT_LIMITS.complexity.explanation.max,
+    'Detailed explanation of the complexity analysis, including key factors such as loop nesting and recursive calls.'
+  ),
+  potentialBottlenecks: createBoundedStringArray(
+    OUTPUT_LIMITS.complexity.bottleneck.min,
+    OUTPUT_LIMITS.complexity.bottleneck.max,
+    0,
+    OUTPUT_LIMITS.complexity.bottleneck.maxItems,
+    'Potential performance bottlenecks identified in the change.'
+  ),
+  isDegradation: z
+    .boolean()
+    .describe(
+      'True if the change introduces a performance degradation compared to the original code.'
+    ),
+});
+
+export const DetectApiBreakingResultSchema = z.strictObject({
+  hasBreakingChanges: z
+    .boolean()
+    .describe('True if any breaking changes were detected.'),
+  breakingChanges: z
+    .array(
+      z.strictObject({
+        element: createBoundedString(
+          OUTPUT_LIMITS.apiBreaking.element.min,
+          OUTPUT_LIMITS.apiBreaking.element.max,
+          'Name of the API element that changed (e.g., function signature, interface field, exported constant).'
+        ),
+        natureOfChange: createBoundedString(
+          OUTPUT_LIMITS.apiBreaking.natureOfChange.min,
+          OUTPUT_LIMITS.apiBreaking.natureOfChange.max,
+          'What changed and why it is breaking (e.g., removed parameter, changed return type, renamed export).'
+        ),
+        consumerImpact: createBoundedString(
+          OUTPUT_LIMITS.apiBreaking.consumerImpact.min,
+          OUTPUT_LIMITS.apiBreaking.consumerImpact.max,
+          'How existing consumers will be affected by this change.'
+        ),
+        suggestedMitigation: createBoundedString(
+          OUTPUT_LIMITS.apiBreaking.suggestedMitigation.min,
+          OUTPUT_LIMITS.apiBreaking.suggestedMitigation.max,
+          'Recommended mitigation strategy for consumers impacted by this breaking change.'
+        ),
+      })
+    )
+    .min(0)
+    .max(OUTPUT_LIMITS.apiBreaking.maxItems)
+    .describe(
+      'List of breaking changes detected. Empty when hasBreakingChanges is false.'
+    ),
 });

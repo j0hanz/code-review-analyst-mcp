@@ -151,3 +151,15 @@ export const GenerateTestPlanInputSchema = z.strictObject({
     'Maximum number of test cases to return.'
   ),
 });
+
+export const AnalyzeComplexityInputSchema = z.strictObject({
+  diff: createDiffSchema(
+    'Unified diff to analyze for time and space complexity.'
+  ),
+  language: createLanguageSchema('Primary language to bias analysis.'),
+});
+
+export const DetectApiBreakingInputSchema = z.strictObject({
+  diff: createDiffSchema('Unified diff to scan for API breaking changes.'),
+  language: createLanguageSchema('Primary language to bias analysis.'),
+});
