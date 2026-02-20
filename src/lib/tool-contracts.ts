@@ -1,0 +1,351 @@
+import {
+  DEFAULT_TIMEOUT_PRO_MS,
+  FLASH_MODEL,
+  FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
+  FLASH_THINKING_BUDGET,
+  FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+  PRO_COMPLEXITY_MAX_OUTPUT_TOKENS,
+  PRO_MODEL,
+  PRO_PATCH_MAX_OUTPUT_TOKENS,
+  PRO_REVIEW_MAX_OUTPUT_TOKENS,
+  PRO_THINKING_BUDGET,
+} from './model-config.js';
+
+const DEFAULT_TIMEOUT_FLASH_MS = 90_000;
+
+export interface ToolParameterContract {
+  name: string;
+  type: string;
+  required: boolean;
+  constraints: string;
+  description: string;
+}
+
+export interface ToolContract {
+  name: string;
+  purpose: string;
+  model: string;
+  timeoutMs: number;
+  thinkingBudget?: number;
+  maxOutputTokens: number;
+  params: readonly ToolParameterContract[];
+  outputShape: string;
+  gotchas: readonly string[];
+  crossToolFlow: readonly string[];
+  constraints?: readonly string[];
+}
+
+export const TOOL_CONTRACTS = [
+  {
+    name: 'analyze_pr_impact',
+    purpose:
+      'Assess severity, categories, breaking changes, and rollback complexity.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'repository',
+        type: 'string',
+        required: true,
+        constraints: '1-200 chars',
+        description: 'Repository identifier (org/repo).',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+    ],
+    outputShape:
+      '{severity, categories[], summary, breakingChanges[], affectedAreas[], rollbackComplexity}',
+    gotchas: [
+      'Flash triage tool optimized for speed.',
+      'Diff-only analysis (no full-file context).',
+    ],
+    crossToolFlow: [
+      'severity/categories feed triage and merge-gate decisions.',
+    ],
+  },
+  {
+    name: 'generate_review_summary',
+    purpose: 'Produce PR summary, risk rating, and merge recommendation.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'repository',
+        type: 'string',
+        required: true,
+        constraints: '1-200 chars',
+        description: 'Repository identifier (org/repo).',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+    ],
+    outputShape:
+      '{summary, overallRisk, keyChanges[], recommendation, stats{filesChanged, linesAdded, linesRemoved}}',
+    gotchas: [
+      'stats are computed locally from the diff.',
+      'Flash triage tool optimized for speed.',
+    ],
+    crossToolFlow: [
+      'Use before deep review to decide whether Pro analysis is needed.',
+    ],
+  },
+  {
+    name: 'inspect_code_quality',
+    purpose: 'Deep code review with optional full-file context.',
+    model: PRO_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    thinkingBudget: PRO_THINKING_BUDGET,
+    maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'repository',
+        type: 'string',
+        required: true,
+        constraints: '1-200 chars',
+        description: 'Repository identifier (org/repo).',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+      {
+        name: 'focusAreas',
+        type: 'string[]',
+        required: false,
+        constraints: '1-12 items, 2-80 chars each',
+        description: 'Focused inspection categories.',
+      },
+      {
+        name: 'maxFindings',
+        type: 'number',
+        required: false,
+        constraints: '1-25',
+        description: 'Post-generation cap applied to findings.',
+      },
+      {
+        name: 'files',
+        type: 'object[]',
+        required: false,
+        constraints: '1-20 files, 100K chars/file',
+        description: 'Optional full file content context.',
+      },
+    ],
+    outputShape:
+      '{summary, overallRisk, findings[], testsNeeded[], contextualInsights[], totalFindings}',
+    gotchas: [
+      'Combined diff + file context is bounded by MAX_CONTEXT_CHARS.',
+      'maxFindings caps output after generation.',
+    ],
+    crossToolFlow: [
+      'findings[].title -> suggest_search_replace.findingTitle',
+      'findings[].explanation -> suggest_search_replace.findingDetails',
+    ],
+    constraints: ['Context budget (diff + files) < 500K chars.'],
+  },
+  {
+    name: 'suggest_search_replace',
+    purpose: 'Generate verbatim search/replace fix blocks for one finding.',
+    model: PRO_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    thinkingBudget: PRO_THINKING_BUDGET,
+    maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff containing the target issue.',
+      },
+      {
+        name: 'findingTitle',
+        type: 'string',
+        required: true,
+        constraints: '3-160 chars',
+        description: 'Short finding title.',
+      },
+      {
+        name: 'findingDetails',
+        type: 'string',
+        required: true,
+        constraints: '10-3000 chars',
+        description: 'Detailed finding context.',
+      },
+    ],
+    outputShape: '{summary, blocks[], validationChecklist[]}',
+    gotchas: [
+      'One finding per call to avoid mixed patch intent.',
+      'search must be exact whitespace-preserving match.',
+    ],
+    crossToolFlow: [
+      'Consumes findings from inspect_code_quality for targeted fixes.',
+    ],
+    constraints: ['One finding per call; verbatim search match required.'],
+  },
+  {
+    name: 'generate_test_plan',
+    purpose: 'Generate prioritized test cases and coverage guidance.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    thinkingBudget: FLASH_THINKING_BUDGET,
+    maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'repository',
+        type: 'string',
+        required: true,
+        constraints: '1-200 chars',
+        description: 'Repository identifier (org/repo).',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+      {
+        name: 'testFramework',
+        type: 'string',
+        required: false,
+        constraints: '1-50 chars',
+        description: 'Framework hint (jest, vitest, pytest, node:test).',
+      },
+      {
+        name: 'maxTestCases',
+        type: 'number',
+        required: false,
+        constraints: '1-30',
+        description: 'Post-generation cap applied to test cases.',
+      },
+    ],
+    outputShape: '{summary, testCases[], coverageSummary}',
+    gotchas: ['maxTestCases caps output after generation.'],
+    crossToolFlow: [
+      'Pair with inspect_code_quality to validate high-risk paths.',
+    ],
+  },
+  {
+    name: 'analyze_time_space_complexity',
+    purpose:
+      'Analyze Big-O complexity and detect degradations in changed code.',
+    model: PRO_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    thinkingBudget: PRO_THINKING_BUDGET,
+    maxOutputTokens: PRO_COMPLEXITY_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+    ],
+    outputShape:
+      '{timeComplexity, spaceComplexity, explanation, potentialBottlenecks[], isDegradation}',
+    gotchas: ['Analyzes only changed code visible in the diff.'],
+    crossToolFlow: ['Use for algorithmic/performance-sensitive changes.'],
+  },
+  {
+    name: 'detect_api_breaking_changes',
+    purpose: 'Detect breaking API/interface changes in a diff.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    params: [
+      {
+        name: 'diff',
+        type: 'string',
+        required: true,
+        constraints: '10-120K chars',
+        description: 'Unified diff text.',
+      },
+      {
+        name: 'language',
+        type: 'string',
+        required: false,
+        constraints: '2-32 chars',
+        description: 'Primary language hint.',
+      },
+    ],
+    outputShape: '{hasBreakingChanges, breakingChanges[]}',
+    gotchas: ['Targets public API contracts over internal refactors.'],
+    crossToolFlow: ['Run before merge for API-surface-sensitive changes.'],
+  },
+] as const satisfies readonly ToolContract[];
+
+const TOOL_CONTRACTS_BY_NAME = new Map<string, ToolContract>(
+  TOOL_CONTRACTS.map((contract) => [contract.name, contract])
+);
+
+export function getToolContracts(): readonly ToolContract[] {
+  return TOOL_CONTRACTS;
+}
+
+export function getToolContract(toolName: string): ToolContract | undefined {
+  return TOOL_CONTRACTS_BY_NAME.get(toolName);
+}
+
+export function requireToolContract(toolName: string): ToolContract {
+  const contract = getToolContract(toolName);
+  if (contract) {
+    return contract;
+  }
+
+  throw new Error(`Unknown tool contract: ${toolName}`);
+}
+
+export function getToolContractNames(): string[] {
+  return TOOL_CONTRACTS.map((contract) => contract.name);
+}

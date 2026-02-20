@@ -5,11 +5,7 @@ import {
   extractChangedPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import {
-  DEFAULT_TIMEOUT_PRO_MS,
-  PRO_MODEL,
-  PRO_THINKING_BUDGET,
-} from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
@@ -20,6 +16,7 @@ CRITICAL: 'search' must be verbatim — character-exact whitespace and indentati
 Never modify code outside the fix scope. If the target cannot be located precisely, omit the block rather than guessing.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('suggest_search_replace');
 
 function formatPatchCount(count: number): string {
   return `${count} ${count === 1 ? 'patch' : 'patches'}`;
@@ -52,9 +49,12 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',
-    model: PRO_MODEL,
-    thinkingBudget: PRO_THINKING_BUDGET,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
+    ...(TOOL_CONTRACT.thinkingBudget !== undefined
+      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+      : undefined),
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => formatPatchCount(result.blocks.length),
     formatOutput: (result) => {

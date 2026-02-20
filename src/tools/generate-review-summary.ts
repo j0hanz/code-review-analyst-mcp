@@ -7,7 +7,7 @@ import {
   computeDiffStatsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
@@ -15,6 +15,7 @@ import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
 const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
   stats: true,
 });
+const TOOL_CONTRACT = requireToolContract('generate_review_summary');
 const SYSTEM_INSTRUCTION = `
 You are a senior code reviewer. Summarize this PR with precision: risk level, key changes, and a definitive merge recommendation (merge, squash, or block).
 Be specific — name the exact logic changed, not generic patterns.
@@ -67,7 +68,9 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
     errorCode: 'E_REVIEW_SUMMARY',
-    model: FLASH_MODEL,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
     transformResult: (input, result) => {

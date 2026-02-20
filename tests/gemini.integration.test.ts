@@ -104,6 +104,27 @@ test('generateStructuredJson retries transient failures and succeeds', async () 
   assert.deepEqual(result, { summary: 'recovered' });
 });
 
+test('generateStructuredJson cancels during retry backoff sleep', async () => {
+  const generateContentMock = setMockClient(async () => {
+    throw { status: 503, message: 'service unavailable' };
+  });
+
+  const controller = new AbortController();
+  const pending = generateStructuredJson({
+    prompt: 'user prompt',
+    responseSchema: { type: 'object' },
+    maxRetries: 1,
+    signal: controller.signal,
+  });
+
+  setTimeout(() => {
+    controller.abort();
+  }, 25);
+
+  await assert.rejects(pending, /Gemini request was cancelled\./);
+  assert.equal(generateContentMock.mock.calls.length, 1);
+});
+
 test('generateStructuredJson waits for an available slot at concurrency limit', async () => {
   let inFlight = 0;
   let maxInFlight = 0;

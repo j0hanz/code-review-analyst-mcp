@@ -3,6 +3,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { z } from 'zod';
 
+import {
+  getToolContract,
+  getToolContractNames,
+} from '../lib/tool-contracts.js';
+
 const HELP_PROMPT_NAME = 'get-help';
 const HELP_PROMPT_TITLE = 'Get Help';
 const HELP_PROMPT_DESCRIPTION = 'Server instructions.';
@@ -11,16 +16,7 @@ const REVIEW_GUIDE_PROMPT_NAME = 'review-guide';
 const REVIEW_GUIDE_PROMPT_TITLE = 'Review Guide';
 const REVIEW_GUIDE_PROMPT_DESCRIPTION = 'Workflow guide for tool/focus area.';
 
-const TOOLS = [
-  'analyze_pr_impact',
-  'generate_review_summary',
-  'inspect_code_quality',
-  'suggest_search_replace',
-  'generate_test_plan',
-  'analyze_time_space_complexity',
-  'detect_api_breaking_changes',
-] as const;
-type ToolName = (typeof TOOLS)[number];
+const TOOLS = getToolContractNames();
 
 const FOCUS_AREAS = [
   'security',
@@ -32,37 +28,6 @@ const FOCUS_AREAS = [
 type FocusArea = (typeof FOCUS_AREAS)[number];
 const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
 const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
-
-const TOOL_GUIDES: Record<ToolName, string> = {
-  analyze_pr_impact:
-    'Tool: analyze_pr_impact\n' +
-    'Model: Flash. Output: severity, categories, breakingChanges, rollbackComplexity.\n' +
-    'Use: Triage, breaking change check.',
-  generate_review_summary:
-    'Tool: generate_review_summary\n' +
-    'Model: Flash. Output: summary, risk, recommendations, stats.\n' +
-    'Use: Triage, merge gate.',
-  inspect_code_quality:
-    'Tool: inspect_code_quality\n' +
-    'Model: Pro (Thinking). Output: findings, testsNeeded, overallRisk.\n' +
-    'Use: Deep review. Feed findings to suggest_search_replace.',
-  suggest_search_replace:
-    'Tool: suggest_search_replace\n' +
-    'Model: Pro (Thinking). Output: patch blocks.\n' +
-    'Use: Fix generation. One finding per call. Verbatim match required.',
-  generate_test_plan:
-    'Tool: generate_test_plan\n' +
-    'Model: Flash. Output: test cases (pseudoCode), priority.\n' +
-    'Use: Test planning. Finding-aware targeting.',
-  analyze_time_space_complexity:
-    'Tool: analyze_time_space_complexity\n' +
-    'Model: Flash. Output: time/space complexity, degradation check.\n' +
-    'Use: Algorithm audit.',
-  detect_api_breaking_changes:
-    'Tool: detect_api_breaking_changes\n' +
-    'Model: Flash. Output: breaking changes list, mitigation.\n' +
-    'Use: API check before merge.',
-};
 
 const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   security: 'Focus: Injection, auth, crypto, OWASP.',
@@ -95,11 +60,17 @@ function getGuide<T extends string>(
 }
 
 function getToolGuide(tool: string): string {
-  return getGuide(
-    TOOL_GUIDES,
-    tool,
-    (toolName) => `Use \`${toolName}\` to analyze your code changes.`
-  );
+  const contract = getToolContract(tool);
+  if (!contract) {
+    return `Use \`${tool}\` to analyze your code changes.`;
+  }
+
+  const { thinkingBudget } = contract;
+  const modelLine =
+    thinkingBudget !== undefined
+      ? `Model: ${contract.model} (thinking budget ${thinkingBudget}, output cap ${contract.maxOutputTokens}).`
+      : `Model: ${contract.model} (output cap ${contract.maxOutputTokens}).`;
+  return `Tool: ${contract.name}\n${modelLine}\nOutput: ${contract.outputShape}\nUse: ${contract.purpose}`;
 }
 
 function getFocusAreaGuide(focusArea: string): string {

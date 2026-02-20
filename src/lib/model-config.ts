@@ -8,6 +8,14 @@ const THINKING_BUDGET_TOKENS = {
   flash: 8_192,
   pro: 16_384,
 } as const;
+
+const OUTPUT_TOKEN_BUDGET = {
+  flashTriage: 1_024,
+  flashTestPlan: 4_096,
+  proReview: 8_192,
+  proPatch: 4_096,
+  proComplexity: 2_048,
+} as const;
 const DEFAULT_DETECT_HINT = 'detect';
 
 /** Thinking budget (tokens) for Flash model thinking tasks (test plans, search/replace). */
@@ -15,6 +23,23 @@ export const FLASH_THINKING_BUDGET = THINKING_BUDGET_TOKENS.flash;
 
 /** Thinking budget (tokens) for Pro model deep-analysis tasks (code quality inspection). */
 export const PRO_THINKING_BUDGET = THINKING_BUDGET_TOKENS.pro;
+
+/** Output cap for Flash triage tools (impact, summary, API breaking). */
+export const FLASH_TRIAGE_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashTriage;
+
+/** Output cap for test-plan generation (includes pseudocode snippets). */
+export const FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS =
+  OUTPUT_TOKEN_BUDGET.flashTestPlan;
+
+/** Output cap for Pro deep review findings. */
+export const PRO_REVIEW_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.proReview;
+
+/** Output cap for Pro search/replace remediation blocks. */
+export const PRO_PATCH_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.proPatch;
+
+/** Output cap for Pro complexity analysis reports. */
+export const PRO_COMPLEXITY_MAX_OUTPUT_TOKENS =
+  OUTPUT_TOKEN_BUDGET.proComplexity;
 
 /** Extended timeout for Pro model calls (ms). Pro thinks longer than Flash. */
 export const DEFAULT_TIMEOUT_PRO_MS = 120_000;

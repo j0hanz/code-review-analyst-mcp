@@ -5,7 +5,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
@@ -16,6 +16,7 @@ Classify severity, categories, breaking changes, affected areas, and rollback co
 Never infer behavior not visible in the diff.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('analyze_pr_impact');
 
 function formatLanguageSegment(language: string | undefined): string {
   return language ? `\nLanguage: ${language}` : '';
@@ -51,7 +52,9 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
     errorCode: 'E_ANALYZE_IMPACT',
-    model: FLASH_MODEL,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) =>

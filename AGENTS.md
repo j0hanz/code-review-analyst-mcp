@@ -24,7 +24,9 @@
   - `src/lib/` — Shared utilities: Gemini client, tool factory, error helpers, diff parsing, budget validation
   - `src/prompts/` — MCP prompt registration (`get-help`, `review-guide`)
   - `src/resources/` — MCP resource registration (`internal://instructions`)
-  - `src/instructions.md` — Server instructions (copied to `dist/` at build time)
+  - `src/lib/tool-contracts.ts` — Canonical typed tool metadata used to generate prompts/resources/instructions
+  - `src/resources/instructions.ts` — Runtime instruction builder from typed tool contracts
+  - `src/instructions.md` — Build artifact placeholder (runtime instructions are generated in code)
 - `tests/` — Test files using `node:test` (see `tsconfig.test.json`, `scripts/tasks.mjs`)
 - `scripts/tasks.mjs` — Custom build orchestrator (clean, compile, validate, copy assets, test runner)
 - `.github/workflows/release.yml` — Release CI: lint, type-check, test, build, publish to npm/Docker/MCP Registry

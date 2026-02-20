@@ -1,11 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  DEFAULT_TIMEOUT_PRO_MS,
-  PRO_MODEL,
-  PRO_THINKING_BUDGET,
-} from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzeComplexityInputSchema } from '../schemas/inputs.js';
 import { AnalyzeComplexityResultSchema } from '../schemas/outputs.js';
@@ -16,6 +12,7 @@ Detect if the change introduces a performance degradation compared to the origin
 Identify potential bottlenecks arising from loop nesting, recursive calls, and auxiliary data structure usage.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('analyze_time_space_complexity');
 
 function formatOptionalLine(label: string, value: string | undefined): string {
   return value === undefined ? '' : `\n${label}: ${value}`;
@@ -39,9 +36,12 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     fullInputSchema: AnalyzeComplexityInputSchema,
     resultSchema: AnalyzeComplexityResultSchema,
     errorCode: 'E_ANALYZE_COMPLEXITY',
-    model: PRO_MODEL,
-    thinkingBudget: PRO_THINKING_BUDGET,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
+    ...(TOOL_CONTRACT.thinkingBudget !== undefined
+      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+      : undefined),
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) =>
       result.isDegradation

@@ -14,6 +14,10 @@ import type { GoogleGenAI } from '@google/genai';
 import { resetMaxContextCharsCacheForTesting } from '../src/lib/context-budget.js';
 import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff-budget.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
+import {
+  FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+  PRO_REVIEW_MAX_OUTPUT_TOKENS,
+} from '../src/lib/model-config.js';
 import { createServer } from '../src/server.js';
 
 const SAMPLE_DIFF = `diff --git a/src/index.ts b/src/index.ts
@@ -355,4 +359,69 @@ test('inspect_code_quality returns budget error when context chars exceeded', as
     delete process.env.MAX_CONTEXT_CHARS;
     resetMaxContextCharsCacheForTesting();
   }
+});
+
+test('tool-specific maxOutputTokens are passed to Gemini calls', async () => {
+  const observedMaxOutputTokens: number[] = [];
+  setMockClient(async (...args: unknown[]) => {
+    const [request] = args as [{ config: { maxOutputTokens?: number } }];
+    observedMaxOutputTokens.push(request.config.maxOutputTokens ?? -1);
+
+    return {
+      text: JSON.stringify({
+        severity: 'low',
+        categories: ['bug_fix'],
+        summary: 'Minor non-breaking bug fix.',
+        breakingChanges: [],
+        affectedAreas: ['src/index.ts'],
+        rollbackComplexity: 'trivial',
+      }),
+    };
+  });
+
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    await callToolAsTask(client, 'analyze_pr_impact', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
+    });
+
+    setMockClient(async (...args: unknown[]) => {
+      const [request] = args as [{ config: { maxOutputTokens?: number } }];
+      observedMaxOutputTokens.push(request.config.maxOutputTokens ?? -1);
+
+      return {
+        text: JSON.stringify({
+          summary: 'Found one issue.',
+          overallRisk: 'high',
+          findings: [
+            {
+              severity: 'high',
+              file: 'src/a.ts',
+              line: 10,
+              title: 'Issue A',
+              explanation: 'A'.repeat(20),
+              recommendation: 'A'.repeat(20),
+            },
+          ],
+          testsNeeded: [],
+          contextualInsights: [],
+        }),
+      };
+    });
+
+    await callToolAsTask(client, 'inspect_code_quality', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
+    });
+  } finally {
+    await close();
+  }
+
+  assert.deepEqual(observedMaxOutputTokens, [
+    FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    PRO_REVIEW_MAX_OUTPUT_TOKENS,
+  ]);
 });

@@ -1,17 +1,11 @@
 import { createCachedEnvInt } from '../lib/env-config.js';
-import {
-  DEFAULT_TIMEOUT_PRO_MS,
-  FLASH_MODEL,
-  FLASH_THINKING_BUDGET,
-  PRO_MODEL,
-  PRO_THINKING_BUDGET,
-} from '../lib/model-config.js';
+import { FLASH_MODEL } from '../lib/model-config.js';
+import { getToolContracts } from '../lib/tool-contracts.js';
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
 const DEFAULT_MAX_CONCURRENT_CALLS = 10;
 const DEFAULT_CONCURRENT_WAIT_MS = 2_000;
-const DEFAULT_TIMEOUT_MS = 90_000;
 const DEFAULT_SAFETY_THRESHOLD = 'BLOCK_NONE';
 
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
@@ -63,6 +57,11 @@ export function buildServerConfig(): string {
   const concurrentWaitMs = concurrentWaitConfig.get();
   const defaultModel = getModelOverride();
   const safetyThreshold = getSafetyThreshold();
+  const toolRows = getToolContracts()
+    .map((contract) => {
+      return `| \`${contract.name}\` | \`${contract.model}\` | ${formatThinkingBudget(contract.thinkingBudget)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
+    })
+    .join('\n');
 
   return `# Server Configuration
 
@@ -79,15 +78,9 @@ export function buildServerConfig(): string {
 
 Default model: \`${defaultModel}\` (override with \`GEMINI_MODEL\`)
 
-| Tool | Model | Thinking Budget | Timeout |
-|------|-------|----------------|---------|
-| \`analyze_pr_impact\` | \`${FLASH_MODEL}\` | ${formatThinkingBudget(undefined)} | ${formatTimeout(DEFAULT_TIMEOUT_MS)} |
-| \`generate_review_summary\` | \`${FLASH_MODEL}\` | ${formatThinkingBudget(undefined)} | ${formatTimeout(DEFAULT_TIMEOUT_MS)} |
-| \`inspect_code_quality\` | \`${PRO_MODEL}\` | ${formatThinkingBudget(PRO_THINKING_BUDGET)} | ${formatTimeout(DEFAULT_TIMEOUT_PRO_MS)} |
-| \`suggest_search_replace\` | \`${PRO_MODEL}\` | ${formatThinkingBudget(PRO_THINKING_BUDGET)} | ${formatTimeout(DEFAULT_TIMEOUT_PRO_MS)} |
-| \`generate_test_plan\` | \`${FLASH_MODEL}\` | ${formatThinkingBudget(FLASH_THINKING_BUDGET)} | ${formatTimeout(DEFAULT_TIMEOUT_MS)} |
-| \`analyze_time_space_complexity\` | \`${PRO_MODEL}\` | ${formatThinkingBudget(PRO_THINKING_BUDGET)} | ${formatTimeout(DEFAULT_TIMEOUT_PRO_MS)} |
-| \`detect_api_breaking_changes\` | \`${FLASH_MODEL}\` | ${formatThinkingBudget(undefined)} | ${formatTimeout(DEFAULT_TIMEOUT_MS)} |
+| Tool | Model | Thinking Budget | Timeout | Max Output Tokens |
+|------|-------|----------------|---------|-------------------|
+${toolRows}
 
 ## Safety
 

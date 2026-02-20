@@ -6,11 +6,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import {
-  DEFAULT_TIMEOUT_PRO_MS,
-  PRO_MODEL,
-  PRO_THINKING_BUDGET,
-} from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import {
@@ -31,6 +27,7 @@ You are a principal engineer performing a deep code review. Identify bugs, secur
 Ignore style issues unless they cause runtime risk. Prioritize correctness and failure modes.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('inspect_code_quality');
 
 export function sanitizePath(path: string): string {
   return path.replace(PATH_ESCAPE_PATTERN, (match) => {
@@ -116,9 +113,12 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     resultSchema: CodeQualityOutputSchema,
     geminiSchema: CodeQualityResultSchema,
     errorCode: 'E_INSPECT_QUALITY',
-    model: PRO_MODEL,
-    thinkingBudget: PRO_THINKING_BUDGET,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
+    ...(TOOL_CONTRACT.thinkingBudget !== undefined
+      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+      : undefined),
     progressContext: (input) => {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';

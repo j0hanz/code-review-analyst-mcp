@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
 import { DetectApiBreakingResultSchema } from '../schemas/outputs.js';
@@ -12,6 +12,7 @@ A breaking change is any modification that would require existing callers or con
 Classify each breaking change with its affected element, nature of change, consumer impact, and suggested mitigation.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('detect_api_breaking_changes');
 
 function formatOptionalLine(label: string, value: string | undefined): string {
   return value === undefined ? '' : `\n${label}: ${value}`;
@@ -35,7 +36,9 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     fullInputSchema: DetectApiBreakingInputSchema,
     resultSchema: DetectApiBreakingResultSchema,
     errorCode: 'E_DETECT_API_BREAKING',
-    model: FLASH_MODEL,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) =>
       `${result.breakingChanges.length} breaking change(s) found`,

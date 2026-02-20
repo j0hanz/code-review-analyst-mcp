@@ -5,7 +5,7 @@ import {
   computeDiffStatsAndPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { FLASH_MODEL, FLASH_THINKING_BUDGET } from '../lib/model-config.js';
+import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
@@ -16,6 +16,7 @@ Prioritize: negative cases, edge cases, logical branches, integration points.
 Every test case must target a specific behavior visible in the diff.
 Return strict JSON only.
 `;
+const TOOL_CONTRACT = requireToolContract('generate_test_plan');
 
 function formatOptionalLine(
   label: string,
@@ -59,8 +60,12 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     fullInputSchema: GenerateTestPlanInputSchema,
     resultSchema: TestPlanResultSchema,
     errorCode: 'E_GENERATE_TEST_PLAN',
-    model: FLASH_MODEL,
-    thinkingBudget: FLASH_THINKING_BUDGET,
+    model: TOOL_CONTRACT.model,
+    timeoutMs: TOOL_CONTRACT.timeoutMs,
+    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
+    ...(TOOL_CONTRACT.thinkingBudget !== undefined
+      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+      : undefined),
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutcome: (result) => `${result.testCases.length} test cases`,
     formatOutput: (result) =>

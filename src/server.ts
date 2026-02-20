@@ -3,12 +3,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { readFileSync } from 'node:fs';
 import { findPackageJSON } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { getErrorMessage } from './lib/errors.js';
 import { registerAllPrompts } from './prompts/index.js';
 import { registerAllResources } from './resources/index.js';
+import { buildServerInstructions } from './resources/instructions.js';
 import { registerAllTools } from './tools/index.js';
 
 interface PackageJsonMetadata {
@@ -16,12 +15,8 @@ interface PackageJsonMetadata {
 }
 
 const SERVER_NAME = 'code-review-analyst';
-const INSTRUCTIONS_FILENAME = 'instructions.md';
-const INSTRUCTIONS_FALLBACK = '(Instructions failed to load)';
 const UTF8_ENCODING = 'utf8';
 const PACKAGE_VERSION_FIELD = 'version';
-const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
-const INSTRUCTIONS_PATH = join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
 const VERSION_FIELD_ERROR = 'missing or invalid version field';
 
 const SERVER_CAPABILITIES = {
@@ -98,18 +93,7 @@ function loadVersion(): string {
 
 const SERVER_VERSION = loadVersion();
 
-function loadInstructions(): string {
-  try {
-    return readUtf8File(INSTRUCTIONS_PATH);
-  } catch (error: unknown) {
-    process.emitWarning(
-      `Failed to load ${INSTRUCTIONS_FILENAME}: ${getErrorMessage(error)}`
-    );
-    return INSTRUCTIONS_FALLBACK;
-  }
-}
-
-const SERVER_INSTRUCTIONS = loadInstructions();
+const SERVER_INSTRUCTIONS = buildServerInstructions();
 
 export interface ServerHandle {
   server: McpServer;

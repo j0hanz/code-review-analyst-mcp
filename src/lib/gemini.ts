@@ -17,6 +17,7 @@ let _defaultModel: string | undefined;
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
+const GEMINI_INCLUDE_THOUGHTS_ENV_VAR = 'GEMINI_INCLUDE_THOUGHTS';
 const GEMINI_API_KEY_ENV_VAR = 'GEMINI_API_KEY';
 const GOOGLE_API_KEY_ENV_VAR = 'GOOGLE_API_KEY';
 type GeminiOnLog = GeminiStructuredRequest['onLog'];
@@ -35,6 +36,7 @@ const RETRY_DELAY_BASE_MS = 300;
 const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
+const DEFAULT_INCLUDE_THOUGHTS = false;
 const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
 const DIGITS_ONLY_PATTERN = /^\d+$/;
@@ -81,6 +83,8 @@ const SAFETY_THRESHOLD_BY_NAME = {
 
 let cachedSafetyThresholdEnv: string | undefined;
 let cachedSafetyThreshold = DEFAULT_SAFETY_THRESHOLD;
+let cachedIncludeThoughtsEnv: string | undefined;
+let cachedIncludeThoughts = DEFAULT_INCLUDE_THOUGHTS;
 const safetySettingsCache = new Map<
   HarmBlockThreshold,
   { category: HarmCategory; threshold: HarmBlockThreshold }[]
@@ -122,11 +126,61 @@ function parseSafetyThreshold(
 }
 
 function getThinkingConfig(
-  thinkingBudget: number | undefined
-): { includeThoughts: true; thinkingBudget: number } | undefined {
-  return thinkingBudget !== undefined
-    ? { includeThoughts: true, thinkingBudget }
-    : undefined;
+  thinkingBudget: number | undefined,
+  includeThoughts: boolean
+): { thinkingBudget: number; includeThoughts?: true } | undefined {
+  if (thinkingBudget === undefined) {
+    return undefined;
+  }
+
+  if (includeThoughts) {
+    return { includeThoughts: true, thinkingBudget };
+  }
+
+  return { thinkingBudget };
+}
+
+function parseBooleanEnv(value: string): boolean | undefined {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  if (
+    normalized === '1' ||
+    normalized === 'true' ||
+    normalized === 'yes' ||
+    normalized === 'on'
+  ) {
+    return true;
+  }
+
+  if (
+    normalized === '0' ||
+    normalized === 'false' ||
+    normalized === 'no' ||
+    normalized === 'off'
+  ) {
+    return false;
+  }
+
+  return undefined;
+}
+
+function getDefaultIncludeThoughts(): boolean {
+  const value = process.env[GEMINI_INCLUDE_THOUGHTS_ENV_VAR];
+  if (value === cachedIncludeThoughtsEnv) {
+    return cachedIncludeThoughts;
+  }
+
+  cachedIncludeThoughtsEnv = value;
+  if (!value) {
+    cachedIncludeThoughts = DEFAULT_INCLUDE_THOUGHTS;
+    return cachedIncludeThoughts;
+  }
+
+  cachedIncludeThoughts = parseBooleanEnv(value) ?? DEFAULT_INCLUDE_THOUGHTS;
+  return cachedIncludeThoughts;
 }
 
 function getSafetySettings(
@@ -377,7 +431,12 @@ function buildGenerationConfig(
   request: GeminiStructuredRequest,
   abortSignal: AbortSignal
 ): GenerateContentConfig {
-  const thinkingConfig = getThinkingConfig(request.thinkingBudget);
+  const includeThoughts =
+    request.includeThoughts ?? getDefaultIncludeThoughts();
+  const thinkingConfig = getThinkingConfig(
+    request.thinkingBudget,
+    includeThoughts
+  );
   const config: GenerateContentConfig = {
     temperature: request.temperature ?? 0.2,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -490,7 +549,8 @@ async function executeAttempt(
 async function waitBeforeRetry(
   attempt: number,
   error: unknown,
-  onLog: GeminiOnLog
+  onLog: GeminiOnLog,
+  requestSignal?: AbortSignal
 ): Promise<void> {
   const delayMs = getRetryDelayMs(attempt);
   const reason = getErrorMessage(error);
@@ -504,7 +564,25 @@ async function waitBeforeRetry(
     },
   });
 
-  await sleep(delayMs, undefined, SLEEP_UNREF_OPTIONS);
+  if (requestSignal?.aborted) {
+    throw new Error('Gemini request was cancelled.');
+  }
+
+  try {
+    await sleep(
+      delayMs,
+      undefined,
+      requestSignal
+        ? { ...SLEEP_UNREF_OPTIONS, signal: requestSignal }
+        : SLEEP_UNREF_OPTIONS
+    );
+  } catch (sleepError: unknown) {
+    if (requestSignal?.aborted) {
+      throw new Error('Gemini request was cancelled.');
+    }
+
+    throw sleepError;
+  }
 }
 
 async function throwGeminiFailure(
@@ -547,7 +625,7 @@ async function runWithRetries(
         break;
       }
 
-      await waitBeforeRetry(attempt, error, onLog);
+      await waitBeforeRetry(attempt, error, onLog, request.signal);
     }
   }
 

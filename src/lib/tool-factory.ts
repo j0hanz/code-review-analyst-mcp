@@ -35,7 +35,7 @@ const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
-const MAX_SCHEMA_RETRIES = 1;
+const MAX_SCHEMA_RETRIES = 0;
 
 type ProgressToken = string | number;
 
@@ -106,8 +106,14 @@ export interface StructuredToolTaskConfig<
   /** Optional thinking budget in tokens. */
   thinkingBudget?: number;
 
-  /** Optional timeout in ms for the Gemini call. Defaults to 60,000 ms. Use DEFAULT_TIMEOUT_PRO_MS for Pro model calls. */
+  /** Optional timeout in ms for the Gemini call. Defaults to 90,000 ms. Use DEFAULT_TIMEOUT_PRO_MS for Pro model calls. */
   timeoutMs?: number;
+
+  /** Optional max output tokens for Gemini. */
+  maxOutputTokens?: number;
+
+  /** Optional opt-in to Gemini thought output. Defaults to false. */
+  includeThoughts?: boolean;
 
   /** Optional formatter for human-readable text output. */
   formatOutput?: (result: TFinal) => string;
@@ -165,6 +171,12 @@ function createGenerationRequest<
   }
   if (config.timeoutMs !== undefined) {
     request.timeoutMs = config.timeoutMs;
+  }
+  if (config.maxOutputTokens !== undefined) {
+    request.maxOutputTokens = config.maxOutputTokens;
+  }
+  if (config.includeThoughts !== undefined) {
+    request.includeThoughts = config.includeThoughts;
   }
   if (signal !== undefined) {
     request.signal = signal;
@@ -512,7 +524,7 @@ export function registerStructuredToolTask<
             );
 
             const promptParts = config.buildPrompt(inputRecord);
-            let { prompt } = promptParts;
+            const { prompt } = promptParts;
             const { systemInstruction } = promptParts;
 
             const modelLabel = friendlyModelName(config.model);
@@ -563,8 +575,6 @@ export function registerStructuredToolTask<
                   event: 'schema_validation_failed',
                   details: { attempt, error: errorMessage },
                 });
-
-                prompt += `\n\nCRITICAL: The previous response was invalid JSON schema. Error: ${errorMessage}. Please fix and return valid JSON matching the schema.`;
               }
             }
 
