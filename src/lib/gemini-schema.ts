@@ -1,9 +1,3 @@
-/**
- * JSON Schema property keys that represent value-range or count constraints.
- * These are stripped when generating relaxed schemas for Gemini structured
- * output so the model is not over-constrained by bounds that the
- * application-level result schema enforces after parsing.
- */
 const CONSTRAINT_KEYS = new Set([
   'minLength',
   'maxLength',

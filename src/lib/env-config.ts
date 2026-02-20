@@ -12,10 +12,7 @@ function parsePositiveInteger(value: string): number | undefined {
   return parsed;
 }
 
-/**
- * Creates a lazy-cached integer from an environment variable.
- * The first call to get() reads and caches the env var. reset() clears the cache.
- */
+/// Creates a cached integer value from an environment variable, with a default fallback.
 export function createCachedEnvInt(
   envVar: string,
   defaultValue: number

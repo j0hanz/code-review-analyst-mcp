@@ -155,10 +155,7 @@ export function computeDiffStats(
   return computeDiffStatsFromFiles(parseDiffFiles(diff));
 }
 
-/**
- * Format a compact, human-readable file summary for prompt injection.
- * Example: "src/foo.ts (+12 -3), src/bar.ts (+0 -5) [2 files, +12 -8]"
- */
+/** Generate human-readable summary of changed files and line counts. */
 export function formatFileSummary(files: ParsedFile[]): string {
   return computeDiffStatsAndSummaryFromFiles(files).summary;
 }
