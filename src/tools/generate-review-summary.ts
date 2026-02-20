@@ -7,7 +7,7 @@ import {
   computeDiffStatsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
+import { FLASH_MODEL } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
@@ -16,10 +16,8 @@ const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
   stats: true,
 });
 const SYSTEM_INSTRUCTION = `
-You are a critical senior code reviewer.
-Summarize the changes in this pull request with high precision and provide a strict risk assessment.
-Identify key changes and provide a definitive merge recommendation (merge, squash, or block).
-Avoid generic statements; focus on the specific logic modified.
+You are a senior code reviewer. Summarize this PR with precision: risk level, key changes, and a definitive merge recommendation (merge, squash, or block).
+Be specific — name the exact logic changed, not generic patterns.
 Return strict JSON only.
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
@@ -72,9 +70,9 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
       `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
     buildPrompt: (input) => {
       const stats = getCachedStats(input);
+      const lang = input.language ? `\nLanguage: ${input.language}` : '';
       const prompt = `
-Repository: ${input.repository}
-Language: ${input.language ?? DEFAULT_LANGUAGE}
+Repository: ${input.repository}${lang}
 Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
 
 Diff:

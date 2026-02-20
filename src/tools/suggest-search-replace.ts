@@ -15,11 +15,9 @@ import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a precise code remediation expert.
-Generate search-and-replace blocks to fix the described issue.
-CRITICAL: The 'search' block must be an EXACT VERBATIM match of the existing code, including all whitespace and indentation.
-Do not modify code outside the scope of the fix.
-If the exact code cannot be located, do not guess.
+You are a code remediation expert. Generate minimal search-and-replace blocks to fix exactly the described issue.
+CRITICAL: 'search' must be verbatim — character-exact whitespace and indentation.
+Never modify code outside the fix scope. If the target cannot be located precisely, omit the block rather than guessing.
 Return strict JSON only.
 `;
 
@@ -40,7 +38,11 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
       const count = result.blocks.length;
       return `${count} ${count === 1 ? 'patch' : 'patches'}`;
     },
-    formatOutput: (result) => `Search/Replace Suggestion: ${result.summary}`,
+    formatOutput: (result) => {
+      const count = result.blocks.length;
+      const patches = count === 1 ? '1 patch' : `${count} patches`;
+      return `${result.summary}\n${patches} • Checklist: ${result.validationChecklist.join(' | ')}`;
+    },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);
       const paths = extractChangedPathsFromFiles(files);

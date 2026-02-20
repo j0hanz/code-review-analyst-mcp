@@ -13,15 +13,6 @@ const OUTPUT_LIMITS = {
     findingsMax: 50,
     testsNeeded: { minItems: 0, maxItems: 20, itemMin: 1, itemMax: 300 },
   },
-  riskScoreResult: {
-    score: { min: 0, max: 100 },
-    rationale: { minItems: 1, maxItems: 20, itemMin: 1, itemMax: 500 },
-  },
-  patchSuggestionResult: {
-    summary: { min: 1, max: 1_000 },
-    patch: { min: 1, max: 60_000 },
-    checklist: { minItems: 1, maxItems: 20, itemMin: 1, itemMax: 300 },
-  },
 } as const;
 
 function createBoundedString(
@@ -97,12 +88,12 @@ export const ReviewFindingSchema = z.strictObject({
   explanation: createBoundedString(
     OUTPUT_LIMITS.reviewFinding.text.min,
     OUTPUT_LIMITS.reviewFinding.text.max,
-    'Why this issue matters.'
+    'What the issue is and its runtime, security, or correctness impact.'
   ),
   recommendation: createBoundedString(
     OUTPUT_LIMITS.reviewFinding.text.min,
     OUTPUT_LIMITS.reviewFinding.text.max,
-    'Concrete fix recommendation.'
+    'Concrete fix — name the exact code, function, or pattern to change.'
   ),
 });
 
@@ -208,7 +199,7 @@ export const CodeQualityResultSchema = z.strictObject({
     500,
     0,
     5,
-    'Insights only possible with full file context that diff alone cannot reveal.'
+    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
   ),
 });
 
@@ -238,7 +229,7 @@ export const CodeQualityOutputSchema = z.object({
     500,
     0,
     5,
-    'Insights only possible with full file context that diff alone cannot reveal.'
+    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
   ),
   totalFindings: z
     .number()
@@ -256,17 +247,19 @@ export const SearchReplaceBlockSchema = z.strictObject({
     .string()
     .min(1)
     .max(5000)
-    .describe('Exact verbatim text to find in the file.'),
+    .describe(
+      'Verbatim source text to find — character-exact including all whitespace and indentation.'
+    ),
   replace: z
     .string()
     .min(0)
     .max(5000)
-    .describe('Replacement text (empty string = deletion).'),
+    .describe('Replacement text. Use empty string to delete.'),
   explanation: z
     .string()
     .min(1)
     .max(500)
-    .describe('Why this change fixes the finding.'),
+    .describe('Why this patch fixes the finding.'),
 });
 
 export const SearchReplaceResultSchema = z.strictObject({

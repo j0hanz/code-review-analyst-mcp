@@ -5,17 +5,15 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
+import { FLASH_MODEL } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a rigorous technical change analyst.
-Your goal is to objectively identify facts about what changed and their specific downstream effects.
-Analyze the provided Unified Diff and determine its impact severity and categories based ONLY on the evidence in the code.
-Strictly evaluate breaking changes, API modifications, and rollback complexity.
-Do not assume behavior not visible in the diff.
+You are a technical change analyst. Analyze the diff for objective, evidence-based impact assessment.
+Classify severity, categories, breaking changes, affected areas, and rollback complexity strictly from diff evidence.
+Never infer behavior not visible in the diff.
 Return strict JSON only.
 `;
 
@@ -38,9 +36,9 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
       const insights = computeDiffStatsAndSummaryFromFiles(files);
       const { stats, summary: fileSummary } = insights;
 
+      const lang = input.language ? `\nLanguage: ${input.language}` : '';
       const prompt = `
-Repository: ${input.repository}
-Language: ${input.language ?? DEFAULT_LANGUAGE}
+Repository: ${input.repository}${lang}
 Change Stats: ${stats.files} files, +${stats.added} lines, -${stats.deleted} lines.
 Changed Files:
 ${fileSummary}

@@ -7,7 +7,6 @@ import {
   parseDiffFiles,
 } from '../lib/diff-parser.js';
 import {
-  DEFAULT_LANGUAGE,
   DEFAULT_TIMEOUT_PRO_MS,
   PRO_MODEL,
   PRO_THINKING_BUDGET,
@@ -20,7 +19,6 @@ import {
 } from '../schemas/outputs.js';
 
 const DEFAULT_FOCUS_AREAS = 'General';
-const DEFAULT_MAX_FINDINGS = 'auto';
 const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
 const PATH_ESCAPE_REPLACEMENTS = {
   '"': '\\"',
@@ -29,10 +27,8 @@ const PATH_ESCAPE_REPLACEMENTS = {
 } as const;
 const PATH_ESCAPE_PATTERN = /["\n\r]/g;
 const SYSTEM_INSTRUCTION = `
-You are a principal software engineer performing a deep, critical code review.
-Analyze the diff and provided file context to identify bugs, security vulnerabilities, performance issues, and maintainability risks.
-Ignore trivial style issues unless they severely impact readability.
-Prioritize correctness and potential runtime failures.
+You are a principal engineer performing a deep code review. Identify bugs, security vulnerabilities, performance issues, and maintainability risks from the diff and file context.
+Ignore style issues unless they cause runtime risk. Prioritize correctness and failure modes.
 Return strict JSON only.
 `;
 
@@ -124,11 +120,16 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(files);
       const fileContext = formatFileContext(input.files);
+      const lang = input.language ? `\nLanguage: ${input.language}` : '';
+      const maxF = input.maxFindings
+        ? `\nMax Findings: ${input.maxFindings}`
+        : '';
+      const noFilesNote = !input.files?.length
+        ? '\nNote: No file context provided. Leave contextualInsights empty.'
+        : '';
       const prompt = `
-Repository: ${input.repository}
-Language: ${input.language ?? (DEFAULT_LANGUAGE as string)}
-Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}
-Max Findings: ${input.maxFindings ?? DEFAULT_MAX_FINDINGS}
+Repository: ${input.repository}${lang}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxF}${noFilesNote}
 Changed Files:
 ${fileSummary}
 

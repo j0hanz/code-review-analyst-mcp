@@ -5,22 +5,15 @@ import {
   computeDiffStatsAndPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import {
-  DEFAULT_LANGUAGE,
-  DEFAULT_FRAMEWORK as DEFAULT_TEST_FRAMEWORK,
-  FLASH_MODEL,
-  FLASH_THINKING_BUDGET,
-} from '../lib/model-config.js';
+import { FLASH_MODEL, FLASH_THINKING_BUDGET } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
-const DEFAULT_MAX_TEST_CASES = 'auto';
 const SYSTEM_INSTRUCTION = `
-You are a QA automation architect focused on reliability and failure modes.
-Analyze the diff and generate a comprehensive, actionable test plan.
-Prioritize negative testing, edge cases, logical branches, and integration points.
-Ensure every test case verifies a specific behavior changed in the diff.
+You are a QA automation architect. Generate an actionable test plan for the diff changes.
+Prioritize: negative cases, edge cases, logical branches, integration points.
+Every test case must target a specific behavior visible in the diff.
 Return strict JSON only.
 `;
 
@@ -54,11 +47,15 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
       const parsedFiles = parseDiffFiles(input.diff);
       const insights = computeDiffStatsAndPathsFromFiles(parsedFiles);
       const { stats, paths } = insights;
+      const lang = input.language ? `\nLanguage: ${input.language}` : '';
+      const fw = input.testFramework
+        ? `\nTest Framework: ${input.testFramework}`
+        : '';
+      const maxT = input.maxTestCases
+        ? `\nMax Test Cases: ${input.maxTestCases}`
+        : '';
       const prompt = `
-Repository: ${input.repository}
-Language: ${input.language ?? DEFAULT_LANGUAGE}
-Test Framework: ${input.testFramework ?? DEFAULT_TEST_FRAMEWORK}
-Max Test Cases: ${input.maxTestCases ?? DEFAULT_MAX_TEST_CASES}
+Repository: ${input.repository}${lang}${fw}${maxT}
 Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
 Changed Files: ${paths.join(', ')}
 
