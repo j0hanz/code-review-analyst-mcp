@@ -15,6 +15,17 @@ const OUTPUT_LIMITS = {
   },
 } as const;
 
+const QUALITY_RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
+const MERGE_RISK_LEVELS = ['low', 'medium', 'high'] as const;
+const ERROR_KINDS = [
+  'validation',
+  'budget',
+  'upstream',
+  'timeout',
+  'cancelled',
+  'internal',
+] as const;
+
 function createBoundedString(
   min: number,
   max: number,
@@ -37,6 +48,24 @@ function createBoundedStringArray(
     .describe(description);
 }
 
+function createReviewSummarySchema(description: string): z.ZodString {
+  return z
+    .string()
+    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
+    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
+    .describe(description);
+}
+
+const reviewFindingSeveritySchema = z
+  .enum(QUALITY_RISK_LEVELS)
+  .describe('Severity for this issue.');
+const qualityRiskSchema = z
+  .enum(QUALITY_RISK_LEVELS)
+  .describe('Overall risk with full context.');
+const mergeRiskSchema = z
+  .enum(MERGE_RISK_LEVELS)
+  .describe('High-level merge risk.');
+
 export const DefaultOutputSchema = z.strictObject({
   ok: z.boolean().describe('Whether the tool completed successfully.'),
   result: z.unknown().optional().describe('Successful result payload.'),
@@ -49,14 +78,7 @@ export const DefaultOutputSchema = z.strictObject({
         .optional()
         .describe('Whether the client should retry this request.'),
       kind: z
-        .enum([
-          'validation',
-          'budget',
-          'upstream',
-          'timeout',
-          'cancelled',
-          'internal',
-        ])
+        .enum(ERROR_KINDS)
         .optional()
         .describe('Machine-readable error category.'),
     })
@@ -65,9 +87,7 @@ export const DefaultOutputSchema = z.strictObject({
 });
 
 export const ReviewFindingSchema = z.strictObject({
-  severity: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Severity for this issue.'),
+  severity: reviewFindingSeveritySchema,
   file: z
     .string()
     .min(1)
@@ -93,14 +113,36 @@ export const ReviewFindingSchema = z.strictObject({
   recommendation: createBoundedString(
     OUTPUT_LIMITS.reviewFinding.text.min,
     OUTPUT_LIMITS.reviewFinding.text.max,
-    'Concrete fix — name the exact code, function, or pattern to change.'
+    'Concrete fix - name the exact code, function, or pattern to change.'
   ),
 });
 
+const CODE_QUALITY_SHARED_FIELDS = {
+  summary: createReviewSummarySchema('Deep-dive review summary.'),
+  overallRisk: qualityRiskSchema,
+  findings: z
+    .array(ReviewFindingSchema)
+    .min(0)
+    .max(30)
+    .describe('Findings ordered by severity, highest first.'),
+  testsNeeded: createBoundedStringArray(
+    1,
+    300,
+    0,
+    12,
+    'Test cases needed to validate this change.'
+  ),
+  contextualInsights: createBoundedStringArray(
+    1,
+    500,
+    0,
+    5,
+    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
+  ),
+} as const;
+
 export const PrImpactResultSchema = z.strictObject({
-  severity: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Overall impact severity.'),
+  severity: z.enum(QUALITY_RISK_LEVELS).describe('Overall impact severity.'),
   categories: z
     .array(
       z.enum([
@@ -140,14 +182,8 @@ export const PrImpactResultSchema = z.strictObject({
 });
 
 export const ReviewSummaryResultSchema = z.strictObject({
-  summary: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
-    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
-    .describe('Human-readable PR summary.'),
-  overallRisk: z
-    .enum(['low', 'medium', 'high'])
-    .describe('High-level merge risk.'),
+  summary: createReviewSummarySchema('Human-readable PR summary.'),
+  overallRisk: mergeRiskSchema,
   keyChanges: createBoundedStringArray(
     1,
     300,
@@ -174,63 +210,11 @@ export const ReviewSummaryResultSchema = z.strictObject({
 });
 
 export const CodeQualityResultSchema = z.strictObject({
-  summary: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
-    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
-    .describe('Deep-dive review summary.'),
-  overallRisk: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Overall risk with full context.'),
-  findings: z
-    .array(ReviewFindingSchema)
-    .min(0)
-    .max(30)
-    .describe('Findings ordered by severity, highest first.'),
-  testsNeeded: createBoundedStringArray(
-    1,
-    300,
-    0,
-    12,
-    'Test cases needed to validate this change.'
-  ),
-  contextualInsights: createBoundedStringArray(
-    1,
-    500,
-    0,
-    5,
-    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
-  ),
+  ...CODE_QUALITY_SHARED_FIELDS,
 });
 
 export const CodeQualityOutputSchema = z.object({
-  summary: z
-    .string()
-    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
-    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
-    .describe('Deep-dive review summary.'),
-  overallRisk: z
-    .enum(['low', 'medium', 'high', 'critical'])
-    .describe('Overall risk with full context.'),
-  findings: z
-    .array(ReviewFindingSchema)
-    .min(0)
-    .max(30)
-    .describe('Findings ordered by severity, highest first.'),
-  testsNeeded: createBoundedStringArray(
-    1,
-    300,
-    0,
-    12,
-    'Test cases needed to validate this change.'
-  ),
-  contextualInsights: createBoundedStringArray(
-    1,
-    500,
-    0,
-    5,
-    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
-  ),
+  ...CODE_QUALITY_SHARED_FIELDS,
   totalFindings: z
     .number()
     .int()
@@ -248,7 +232,7 @@ export const SearchReplaceBlockSchema = z.strictObject({
     .min(1)
     .max(5000)
     .describe(
-      'Verbatim source text to find — character-exact including all whitespace and indentation.'
+      'Verbatim source text to find - character-exact including all whitespace and indentation.'
     ),
   replace: z
     .string()

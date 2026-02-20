@@ -46,6 +46,17 @@ export function sanitizeContent(content: string): string {
     .replaceAll('<<FILE', '<FILE');
 }
 
+function formatOptionalLine(
+  label: string,
+  value: string | number | undefined
+): string {
+  return value === undefined ? '' : `\n${label}: ${value}`;
+}
+
+function capFindings<T>(findings: readonly T[], maxFindings?: number): T[] {
+  return findings.slice(0, maxFindings ?? findings.length);
+}
+
 function formatFileContext(
   files: readonly { path: string; content: string }[] | undefined
 ): string {
@@ -53,24 +64,46 @@ function formatFileContext(
     return '';
   }
 
-  let fileBlocks = '';
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index];
-    if (!file) {
-      continue;
-    }
-
-    fileBlocks += `
+  const fileBlocks: string[] = [];
+  for (const file of files) {
+    fileBlocks.push(`
 <<FILE path="${sanitizePath(file.path)}">>
 ${sanitizeContent(file.content)}
 <<END_FILE>>
-`;
-    if (index < files.length - 1) {
-      fileBlocks += '\n';
-    }
+`);
   }
 
-  return `${FILE_CONTEXT_HEADING}${fileBlocks}`;
+  return `${FILE_CONTEXT_HEADING}${fileBlocks.join('\n')}`;
+}
+
+function buildInspectPrompt(input: {
+  repository: string;
+  language?: string | undefined;
+  focusAreas?: string[] | undefined;
+  maxFindings?: number | undefined;
+  diff: string;
+  files?: readonly { path: string; content: string }[] | undefined;
+}): string {
+  const parsedFiles = parseDiffFiles(input.diff);
+  const { summary: fileSummary } =
+    computeDiffStatsAndSummaryFromFiles(parsedFiles);
+  const fileContext = formatFileContext(input.files);
+  const languageLine = formatOptionalLine('Language', input.language);
+  const maxFindingsLine = formatOptionalLine('Max Findings', input.maxFindings);
+  const noFilesNote = !input.files?.length
+    ? '\nNote: No file context provided. Leave contextualInsights empty.'
+    : '';
+
+  return `
+Repository: ${input.repository}${languageLine}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}${noFilesNote}
+Changed Files:
+${fileSummary}
+
+Diff:
+${input.diff}
+${fileContext}
+`;
 }
 
 export function registerInspectCodeQualityTool(server: McpServer): void {
@@ -108,36 +141,13 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     },
     transformResult: (input, result) => {
       const totalFindings = result.findings.length;
-      const cappedFindings = result.findings.slice(
-        0,
-        input.maxFindings ?? totalFindings
-      );
+      const cappedFindings = capFindings(result.findings, input.maxFindings);
 
       return { ...result, findings: cappedFindings, totalFindings };
     },
-    buildPrompt: (input) => {
-      const files = parseDiffFiles(input.diff);
-      const { summary: fileSummary } =
-        computeDiffStatsAndSummaryFromFiles(files);
-      const fileContext = formatFileContext(input.files);
-      const lang = input.language ? `\nLanguage: ${input.language}` : '';
-      const maxF = input.maxFindings
-        ? `\nMax Findings: ${input.maxFindings}`
-        : '';
-      const noFilesNote = !input.files?.length
-        ? '\nNote: No file context provided. Leave contextualInsights empty.'
-        : '';
-      const prompt = `
-Repository: ${input.repository}${lang}
-Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxF}${noFilesNote}
-Changed Files:
-${fileSummary}
-
-Diff:
-${input.diff}
-${fileContext}
-`;
-      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
-    },
+    buildPrompt: (input) => ({
+      systemInstruction: SYSTEM_INSTRUCTION,
+      prompt: buildInspectPrompt(input),
+    }),
   });
 }

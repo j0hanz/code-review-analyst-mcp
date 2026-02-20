@@ -40,6 +40,15 @@ interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
   isError: true;
 }
 
+function appendErrorMeta(error: ToolError, meta?: ErrorMeta): void {
+  if (meta?.retryable !== undefined) {
+    error.retryable = meta.retryable;
+  }
+  if (meta?.kind !== undefined) {
+    error.kind = meta.kind;
+  }
+}
+
 function toTextContent(
   structured: ToolStructuredContent,
   textContent?: string
@@ -68,12 +77,7 @@ function createErrorStructuredContent(
     code,
     message,
   };
-  if (meta?.retryable !== undefined) {
-    error.retryable = meta.retryable;
-  }
-  if (meta?.kind !== undefined) {
-    error.kind = meta.kind;
-  }
+  appendErrorMeta(error, meta);
 
   if (result === undefined) {
     return { ok: false, error };
@@ -98,9 +102,5 @@ export function createErrorToolResponse(
   meta?: ErrorMeta
 ): ErrorToolResponse {
   const structured = createErrorStructuredContent(code, message, result, meta);
-  return {
-    content: toTextContent(structured),
-    structuredContent: structured,
-    isError: true,
-  };
+  return { ...buildToolResponse(structured), isError: true };
 }

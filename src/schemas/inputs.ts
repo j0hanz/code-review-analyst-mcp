@@ -50,6 +50,22 @@ function createDiffSchema(description: string): z.ZodString {
     );
 }
 
+function createRepositorySchema(): z.ZodString {
+  return createBoundedString(
+    INPUT_LIMITS.repository.min,
+    INPUT_LIMITS.repository.max,
+    'Repository identifier, e.g. org/repo.'
+  );
+}
+
+function createOptionalBoundedInteger(
+  min: number,
+  max: number,
+  description: string
+): z.ZodOptional<z.ZodNumber> {
+  return z.number().int().min(min).max(max).optional().describe(description);
+}
+
 export const FileContextSchema = z.strictObject({
   path: createBoundedString(
     INPUT_LIMITS.fileContext.path.min,
@@ -65,31 +81,19 @@ export const FileContextSchema = z.strictObject({
 
 export const AnalyzePrImpactInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text for the PR or commit.'),
-  repository: createBoundedString(
-    INPUT_LIMITS.repository.min,
-    INPUT_LIMITS.repository.max,
-    'Repository identifier, e.g. org/repo.'
-  ),
+  repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language to bias analysis.'),
 });
 
 export const GenerateReviewSummaryInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text for one PR or commit.'),
-  repository: createBoundedString(
-    INPUT_LIMITS.repository.min,
-    INPUT_LIMITS.repository.max,
-    'Repository identifier, e.g. org/repo.'
-  ),
+  repository: createRepositorySchema(),
   language: createLanguageSchema('Primary implementation language.'),
 });
 
 export const InspectCodeQualityInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff text for in-depth analysis.'),
-  repository: createBoundedString(
-    INPUT_LIMITS.repository.min,
-    INPUT_LIMITS.repository.max,
-    'Repository identifier, e.g. org/repo.'
-  ),
+  repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language.'),
   focusAreas: z
     .array(
@@ -103,13 +107,11 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     .max(INPUT_LIMITS.focusArea.maxItems)
     .optional()
     .describe('Specific areas to inspect: security, correctness, etc.'),
-  maxFindings: z
-    .number()
-    .int()
-    .min(INPUT_LIMITS.maxFindings.min)
-    .max(INPUT_LIMITS.maxFindings.max)
-    .optional()
-    .describe('Maximum number of findings to return.'),
+  maxFindings: createOptionalBoundedInteger(
+    INPUT_LIMITS.maxFindings.min,
+    INPUT_LIMITS.maxFindings.max,
+    'Maximum number of findings to return.'
+  ),
   files: z
     .array(FileContextSchema)
     .min(1)
@@ -136,22 +138,16 @@ export const SuggestSearchReplaceInputSchema = z.strictObject({
 
 export const GenerateTestPlanInputSchema = z.strictObject({
   diff: createDiffSchema('Unified diff to generate tests for.'),
-  repository: createBoundedString(
-    INPUT_LIMITS.repository.min,
-    INPUT_LIMITS.repository.max,
-    'Repository identifier, e.g. org/repo.'
-  ),
+  repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language.'),
   testFramework: createOptionalBoundedString(
     INPUT_LIMITS.testFramework.min,
     INPUT_LIMITS.testFramework.max,
     'Test framework to use, e.g. jest, vitest, pytest, node:test.'
   ),
-  maxTestCases: z
-    .number()
-    .int()
-    .min(INPUT_LIMITS.maxTestCases.min)
-    .max(INPUT_LIMITS.maxTestCases.max)
-    .optional()
-    .describe('Maximum number of test cases to return.'),
+  maxTestCases: createOptionalBoundedInteger(
+    INPUT_LIMITS.maxTestCases.min,
+    INPUT_LIMITS.maxTestCases.max,
+    'Maximum number of test cases to return.'
+  ),
 });

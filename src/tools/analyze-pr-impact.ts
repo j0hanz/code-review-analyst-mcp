@@ -17,6 +17,31 @@ Never infer behavior not visible in the diff.
 Return strict JSON only.
 `;
 
+function formatLanguageSegment(language: string | undefined): string {
+  return language ? `\nLanguage: ${language}` : '';
+}
+
+function buildAnalyzePrImpactPrompt(input: {
+  repository: string;
+  language?: string | undefined;
+  diff: string;
+}): string {
+  const files = parseDiffFiles(input.diff);
+  const { stats, summary: fileSummary } =
+    computeDiffStatsAndSummaryFromFiles(files);
+  const languageSegment = formatLanguageSegment(input.language);
+
+  return `
+Repository: ${input.repository}${languageSegment}
+Change Stats: ${stats.files} files, +${stats.added} lines, -${stats.deleted} lines.
+Changed Files:
+${fileSummary}
+
+Diff:
+${input.diff}
+`;
+}
+
 export function registerAnalyzePrImpactTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'analyze_pr_impact',
@@ -31,22 +56,9 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) =>
       `Impact Analysis (${result.severity}): ${result.summary}`,
-    buildPrompt: (input) => {
-      const files = parseDiffFiles(input.diff);
-      const insights = computeDiffStatsAndSummaryFromFiles(files);
-      const { stats, summary: fileSummary } = insights;
-
-      const lang = input.language ? `\nLanguage: ${input.language}` : '';
-      const prompt = `
-Repository: ${input.repository}${lang}
-Change Stats: ${stats.files} files, +${stats.added} lines, -${stats.deleted} lines.
-Changed Files:
-${fileSummary}
-
-Diff:
-${input.diff}
-`;
-      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
-    },
+    buildPrompt: (input) => ({
+      systemInstruction: SYSTEM_INSTRUCTION,
+      prompt: buildAnalyzePrImpactPrompt(input),
+    }),
   });
 }

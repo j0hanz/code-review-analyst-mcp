@@ -14,10 +14,16 @@ import type { GeminiStructuredRequest } from './types.js';
 
 // Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
 let _defaultModel: string | undefined;
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
+const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
+const GEMINI_API_KEY_ENV_VAR = 'GEMINI_API_KEY';
+const GOOGLE_API_KEY_ENV_VAR = 'GOOGLE_API_KEY';
+type GeminiOnLog = GeminiStructuredRequest['onLog'];
 
 function getDefaultModel(): string {
   if (_defaultModel !== undefined) return _defaultModel;
-  const value = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  const value = process.env[GEMINI_MODEL_ENV_VAR] ?? DEFAULT_MODEL;
   _defaultModel = value;
   return value;
 }
@@ -81,7 +87,7 @@ const safetySettingsCache = new Map<
 >();
 
 function getSafetyThreshold(): HarmBlockThreshold {
-  const threshold = process.env.GEMINI_HARM_BLOCK_THRESHOLD;
+  const threshold = process.env[GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR];
   if (threshold === cachedSafetyThresholdEnv) {
     return cachedSafetyThreshold;
   }
@@ -92,17 +98,27 @@ function getSafetyThreshold(): HarmBlockThreshold {
     return cachedSafetyThreshold;
   }
 
-  const normalizedThreshold = threshold.trim().toUpperCase();
-  if (normalizedThreshold in SAFETY_THRESHOLD_BY_NAME) {
-    cachedSafetyThreshold =
-      SAFETY_THRESHOLD_BY_NAME[
-        normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
-      ];
+  const parsedThreshold = parseSafetyThreshold(threshold);
+  if (parsedThreshold) {
+    cachedSafetyThreshold = parsedThreshold;
     return cachedSafetyThreshold;
   }
 
   cachedSafetyThreshold = DEFAULT_SAFETY_THRESHOLD;
   return cachedSafetyThreshold;
+}
+
+function parseSafetyThreshold(
+  threshold: string
+): HarmBlockThreshold | undefined {
+  const normalizedThreshold = threshold.trim().toUpperCase();
+  if (!(normalizedThreshold in SAFETY_THRESHOLD_BY_NAME)) {
+    return undefined;
+  }
+
+  return SAFETY_THRESHOLD_BY_NAME[
+    normalizedThreshold as keyof typeof SAFETY_THRESHOLD_BY_NAME
+  ];
 }
 
 function getThinkingConfig(
@@ -178,9 +194,12 @@ export function getCurrentRequestId(): string {
 }
 
 function getApiKey(): string {
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  const apiKey =
+    process.env[GEMINI_API_KEY_ENV_VAR] ?? process.env[GOOGLE_API_KEY_ENV_VAR];
   if (!apiKey) {
-    throw new Error('Missing GEMINI_API_KEY or GOOGLE_API_KEY.');
+    throw new Error(
+      `Missing ${GEMINI_API_KEY_ENV_VAR} or ${GOOGLE_API_KEY_ENV_VAR}.`
+    );
   }
 
   return apiKey;
@@ -222,7 +241,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 async function safeCallOnLog(
-  onLog: GeminiStructuredRequest['onLog'],
+  onLog: GeminiOnLog,
   level: string,
   data: Record<string, unknown>
 ): Promise<void> {
@@ -234,7 +253,7 @@ async function safeCallOnLog(
 }
 
 async function emitGeminiLog(
-  onLog: GeminiStructuredRequest['onLog'],
+  onLog: GeminiOnLog,
   level: GeminiLogLevel,
   payload: GeminiLogPayload
 ): Promise<void> {
@@ -281,28 +300,39 @@ function toUpperStringCode(candidate: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function findFirstNumericCode(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): number | undefined {
+  for (const key of keys) {
+    const numericCode = toNumericCode(record[key]);
+    if (numericCode !== undefined) {
+      return numericCode;
+    }
+  }
+  return undefined;
+}
+
+function findFirstStringCode(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): string | undefined {
+  for (const key of keys) {
+    const stringCode = toUpperStringCode(record[key]);
+    if (stringCode !== undefined) {
+      return stringCode;
+    }
+  }
+  return undefined;
+}
+
 function getNumericErrorCode(error: unknown): number | undefined {
   const record = getNestedError(error);
   if (!record) {
     return undefined;
   }
 
-  const fromStatus = toNumericCode(record.status);
-  if (fromStatus !== undefined) {
-    return fromStatus;
-  }
-
-  const fromStatusCode = toNumericCode(record.statusCode);
-  if (fromStatusCode !== undefined) {
-    return fromStatusCode;
-  }
-
-  const fromCode = toNumericCode(record.code);
-  if (fromCode !== undefined) {
-    return fromCode;
-  }
-
-  return undefined;
+  return findFirstNumericCode(record, ['status', 'statusCode', 'code']);
 }
 
 function getTransientErrorCode(error: unknown): string | undefined {
@@ -311,22 +341,7 @@ function getTransientErrorCode(error: unknown): string | undefined {
     return undefined;
   }
 
-  const fromCode = toUpperStringCode(record.code);
-  if (fromCode !== undefined) {
-    return fromCode;
-  }
-
-  const fromStatus = toUpperStringCode(record.status);
-  if (fromStatus !== undefined) {
-    return fromStatus;
-  }
-
-  const fromStatusText = toUpperStringCode(record.statusText);
-  if (fromStatusText !== undefined) {
-    return fromStatusText;
-  }
-
-  return undefined;
+  return findFirstStringCode(record, ['code', 'status', 'statusText']);
 }
 
 function shouldRetry(error: unknown): boolean {
@@ -402,6 +417,17 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
   }
 }
 
+function formatTimeoutErrorMessage(timeoutMs: number): string {
+  return `Gemini request timed out after ${formatNumber(timeoutMs)}ms.`;
+}
+
+function formatConcurrencyLimitErrorMessage(
+  limit: number,
+  waitLimitMs: number
+): string {
+  return `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}; waited ${formatNumber(waitLimitMs)}ms).`;
+}
+
 async function generateContentWithTimeout(
   request: GeminiStructuredRequest,
   model: string,
@@ -427,10 +453,7 @@ async function generateContentWithTimeout(
     }
 
     if (controller.signal.aborted) {
-      throw new Error(
-        `Gemini request timed out after ${formatNumber(timeoutMs)}ms.`,
-        { cause: error }
-      );
+      throw new Error(formatTimeoutErrorMessage(timeoutMs), { cause: error });
     }
 
     throw error;
@@ -444,7 +467,7 @@ async function executeAttempt(
   model: string,
   timeoutMs: number,
   attempt: number,
-  onLog: GeminiStructuredRequest['onLog']
+  onLog: GeminiOnLog
 ): Promise<unknown> {
   const startedAt = performance.now();
   const response = await generateContentWithTimeout(request, model, timeoutMs);
@@ -465,7 +488,7 @@ async function executeAttempt(
 async function waitBeforeRetry(
   attempt: number,
   error: unknown,
-  onLog: GeminiStructuredRequest['onLog']
+  onLog: GeminiOnLog
 ): Promise<void> {
   const delayMs = getRetryDelayMs(attempt);
   const reason = getErrorMessage(error);
@@ -485,7 +508,7 @@ async function waitBeforeRetry(
 async function throwGeminiFailure(
   maxRetries: number,
   lastError: unknown,
-  onLog: GeminiStructuredRequest['onLog']
+  onLog: GeminiOnLog
 ): Promise<never> {
   const attempts = maxRetries + 1;
   const message = getErrorMessage(lastError);
@@ -509,7 +532,7 @@ async function runWithRetries(
   model: string,
   timeoutMs: number,
   maxRetries: number,
-  onLog: GeminiStructuredRequest['onLog']
+  onLog: GeminiOnLog
 ): Promise<unknown> {
   let lastError: unknown;
 
@@ -518,7 +541,7 @@ async function runWithRetries(
       return await executeAttempt(request, model, timeoutMs, attempt, onLog);
     } catch (error: unknown) {
       lastError = error;
-      if (attempt >= maxRetries || !shouldRetry(error)) {
+      if (!canRetryAttempt(attempt, maxRetries, error)) {
         break;
       }
 
@@ -527,6 +550,14 @@ async function runWithRetries(
   }
 
   return throwGeminiFailure(maxRetries, lastError, onLog);
+}
+
+function canRetryAttempt(
+  attempt: number,
+  maxRetries: number,
+  error: unknown
+): boolean {
+  return attempt < maxRetries && shouldRetry(error);
 }
 
 async function waitForConcurrencySlot(
@@ -543,9 +574,7 @@ async function waitForConcurrencySlot(
     }
 
     if (performance.now() >= deadline) {
-      throw new Error(
-        `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}; waited ${formatNumber(waitLimitMs)}ms).`
-      );
+      throw new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs));
     }
 
     await sleep(pollMs, undefined, SLEEP_UNREF_OPTIONS);

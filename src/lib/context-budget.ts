@@ -14,6 +14,19 @@ interface FileContent {
   content: string;
 }
 
+function computeFilesSize(files: readonly FileContent[]): number {
+  let fileSize = 0;
+  for (const file of files) {
+    fileSize += file.content.length;
+  }
+
+  return fileSize;
+}
+
+function createContextBudgetMessage(size: number, max: number): string {
+  return `Combined context size ${size} chars exceeds limit of ${max} chars.`;
+}
+
 export function resetMaxContextCharsCacheForTesting(): void {
   contextCharsConfig.reset();
 }
@@ -24,23 +37,18 @@ function getMaxContextChars(): number {
 
 export function computeContextSize(
   diff: string,
-  files?: FileContent[]
+  files?: readonly FileContent[]
 ): number {
   if (!files || files.length === 0) {
     return diff.length;
   }
 
-  let fileSize = 0;
-  for (const file of files) {
-    fileSize += file.content.length;
-  }
-
-  return diff.length + fileSize;
+  return diff.length + computeFilesSize(files);
 }
 
 export function validateContextBudget(
   diff: string,
-  files?: FileContent[]
+  files?: readonly FileContent[]
 ): ReturnType<typeof createErrorToolResponse> | undefined {
   const size = computeContextSize(diff, files);
   const max = getMaxContextChars();
@@ -48,7 +56,7 @@ export function validateContextBudget(
   if (size > max) {
     return createErrorToolResponse(
       'E_INPUT_TOO_LARGE',
-      `Combined context size ${size} chars exceeds limit of ${max} chars.`,
+      createContextBudgetMessage(size, max),
       { providedChars: size, maxChars: max },
       BUDGET_ERROR_META
     );

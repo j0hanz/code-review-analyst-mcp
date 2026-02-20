@@ -19,9 +19,8 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 
 function stripConstraintValue(value: unknown): unknown {
   if (Array.isArray(value)) {
-    const { length } = value;
-    const stripped = new Array<unknown>(length);
-    for (let index = 0; index < length; index += 1) {
+    const stripped = new Array<unknown>(value.length);
+    for (let index = 0; index < value.length; index += 1) {
       stripped[index] = stripConstraintValue(value[index]);
     }
     return stripped;
@@ -47,7 +46,9 @@ export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
   const result: JsonRecord = {};
 
   for (const [key, value] of Object.entries(schema)) {
-    if (CONSTRAINT_KEYS.has(key)) continue;
+    if (CONSTRAINT_KEYS.has(key)) {
+      continue;
+    }
 
     // Relax integer → number so Gemini is not forced into integer-only
     // output; the stricter result schema still validates integrality.

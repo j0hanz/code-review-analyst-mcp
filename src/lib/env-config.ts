@@ -16,7 +16,12 @@ function parsePositiveInteger(value: string): number | undefined {
   return parsed;
 }
 
-/// Creates a cached integer value from an environment variable, with a default fallback.
+function resolveEnvInt(envVar: string, defaultValue: number): number {
+  const envValue = process.env[envVar] ?? '';
+  return parsePositiveInteger(envValue) ?? defaultValue;
+}
+
+/** Creates a cached integer value from an environment variable, with a default fallback. */
 export function createCachedEnvInt(
   envVar: string,
   defaultValue: number
@@ -29,8 +34,7 @@ export function createCachedEnvInt(
         return cached;
       }
 
-      const envValue = process.env[envVar] ?? '';
-      cached = parsePositiveInteger(envValue) ?? defaultValue;
+      cached = resolveEnvInt(envVar, defaultValue);
       return cached;
     },
 

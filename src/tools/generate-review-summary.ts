@@ -41,6 +41,23 @@ function getCachedStats(input: ReviewSummaryInput): CachedStats {
   return stats;
 }
 
+function formatLanguageSegment(language: string | undefined): string {
+  return language ? `\nLanguage: ${language}` : '';
+}
+
+function buildReviewSummaryPrompt(input: ReviewSummaryInput): string {
+  const stats = getCachedStats(input);
+  const languageSegment = formatLanguageSegment(input.language);
+
+  return `
+Repository: ${input.repository}${languageSegment}
+Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
+
+Diff:
+${input.diff}
+`;
+}
+
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_review_summary',
@@ -68,17 +85,9 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     },
     formatOutput: (result) =>
       `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
-    buildPrompt: (input) => {
-      const stats = getCachedStats(input);
-      const lang = input.language ? `\nLanguage: ${input.language}` : '';
-      const prompt = `
-Repository: ${input.repository}${lang}
-Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
-
-Diff:
-${input.diff}
-`;
-      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
-    },
+    buildPrompt: (input) => ({
+      systemInstruction: SYSTEM_INSTRUCTION,
+      prompt: buildReviewSummaryPrompt(input),
+    }),
   });
 }

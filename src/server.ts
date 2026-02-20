@@ -22,6 +22,7 @@ const UTF8_ENCODING = 'utf8';
 const PACKAGE_VERSION_FIELD = 'version';
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const INSTRUCTIONS_PATH = join(CURRENT_DIR, INSTRUCTIONS_FILENAME);
+const VERSION_FIELD_ERROR = 'missing or invalid version field';
 
 const SERVER_CAPABILITIES = {
   logging: {},
@@ -53,23 +54,28 @@ function parsePackageJson(
   packageJson: string,
   packageJsonPath: string
 ): PackageJsonMetadata {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(packageJson);
-  } catch (error: unknown) {
-    throw new Error(
-      `Invalid JSON in ${packageJsonPath}: ${getErrorMessage(error)}`
-    );
-  }
-
-  if (!isPackageJsonMetadata(parsed)) {
-    throw new Error(
-      `Invalid package.json at ${packageJsonPath}: missing or invalid version field`
-    );
-  }
-
+  const parsed = parseJsonText(packageJson, packageJsonPath);
+  ensurePackageJsonMetadata(parsed, packageJsonPath);
   return parsed;
+}
+
+function parseJsonText(jsonText: string, sourcePath: string): unknown {
+  try {
+    return JSON.parse(jsonText);
+  } catch (error: unknown) {
+    throw new Error(`Invalid JSON in ${sourcePath}: ${getErrorMessage(error)}`);
+  }
+}
+
+function ensurePackageJsonMetadata(
+  metadata: unknown,
+  packageJsonPath: string
+): asserts metadata is PackageJsonMetadata {
+  if (!isPackageJsonMetadata(metadata)) {
+    throw new Error(
+      `Invalid package.json at ${packageJsonPath}: ${VERSION_FIELD_ERROR}`
+    );
+  }
 }
 
 function readUtf8File(path: string): string {
@@ -110,9 +116,8 @@ export interface ServerHandle {
   shutdown: () => Promise<void>;
 }
 
-export function createServer(): ServerHandle {
-  const taskStore = new InMemoryTaskStore();
-  const server = new McpServer(
+function createMcpServer(taskStore: InMemoryTaskStore): McpServer {
+  return new McpServer(
     {
       name: SERVER_NAME,
       version: SERVER_VERSION,
@@ -123,10 +128,18 @@ export function createServer(): ServerHandle {
       capabilities: SERVER_CAPABILITIES,
     }
   );
+}
 
+function registerServerCapabilities(server: McpServer): void {
   registerAllTools(server);
   registerAllResources(server, SERVER_INSTRUCTIONS);
   registerAllPrompts(server, SERVER_INSTRUCTIONS);
+}
+
+export function createServer(): ServerHandle {
+  const taskStore = new InMemoryTaskStore();
+  const server = createMcpServer(taskStore);
+  registerServerCapabilities(server);
 
   const shutdown = async (): Promise<void> => {
     await server.close();

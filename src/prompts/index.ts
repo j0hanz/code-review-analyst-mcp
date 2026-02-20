@@ -29,6 +29,10 @@ const FOCUS_AREAS = [
   'tests',
 ] as const;
 type FocusArea = (typeof FOCUS_AREAS)[number];
+const TOOL_DESCRIPTION_TEXT =
+  'Which review tool to use: analyze_pr_impact, generate_review_summary, etc.';
+const FOCUS_DESCRIPTION_TEXT =
+  'Focus area: security, correctness, performance, regressions, or tests';
 
 const TOOL_GUIDES: Record<ToolName, string> = {
   analyze_pr_impact:
@@ -101,15 +105,12 @@ function getFocusAreaGuide(focusArea: string): string {
   );
 }
 
-export function registerAllPrompts(
-  server: McpServer,
-  instructions: string
-): void {
+function registerHelpPrompt(server: McpServer, instructions: string): void {
   server.registerPrompt(
     HELP_PROMPT_NAME,
     {
       title: HELP_PROMPT_TITLE,
-      description: 'Return the server usage instructions.',
+      description: HELP_PROMPT_DESCRIPTION,
     },
     () => ({
       description: HELP_PROMPT_DESCRIPTION,
@@ -124,27 +125,29 @@ export function registerAllPrompts(
       ],
     })
   );
+}
 
+function buildReviewGuideText(tool: string, focusArea: string): string {
+  return (
+    `# Code Review Guide\n\n` +
+    `## Tool: \`${tool}\`\n${getToolGuide(tool)}\n\n` +
+    `## Focus Area: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
+    `> Tip: Run \`get-help\` for full server documentation.`
+  );
+}
+
+function registerReviewGuidePrompt(server: McpServer): void {
   server.registerPrompt(
     REVIEW_GUIDE_PROMPT_NAME,
     {
       title: REVIEW_GUIDE_PROMPT_TITLE,
       description: REVIEW_GUIDE_PROMPT_DESCRIPTION,
       argsSchema: {
-        tool: completable(
-          z
-            .string()
-            .describe(
-              'Which review tool to use: analyze_pr_impact, generate_review_summary, etc.'
-            ),
-          (value) => completeByPrefix(TOOLS, value)
+        tool: completable(z.string().describe(TOOL_DESCRIPTION_TEXT), (value) =>
+          completeByPrefix(TOOLS, value)
         ),
         focusArea: completable(
-          z
-            .string()
-            .describe(
-              'Focus area: security, correctness, performance, regressions, or tests'
-            ),
+          z.string().describe(FOCUS_DESCRIPTION_TEXT),
           (value) => completeByPrefix(FOCUS_AREAS, value)
         ),
       },
@@ -156,14 +159,18 @@ export function registerAllPrompts(
           role: 'user',
           content: {
             type: 'text',
-            text:
-              `# Code Review Guide\n\n` +
-              `## Tool: \`${tool}\`\n${getToolGuide(tool)}\n\n` +
-              `## Focus Area: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
-              `> Tip: Run \`get-help\` for full server documentation.`,
+            text: buildReviewGuideText(tool, focusArea),
           },
         },
       ],
     })
   );
+}
+
+export function registerAllPrompts(
+  server: McpServer,
+  instructions: string
+): void {
+  registerHelpPrompt(server, instructions);
+  registerReviewGuidePrompt(server);
 }

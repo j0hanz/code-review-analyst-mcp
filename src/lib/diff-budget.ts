@@ -21,7 +21,7 @@ export function resetMaxDiffCharsCacheForTesting(): void {
 
 export function exceedsDiffBudget(diff: string): boolean {
   const maxChars = getMaxDiffChars();
-  return diff.length > maxChars;
+  return getDiffLength(diff) > maxChars;
 }
 
 function formatDiffBudgetError(diffLength: number, maxChars: number): string {
@@ -37,10 +37,14 @@ export function getDiffBudgetError(
 
 const BUDGET_ERROR_META: ErrorMeta = { retryable: false, kind: 'budget' };
 
+function getDiffLength(diff: string): number {
+  return diff.length;
+}
+
 export function validateDiffBudget(
   diff: string
 ): ReturnType<typeof createErrorToolResponse> | undefined {
-  const providedChars = diff.length;
+  const providedChars = getDiffLength(diff);
   const maxChars = getMaxDiffChars();
   if (providedChars <= maxChars) {
     return undefined;

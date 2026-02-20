@@ -37,6 +37,29 @@ const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
 const MAX_SCHEMA_RETRIES = 1;
 
+type ProgressToken = string | number;
+
+interface ProgressNotificationParams {
+  progressToken: ProgressToken;
+  progress: number;
+  total?: number;
+  message?: string;
+}
+
+interface ProgressPayload {
+  current: number;
+  total?: number;
+  message?: string;
+}
+
+interface ProgressExtra {
+  _meta?: { progressToken?: unknown };
+  sendNotification: (notification: {
+    method: 'notifications/progress';
+    params: ProgressNotificationParams;
+  }) => Promise<void>;
+}
+
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
   TResult extends object = Record<string, unknown>,
@@ -179,14 +202,7 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
     };
   }
 
-  if (RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'upstream',
-      retryable: true,
-    };
-  }
-
-  if (BUSY_ERROR_PATTERN.test(message)) {
+  if (isRetryableUpstreamMessage(message)) {
     return {
       kind: 'upstream',
       retryable: true,
@@ -199,24 +215,16 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
   };
 }
 
+function isRetryableUpstreamMessage(message: string): boolean {
+  return (
+    RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message) ||
+    BUSY_ERROR_PATTERN.test(message)
+  );
+}
+
 async function sendTaskProgress(
-  extra: {
-    _meta?: { progressToken?: unknown };
-    sendNotification: (notification: {
-      method: 'notifications/progress';
-      params: {
-        progressToken: string | number;
-        progress: number;
-        total?: number;
-        message?: string;
-      };
-    }) => Promise<void>;
-  },
-  payload: {
-    current: number;
-    total?: number;
-    message?: string;
-  }
+  extra: ProgressExtra,
+  payload: ProgressPayload
 ): Promise<void> {
   const progressToken = extra._meta?.progressToken;
   if (typeof progressToken !== 'string' && typeof progressToken !== 'number') {
@@ -224,12 +232,7 @@ async function sendTaskProgress(
   }
 
   try {
-    const params: {
-      progressToken: string | number;
-      progress: number;
-      total?: number;
-      message?: string;
-    } = {
+    const params: ProgressNotificationParams = {
       progressToken,
       progress: payload.current,
     };
@@ -249,22 +252,9 @@ async function sendTaskProgress(
   }
 }
 
-function createProgressReporter(extra: {
-  _meta?: { progressToken?: unknown };
-  sendNotification: (notification: {
-    method: 'notifications/progress';
-    params: {
-      progressToken: string | number;
-      progress: number;
-      total?: number;
-      message?: string;
-    };
-  }) => Promise<void>;
-}): (payload: {
-  current: number;
-  total?: number;
-  message?: string;
-}) => Promise<void> {
+function createProgressReporter(
+  extra: ProgressExtra
+): (payload: ProgressPayload) => Promise<void> {
   let lastCurrent = 0;
   let didSendTerminal = false;
 
@@ -279,11 +269,7 @@ function createProgressReporter(extra: {
         ? Math.max(payload.total, current)
         : undefined;
 
-    const progressPayload: {
-      current: number;
-      total?: number;
-      message?: string;
-    } = { current };
+    const progressPayload: ProgressPayload = { current };
     if (total !== undefined) {
       progressPayload.total = total;
     }
@@ -337,6 +323,34 @@ function formatProgressCompletion(
 ): string {
   const prefix = success ? '◈' : '‣';
   return `${prefix} ${toolName}: ${context} • ${outcome}`;
+}
+
+async function reportProgressStepUpdate(
+  reportProgress: (payload: ProgressPayload) => Promise<void>,
+  toolName: string,
+  context: string,
+  current: number,
+  metadata: string
+): Promise<void> {
+  await reportProgress({
+    current,
+    total: TASK_PROGRESS_TOTAL,
+    message: formatProgressStep(toolName, context, metadata),
+  });
+}
+
+async function reportProgressCompletionUpdate(
+  reportProgress: (payload: ProgressPayload) => Promise<void>,
+  toolName: string,
+  context: string,
+  outcome: string,
+  success = true
+): Promise<void> {
+  await reportProgress({
+    current: TASK_PROGRESS_TOTAL,
+    total: TASK_PROGRESS_TOTAL,
+    message: formatProgressCompletion(toolName, context, outcome, success),
+  });
 }
 
 function toLoggingLevel(level: string): LoggingLevel {
@@ -462,15 +476,13 @@ export function registerStructuredToolTask<
               config.progressContext?.(inputRecord)
             );
 
-            await reportProgress({
-              current: 0,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressStep(
-                config.name,
-                progressContext,
-                'starting'
-              ),
-            });
+            await reportProgressStepUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              0,
+              'starting'
+            );
 
             if (config.validateInput) {
               const validationError = await config.validateInput(inputRecord);
@@ -479,45 +491,38 @@ export function registerStructuredToolTask<
                   validationError.structuredContent.error?.message ??
                   INPUT_VALIDATION_FAILED;
                 await updateStatusMessage(validationMessage);
-                await reportProgress({
-                  current: TASK_PROGRESS_TOTAL,
-                  total: TASK_PROGRESS_TOTAL,
-                  message: formatProgressCompletion(
-                    config.name,
-                    progressContext,
-                    'rejected',
-                    false
-                  ),
-                });
+                await reportProgressCompletionUpdate(
+                  reportProgress,
+                  config.name,
+                  progressContext,
+                  'rejected',
+                  false
+                );
                 await storeResultSafely('completed', validationError);
                 return;
               }
             }
 
-            await reportProgress({
-              current: 1,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressStep(
-                config.name,
-                progressContext,
-                'preparing'
-              ),
-            });
+            await reportProgressStepUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              1,
+              'preparing'
+            );
 
             const promptParts = config.buildPrompt(inputRecord);
             let { prompt } = promptParts;
             const { systemInstruction } = promptParts;
 
             const modelLabel = friendlyModelName(config.model);
-            await reportProgress({
-              current: 2,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressStep(
-                config.name,
-                progressContext,
-                modelLabel
-              ),
-            });
+            await reportProgressStepUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              2,
+              modelLabel
+            );
 
             let parsed: TResult | undefined;
 
@@ -534,15 +539,13 @@ export function registerStructuredToolTask<
                 );
 
                 if (attempt === 0) {
-                  await reportProgress({
-                    current: 3,
-                    total: TASK_PROGRESS_TOTAL,
-                    message: formatProgressStep(
-                      config.name,
-                      progressContext,
-                      'processing response'
-                    ),
-                  });
+                  await reportProgressStepUpdate(
+                    reportProgress,
+                    config.name,
+                    progressContext,
+                    3,
+                    'processing response'
+                  );
                 }
 
                 parsed = config.resultSchema.parse(raw);
@@ -580,15 +583,12 @@ export function registerStructuredToolTask<
               : undefined;
 
             const outcome = config.formatOutcome?.(finalResult) ?? 'completed';
-            await reportProgress({
-              current: TASK_PROGRESS_TOTAL,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressCompletion(
-                config.name,
-                progressContext,
-                outcome
-              ),
-            });
+            await reportProgressCompletionUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              outcome
+            );
             await storeResultSafely(
               'completed',
               createToolResponse(
@@ -602,16 +602,13 @@ export function registerStructuredToolTask<
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             const errorMeta = classifyErrorMeta(error, errorMessage);
-            await reportProgress({
-              current: TASK_PROGRESS_TOTAL,
-              total: TASK_PROGRESS_TOTAL,
-              message: formatProgressCompletion(
-                config.name,
-                progressContext,
-                'failed',
-                false
-              ),
-            });
+            await reportProgressCompletionUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              'failed',
+              false
+            );
             await updateStatusMessage(errorMessage);
             await storeResultSafely(
               'failed',

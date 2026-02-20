@@ -21,6 +21,28 @@ Never modify code outside the fix scope. If the target cannot be located precise
 Return strict JSON only.
 `;
 
+function formatPatchCount(count: number): string {
+  return `${count} ${count === 1 ? 'patch' : 'patches'}`;
+}
+
+function buildSuggestSearchReplacePrompt(input: {
+  findingTitle: string;
+  findingDetails: string;
+  diff: string;
+}): string {
+  const files = parseDiffFiles(input.diff);
+  const paths = extractChangedPathsFromFiles(files);
+
+  return `
+Finding: ${input.findingTitle}
+Details: ${input.findingDetails}
+Changed Files: ${paths.join(', ')}
+
+Diff:
+${input.diff}
+`;
+}
+
 export function registerSuggestSearchReplaceTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'suggest_search_replace',
@@ -34,27 +56,15 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     thinkingBudget: PRO_THINKING_BUDGET,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     validateInput: (input) => validateDiffBudget(input.diff),
-    formatOutcome: (result) => {
-      const count = result.blocks.length;
-      return `${count} ${count === 1 ? 'patch' : 'patches'}`;
-    },
+    formatOutcome: (result) => formatPatchCount(result.blocks.length),
     formatOutput: (result) => {
       const count = result.blocks.length;
-      const patches = count === 1 ? '1 patch' : `${count} patches`;
+      const patches = formatPatchCount(count);
       return `${result.summary}\n${patches} • Checklist: ${result.validationChecklist.join(' | ')}`;
     },
-    buildPrompt: (input) => {
-      const files = parseDiffFiles(input.diff);
-      const paths = extractChangedPathsFromFiles(files);
-      const prompt = `
-Finding: ${input.findingTitle}
-Details: ${input.findingDetails}
-Changed Files: ${paths.join(', ')}
-
-Diff:
-${input.diff}
-`;
-      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
-    },
+    buildPrompt: (input) => ({
+      systemInstruction: SYSTEM_INSTRUCTION,
+      prompt: buildSuggestSearchReplacePrompt(input),
+    }),
   });
 }

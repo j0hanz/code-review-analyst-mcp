@@ -17,6 +17,39 @@ Every test case must target a specific behavior visible in the diff.
 Return strict JSON only.
 `;
 
+function formatOptionalLine(
+  label: string,
+  value: string | number | undefined
+): string {
+  return value === undefined ? '' : `\n${label}: ${value}`;
+}
+
+function buildGenerateTestPlanPrompt(input: {
+  repository: string;
+  language?: string | undefined;
+  testFramework?: string | undefined;
+  maxTestCases?: number | undefined;
+  diff: string;
+}): string {
+  const parsedFiles = parseDiffFiles(input.diff);
+  const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
+  const languageLine = formatOptionalLine('Language', input.language);
+  const frameworkLine = formatOptionalLine(
+    'Test Framework',
+    input.testFramework
+  );
+  const maxCasesLine = formatOptionalLine('Max Test Cases', input.maxTestCases);
+
+  return `
+Repository: ${input.repository}${languageLine}${frameworkLine}${maxCasesLine}
+Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
+Changed Files: ${paths.join(', ')}
+
+Diff:
+${input.diff}
+`;
+}
+
 export function registerGenerateTestPlanTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_test_plan',
@@ -43,26 +76,9 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
         testCases: cappedTestCases,
       };
     },
-    buildPrompt: (input) => {
-      const parsedFiles = parseDiffFiles(input.diff);
-      const insights = computeDiffStatsAndPathsFromFiles(parsedFiles);
-      const { stats, paths } = insights;
-      const lang = input.language ? `\nLanguage: ${input.language}` : '';
-      const fw = input.testFramework
-        ? `\nTest Framework: ${input.testFramework}`
-        : '';
-      const maxT = input.maxTestCases
-        ? `\nMax Test Cases: ${input.maxTestCases}`
-        : '';
-      const prompt = `
-Repository: ${input.repository}${lang}${fw}${maxT}
-Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
-Changed Files: ${paths.join(', ')}
-
-Diff:
-${input.diff}
-`;
-      return { systemInstruction: SYSTEM_INSTRUCTION, prompt };
-    },
+    buildPrompt: (input) => ({
+      systemInstruction: SYSTEM_INSTRUCTION,
+      prompt: buildGenerateTestPlanPrompt(input),
+    }),
   });
 }

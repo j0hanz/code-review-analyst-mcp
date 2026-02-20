@@ -2,6 +2,7 @@ import parseDiff from 'parse-diff';
 import type { File as ParsedFile } from 'parse-diff';
 
 export type { ParsedFile };
+
 const UNKNOWN_PATH = 'unknown';
 const NO_FILES_CHANGED = 'No files changed.';
 const EMPTY_PATHS: string[] = [];
@@ -15,6 +16,13 @@ interface DiffStats {
   deleted: number;
 }
 
+interface DiffComputation {
+  added: number;
+  deleted: number;
+  paths: Set<string>;
+  summaries: string[];
+}
+
 /** Parse unified diff string into structured file list. */
 export function parseDiffFiles(diff: string): ParsedFile[] {
   if (!diff) {
@@ -25,7 +33,6 @@ export function parseDiffFiles(diff: string): ParsedFile[] {
 }
 
 function cleanPath(path: string): string {
-  // Common git diff prefixes
   if (path.startsWith('a/') || path.startsWith('b/')) {
     return path.slice(2);
   }
@@ -36,20 +43,50 @@ function resolveChangedPath(file: ParsedFile): string | undefined {
   if (file.to && file.to !== '/dev/null') {
     return cleanPath(file.to);
   }
-
   if (file.from && file.from !== '/dev/null') {
     return cleanPath(file.from);
   }
-
   return undefined;
 }
 
-function sortPaths(paths: Set<string>): string[] {
+function sortPaths(paths: ReadonlySet<string>): string[] {
   if (paths.size === 0) {
     return EMPTY_PATHS;
   }
 
   return Array.from(paths).sort(PATH_SORTER);
+}
+
+function buildDiffComputation(files: readonly ParsedFile[]): DiffComputation {
+  let added = 0;
+  let deleted = 0;
+  const paths = new Set<string>();
+  const summaries = new Array<string>(files.length);
+
+  let index = 0;
+  for (const file of files) {
+    added += file.additions;
+    deleted += file.deletions;
+
+    const path = resolveChangedPath(file);
+    if (path) {
+      paths.add(path);
+    }
+
+    summaries[index] =
+      `${path ?? UNKNOWN_PATH} (+${file.additions} -${file.deletions})`;
+    index += 1;
+  }
+
+  return { added, deleted, paths, summaries };
+}
+
+function buildStats(
+  filesCount: number,
+  added: number,
+  deleted: number
+): DiffStats {
+  return { files: filesCount, added, deleted };
 }
 
 export function computeDiffStatsAndSummaryFromFiles(
@@ -62,24 +99,12 @@ export function computeDiffStatsAndSummaryFromFiles(
     };
   }
 
-  let added = 0;
-  let deleted = 0;
-  const summaries = new Array<string>(files.length);
-
-  let index = 0;
-  for (const file of files) {
-    added += file.additions;
-    deleted += file.deletions;
-
-    const path = resolveChangedPath(file);
-    summaries[index] =
-      `${path ?? UNKNOWN_PATH} (+${file.additions} -${file.deletions})`;
-    index += 1;
-  }
+  const computed = buildDiffComputation(files);
+  const stats = buildStats(files.length, computed.added, computed.deleted);
 
   return {
-    stats: { files: files.length, added, deleted },
-    summary: `${summaries.join(', ')} [${files.length} files, +${added} -${deleted}]`,
+    stats,
+    summary: `${computed.summaries.join(', ')} [${stats.files} files, +${stats.added} -${stats.deleted}]`,
   };
 }
 
@@ -93,23 +118,10 @@ export function computeDiffStatsAndPathsFromFiles(
     };
   }
 
-  let added = 0;
-  let deleted = 0;
-  const paths = new Set<string>();
-
-  for (const file of files) {
-    added += file.additions;
-    deleted += file.deletions;
-
-    const path = resolveChangedPath(file);
-    if (path) {
-      paths.add(path);
-    }
-  }
-
+  const computed = buildDiffComputation(files);
   return {
-    stats: { files: files.length, added, deleted },
-    paths: sortPaths(paths),
+    stats: buildStats(files.length, computed.added, computed.deleted),
+    paths: sortPaths(computed.paths),
   };
 }
 
@@ -117,16 +129,11 @@ export function computeDiffStatsAndPathsFromFiles(
 export function extractChangedPathsFromFiles(
   files: readonly ParsedFile[]
 ): string[] {
-  const paths = new Set<string>();
-
-  for (const file of files) {
-    const path = resolveChangedPath(file);
-    if (path) {
-      paths.add(path);
-    }
+  if (files.length === 0) {
+    return EMPTY_PATHS;
   }
 
-  return sortPaths(paths);
+  return sortPaths(buildDiffComputation(files).paths);
 }
 
 /** Extract all unique changed file paths (renamed: returns new path). */
@@ -137,15 +144,12 @@ export function extractChangedPaths(diff: string): string[] {
 export function computeDiffStatsFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ files: number; added: number; deleted: number }> {
-  let added = 0;
-  let deleted = 0;
-
-  for (const file of files) {
-    added += file.additions;
-    deleted += file.deletions;
+  if (files.length === 0) {
+    return EMPTY_STATS;
   }
 
-  return { files: files.length, added, deleted };
+  const computed = buildDiffComputation(files);
+  return buildStats(files.length, computed.added, computed.deleted);
 }
 
 /** Count changed files, added lines, and deleted lines. */
