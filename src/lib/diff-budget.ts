@@ -1,3 +1,4 @@
+import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse, type ErrorMeta } from './tool-response.js';
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
@@ -5,34 +6,17 @@ const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
-// Lazy-cached: first call happens after parseCommandLineArgs() sets MAX_DIFF_CHARS.
-let cachedMaxDiffChars: number | undefined;
-
-function parsePositiveInteger(value: string): number | undefined {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-function getConfiguredMaxDiffChars(): number {
-  const envValue = process.env[MAX_DIFF_CHARS_ENV_VAR] ?? '';
-  return parsePositiveInteger(envValue) ?? DEFAULT_MAX_DIFF_CHARS;
-}
+const diffCharsConfig = createCachedEnvInt(
+  MAX_DIFF_CHARS_ENV_VAR,
+  DEFAULT_MAX_DIFF_CHARS
+);
 
 export function getMaxDiffChars(): number {
-  if (cachedMaxDiffChars !== undefined) {
-    return cachedMaxDiffChars;
-  }
-
-  cachedMaxDiffChars = getConfiguredMaxDiffChars();
-  return cachedMaxDiffChars;
+  return diffCharsConfig.get();
 }
 
 export function resetMaxDiffCharsCacheForTesting(): void {
-  cachedMaxDiffChars = undefined;
+  diffCharsConfig.reset();
 }
 
 export function exceedsDiffBudget(diff: string): boolean {

@@ -1,35 +1,25 @@
+import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse } from './tool-response.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
 const MAX_CONTEXT_CHARS_ENV_VAR = 'MAX_CONTEXT_CHARS';
 const BUDGET_ERROR_META = { retryable: false, kind: 'budget' } as const;
-let cachedMaxContextChars: number | undefined;
+
+const contextCharsConfig = createCachedEnvInt(
+  MAX_CONTEXT_CHARS_ENV_VAR,
+  DEFAULT_MAX_CONTEXT_CHARS
+);
+
 interface FileContent {
   content: string;
 }
 
-function parsePositiveInteger(value: string): number | undefined {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
+export function resetMaxContextCharsCacheForTesting(): void {
+  contextCharsConfig.reset();
 }
 
 function getMaxContextChars(): number {
-  if (cachedMaxContextChars !== undefined) {
-    return cachedMaxContextChars;
-  }
-
-  const envValue = process.env[MAX_CONTEXT_CHARS_ENV_VAR] ?? '';
-  cachedMaxContextChars =
-    parsePositiveInteger(envValue) ?? DEFAULT_MAX_CONTEXT_CHARS;
-  return cachedMaxContextChars;
-}
-
-export function resetMaxContextCharsCacheForTesting(): void {
-  cachedMaxContextChars = undefined;
+  return contextCharsConfig.get();
 }
 
 export function computeContextSize(

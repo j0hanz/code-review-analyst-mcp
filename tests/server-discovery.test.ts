@@ -11,7 +11,7 @@ function createClientServerPair(): {
   connect: () => Promise<void>;
   close: () => Promise<void>;
 } {
-  const server = createServer();
+  const { server, shutdown } = createServer();
   const client = new Client({ name: 'test-client', version: '0.0.0' });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -26,7 +26,7 @@ function createClientServerPair(): {
     },
     close: async () => {
       await client.close();
-      await server.close();
+      await shutdown();
     },
   };
 }
@@ -149,6 +149,25 @@ test('prompt review-guide returns workflow guide', async () => {
       typeof message.content.text === 'string' &&
         message.content.text.includes('analyze_pr_impact'),
       'Guide text should reference the tool'
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('review-guide tool argument completes with prefix ana', async () => {
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const result = await client.complete({
+      ref: { type: 'ref/prompt', name: 'review-guide' },
+      argument: { name: 'tool', value: 'ana' },
+    });
+
+    assert.ok(
+      result.completion.values.some((v) => v.startsWith('ana')),
+      'Should complete with a value starting with ana'
     );
   } finally {
     await close();

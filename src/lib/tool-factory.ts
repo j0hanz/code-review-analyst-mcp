@@ -12,7 +12,7 @@ import type {
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
-import { getErrorMessage } from './errors.js';
+import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
 import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
 import {
@@ -20,6 +20,7 @@ import {
   createToolResponse,
   type ErrorMeta,
 } from './tool-response.js';
+import type { GeminiStructuredRequest } from './types.js';
 
 export interface PromptParts {
   systemInstruction: string;
@@ -30,16 +31,16 @@ const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 const TASK_PROGRESS_TOTAL = 4;
 const INPUT_VALIDATION_FAILED = 'Input validation failed';
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
-const RETRYABLE_UPSTREAM_ERROR_PATTERN =
-  /(429|500|502|503|504|rate limit|unavailable|timeout|timed out|connection|reset|econn|enotfound|temporary|transient)/i;
 const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
+  TResult extends object = Record<string, unknown>,
+  TFinal extends TResult = TResult,
 > {
-  /** Tool name registered with the MCP server (e.g. 'review_diff'). */
+  /** Tool name registered with the MCP server (e.g. 'analyze_pr_impact'). */
   name: string;
 
   /** Human-readable title shown to clients. */
@@ -55,16 +56,16 @@ export interface StructuredToolTaskConfig<
   fullInputSchema: z.ZodType<TInput>;
 
   /** Zod schema for parsing and validating the Gemini structured response. */
-  resultSchema: z.ZodType;
+  resultSchema: z.ZodType<TResult>;
 
   /** Optional Zod schema used specifically for Gemini response validation. */
   geminiSchema?: z.ZodType;
 
-  /** Stable error code returned on failure (e.g. 'E_REVIEW_DIFF'). */
+  /** Stable error code returned on failure (e.g. 'E_INSPECT_QUALITY'). */
   errorCode: string;
 
-  /** Optional post-processing hook called after resultSchema.parse(). Returns the (possibly modified) final result. */
-  transformResult?: (input: TInput, result: unknown) => unknown;
+  /** Optional post-processing hook called after resultSchema.parse(). The return value replaces the parsed result. */
+  transformResult?: (input: TInput, result: TResult) => TFinal;
 
   /** Optional validation hook for input parameters. */
   validateInput?: (
@@ -84,7 +85,7 @@ export interface StructuredToolTaskConfig<
   timeoutMs?: number;
 
   /** Optional formatter for human-readable text output. */
-  formatOutput?: (result: unknown) => string;
+  formatOutput?: (result: TFinal) => string;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput) => PromptParts;
@@ -107,55 +108,31 @@ function parseToolInput<TInput extends object>(
   return fullInputSchema.parse(input);
 }
 
-function createGenerationRequest<TInput extends object>(
-  config: StructuredToolTaskConfig<TInput>,
+function createGenerationRequest<
+  TInput extends object,
+  TResult extends object,
+  TFinal extends TResult,
+>(
+  config: StructuredToolTaskConfig<TInput, TResult, TFinal>,
   promptParts: PromptParts,
   responseSchema: Record<string, unknown>,
   onLog: (level: string, data: unknown) => Promise<void>,
   signal?: AbortSignal
-): {
-  model?: string;
-  thinkingBudget?: number;
-  timeoutMs?: number;
-  onLog: (level: string, data: unknown) => Promise<void>;
-  systemInstruction: string;
-  prompt: string;
-  responseSchema: Record<string, unknown>;
-  signal?: AbortSignal;
-} {
-  const request: {
-    model?: string;
-    thinkingBudget?: number;
-    timeoutMs?: number;
-    onLog: (level: string, data: unknown) => Promise<void>;
-    systemInstruction: string;
-    prompt: string;
-    responseSchema: Record<string, unknown>;
-    signal?: AbortSignal;
-  } = {
+): GeminiStructuredRequest {
+  return {
     systemInstruction: promptParts.systemInstruction,
     prompt: promptParts.prompt,
     responseSchema,
     onLog,
+    ...(config.model !== undefined ? { model: config.model } : undefined),
+    ...(config.thinkingBudget !== undefined
+      ? { thinkingBudget: config.thinkingBudget }
+      : undefined),
+    ...(config.timeoutMs !== undefined
+      ? { timeoutMs: config.timeoutMs }
+      : undefined),
+    ...(signal !== undefined ? { signal } : undefined),
   };
-
-  if (config.model) {
-    request.model = config.model;
-  }
-
-  if (config.thinkingBudget) {
-    request.thinkingBudget = config.thinkingBudget;
-  }
-
-  if (config.timeoutMs) {
-    request.timeoutMs = config.timeoutMs;
-  }
-
-  if (signal) {
-    request.signal = signal;
-  }
-
-  return request;
 }
 
 function isTerminalTaskStatus(status: string): boolean {
@@ -258,9 +235,13 @@ function createGeminiLogger(
   };
 }
 
-export function registerStructuredToolTask<TInput extends object>(
+export function registerStructuredToolTask<
+  TInput extends object,
+  TResult extends object = Record<string, unknown>,
+  TFinal extends TResult = TResult,
+>(
   server: McpServer,
-  config: StructuredToolTaskConfig<TInput>
+  config: StructuredToolTaskConfig<TInput, TResult, TFinal>
 ): void {
   const responseSchema = createGeminiResponseSchema({
     geminiSchema: config.geminiSchema,
@@ -372,17 +353,19 @@ export function registerStructuredToolTask<TInput extends object>(
 
             await sendTaskProgress(extra, 3);
 
-            const parsed: unknown = config.resultSchema.parse(raw);
+            const parsed = config.resultSchema.parse(raw);
 
-            const finalResult = config.transformResult
-              ? config.transformResult(inputRecord, parsed)
-              : parsed;
+            // When transformResult is absent, TFinal = TResult (by the generic default).
+            // The cast is sound by construction; TypeScript cannot verify this statically.
+            const finalResult = (
+              config.transformResult
+                ? config.transformResult(inputRecord, parsed)
+                : parsed
+            ) as TFinal;
 
             const textContent = config.formatOutput
               ? config.formatOutput(finalResult)
               : undefined;
-
-            await sendTaskProgress(extra, 4);
 
             await storeResultIfTaskActive(
               'completed',
@@ -394,6 +377,8 @@ export function registerStructuredToolTask<TInput extends object>(
                 textContent
               )
             );
+
+            await sendTaskProgress(extra, 4);
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             const errorMeta = classifyErrorMeta(error, errorMessage);

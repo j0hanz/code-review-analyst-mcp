@@ -1,19 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { type z } from 'zod';
-
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   computeDiffStatsFromFiles,
   formatFileSummary,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
+import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 
-const DEFAULT_LANGUAGE = 'detect';
 const SYSTEM_INSTRUCTION = `
 You are a technical change analyst.
 Your goal is to identify observable facts about what changed and their downstream effects.
@@ -34,8 +31,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     model: FLASH_MODEL,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
-      const typed = result as z.infer<typeof PrImpactResultSchema>;
-      return `Impact Analysis (${typed.severity}): ${typed.summary}`;
+      return `Impact Analysis (${result.severity}): ${result.summary}`;
     },
     buildPrompt: (input) => {
       const files = parseDiffFiles(input.diff);

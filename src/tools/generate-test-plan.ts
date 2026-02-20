@@ -1,20 +1,21 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import type { z } from 'zod';
-
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import {
   computeDiffStatsFromFiles,
   extractChangedPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { FLASH_MODEL, FLASH_THINKING_BUDGET } from '../lib/model-config.js';
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_FRAMEWORK as DEFAULT_TEST_FRAMEWORK,
+  FLASH_MODEL,
+  FLASH_THINKING_BUDGET,
+} from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
-const DEFAULT_LANGUAGE = 'detect';
-const DEFAULT_TEST_FRAMEWORK = 'detect';
 const DEFAULT_MAX_TEST_CASES = 'auto';
 const SYSTEM_INSTRUCTION = `
 You are a QA automation architect.
@@ -37,18 +38,16 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     thinkingBudget: FLASH_THINKING_BUDGET,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
-      const typed = result as z.infer<typeof TestPlanResultSchema>;
-      return `Test Plan: ${typed.summary}\n${typed.testCases.length} cases proposed.`;
+      return `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`;
     },
     transformResult: (input, result) => {
-      const typed = result as z.infer<typeof TestPlanResultSchema>;
-      const cappedTestCases = typed.testCases.slice(
+      const cappedTestCases = result.testCases.slice(
         0,
-        input.maxTestCases ?? typed.testCases.length
+        input.maxTestCases ?? result.testCases.length
       );
 
       return {
-        ...typed,
+        ...result,
         testCases: cappedTestCases,
       };
     },

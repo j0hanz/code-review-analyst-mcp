@@ -1,7 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import type { z } from 'zod';
-
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import { extractChangedPaths } from '../lib/diff-parser.js';
 import {
@@ -36,8 +34,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     validateInput: (input) => validateDiffBudget(input.diff),
     formatOutput: (result) => {
-      const typed = result as z.infer<typeof SearchReplaceResultSchema>;
-      return `Search/Replace Suggestion: ${typed.summary}`;
+      return `Search/Replace Suggestion: ${result.summary}`;
     },
     buildPrompt: (input) => {
       const paths = extractChangedPaths(input.diff);

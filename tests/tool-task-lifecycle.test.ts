@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 import type { GoogleGenAI } from '@google/genai';
 
+import { resetMaxContextCharsCacheForTesting } from '../src/lib/context-budget.js';
 import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff-budget.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
 import { createServer } from '../src/server.js';
@@ -24,7 +25,7 @@ function createClientServerPair(): {
   connect: () => Promise<void>;
   close: () => Promise<void>;
 } {
-  const server = createServer();
+  const { server, shutdown } = createServer();
   const client = new Client({ name: 'task-lifecycle-test', version: '0.0.0' });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -39,7 +40,7 @@ function createClientServerPair(): {
     },
     close: async () => {
       await client.close();
-      await server.close();
+      await shutdown();
     },
   };
 }
@@ -254,5 +255,32 @@ test('generate_test_plan respects maxTestCases cap', async () => {
     assert.equal(structuredResult.testCases.length, 2);
   } finally {
     await close();
+  }
+});
+
+test('inspect_code_quality returns budget error when context chars exceeded', async () => {
+  process.env.MAX_CONTEXT_CHARS = '20';
+  resetMaxContextCharsCacheForTesting();
+
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const result = await client.callTool({
+      name: 'inspect_code_quality',
+      arguments: { diff: SAMPLE_DIFF, repository: 'org/repo' },
+    });
+
+    assert.equal(result.isError, true);
+    assert.ok(result.structuredContent);
+    assert.equal(result.structuredContent.ok, false);
+    assert.equal(
+      (result.structuredContent.error as { code: string }).code,
+      'E_INPUT_TOO_LARGE'
+    );
+  } finally {
+    await close();
+    delete process.env.MAX_CONTEXT_CHARS;
+    resetMaxContextCharsCacheForTesting();
   }
 });

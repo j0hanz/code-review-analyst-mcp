@@ -1,5 +1,12 @@
 import { inspect } from 'node:util';
 
+/**
+ * Unified superset pattern for retryable upstream errors.
+ * Used by both the Gemini adapter and the tool-task factory to classify errors consistently.
+ */
+export const RETRYABLE_UPSTREAM_ERROR_PATTERN =
+  /(429|500|502|503|504|rate.?limit|quota|overload|unavailable|gateway|timeout|timed.out|connection|reset|econn|enotfound|temporary|transient|invalid.json)/i;
+
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }

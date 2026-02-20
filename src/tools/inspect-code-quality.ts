@@ -1,11 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import type { z } from 'zod';
-
 import { validateContextBudget } from '../lib/context-budget.js';
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import { formatFileSummary, parseDiffFiles } from '../lib/diff-parser.js';
 import {
+  DEFAULT_LANGUAGE,
   DEFAULT_TIMEOUT_PRO_MS,
   PRO_MODEL,
   PRO_THINKING_BUDGET,
@@ -14,19 +13,15 @@ import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import { CodeQualityResultSchema } from '../schemas/outputs.js';
 
-const DEFAULT_LANGUAGE = 'detect';
 const DEFAULT_FOCUS_AREAS = 'General';
 const DEFAULT_MAX_FINDINGS = 'auto';
 const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
 const PATH_ESCAPE_REPLACEMENTS = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
+  '"': '\\"',
   '\n': ' ',
   '\r': ' ',
 } as const;
-const PATH_ESCAPE_PATTERN = /[&<>"\n\r]/g;
+const PATH_ESCAPE_PATTERN = /["\n\r]/g;
 const SYSTEM_INSTRUCTION = `
 You are a principal software engineer performing a deep code review.
 Analyze the diff and provided file context to identify bugs, security issues, and quality problems.
@@ -35,7 +30,7 @@ Prioritize correctness and maintainability.
 Return strict JSON only.
 `;
 
-function sanitizePath(path: string): string {
+export function sanitizePath(path: string): string {
   return path.replace(PATH_ESCAPE_PATTERN, (match) => {
     return PATH_ESCAPE_REPLACEMENTS[
       match as keyof typeof PATH_ESCAPE_REPLACEMENTS
@@ -43,8 +38,10 @@ function sanitizePath(path: string): string {
   });
 }
 
-function sanitizeContent(content: string): string {
-  return content.replaceAll('<<END_FILE>>', '<END_FILE_ESCAPED>');
+export function sanitizeContent(content: string): string {
+  return content
+    .replaceAll('<<END_FILE>>', '<END_FILE_ESCAPED>')
+    .replaceAll('<<FILE', '<FILE');
 }
 
 function formatFileContext(
@@ -92,18 +89,16 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       return validateContextBudget(input.diff, input.files);
     },
     formatOutput: (result) => {
-      const typed = result as z.infer<typeof CodeQualityResultSchema>;
-      return `Code Quality Inspection: ${typed.summary}\n${typed.findings.length} findings reported.`;
+      return `Code Quality Inspection: ${result.summary}\n${result.findings.length} findings reported.`;
     },
     transformResult: (input, result) => {
-      const typed = result as z.infer<typeof CodeQualityResultSchema>;
-      const cappedFindings = typed.findings.slice(
+      const cappedFindings = result.findings.slice(
         0,
-        input.maxFindings ?? typed.findings.length
+        input.maxFindings ?? result.findings.length
       );
 
       return {
-        ...typed,
+        ...result,
         findings: cappedFindings,
       };
     },

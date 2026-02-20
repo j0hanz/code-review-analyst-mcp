@@ -21,3 +21,9 @@ export const DEFAULT_TIMEOUT_PRO_MS = 120_000;
 export const MODEL_TIMEOUT_MS = {
   defaultPro: DEFAULT_TIMEOUT_PRO_MS,
 } as const;
+
+/** Default language hint when not specified by the user. Tells the model to auto-detect. */
+export const DEFAULT_LANGUAGE = 'detect';
+
+/** Default test-framework hint when not specified by the user. Tells the model to auto-detect. */
+export const DEFAULT_FRAMEWORK = 'detect';

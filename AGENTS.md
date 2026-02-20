@@ -20,9 +20,9 @@
 - `src/` — Main source root (see `tsconfig.json#rootDir`)
   - `src/index.ts` — CLI entrypoint with shebang, stdio transport wiring, signal shutdown handlers
   - `src/server.ts` — `McpServer` instance creation, capability declaration, version loading, instructions loading
-  - `src/tools/` — Tool implementations, one file per tool (`review-diff.ts`, `risk-score.ts`, `suggest-patch.ts`), plus `index.ts` registrar
+  - `src/tools/` — Tool implementations, one file per tool (`analyze-pr-impact.ts`, `generate-review-summary.ts`, `inspect-code-quality.ts`, `suggest-search-replace.ts`, `generate-test-plan.ts`), plus `index.ts` registrar
   - `src/schemas/` — Zod schemas: `inputs.ts` (tool input validation), `outputs.ts` (tool result schemas; Gemini schemas auto-derived via `stripJsonSchemaConstraints` in `tool-factory.ts`)
-  - `src/lib/` — Shared infrastructure: `gemini.ts` (API adapter with retry/timeout), `gemini-schema.ts` (JSON Schema constraint stripping for Gemini), `tool-factory.ts` (generic tool-task registrar), `tool-response.ts` (response helpers), `errors.ts` (error extraction), `diff-budget.ts` (diff size guard), `types.ts` (shared type definitions)
+  - `src/lib/` — Shared infrastructure: `gemini.ts` (API adapter with retry/timeout), `gemini-schema.ts` (JSON Schema constraint stripping for Gemini), `tool-factory.ts` (generic tool-task registrar), `tool-response.ts` (response helpers), `errors.ts` (error extraction), `diff-budget.ts` (diff size guard), `context-budget.ts` (context size guard), `diff-parser.ts` (unified diff parsing), `model-config.ts` (model name constants, default values), `env-config.ts` (cached env-var integer factory), `types.ts` (shared type definitions)
   - `src/resources/` — MCP resource registration (`internal://instructions`)
   - `src/prompts/` — MCP prompt registration (`get-help`)
   - `src/instructions.md` — Server usage guide bundled into `dist/` and served as a resource
@@ -57,7 +57,7 @@
 - **Schemas:** All object schemas use `z.strictObject()` (rejects unknown fields). All parameters have `.describe()` annotations and explicit bounds (`.min()`, `.max()`). Observed in `src/schemas/inputs.ts` and `src/schemas/outputs.ts`.
 - **Error Handling:** Errors caught as `unknown`, extracted via `getErrorMessage()` helper (see `src/lib/errors.ts`). Tool errors returned via `createErrorToolResponse(code, message)` with `isError: true` (see `src/lib/tool-response.ts`). Uncaught exceptions avoided in tool handlers (see `src/lib/tool-factory.ts`).
 - **Patterns Observed:**
-  - Generic tool-task factory pattern: all three tools use the same `registerStructuredToolTask<TInput>()` abstraction with config objects (observed in `src/tools/review-diff.ts`, `src/tools/risk-score.ts`, `src/tools/suggest-patch.ts`)
+  - Generic tool-task factory pattern: all five tools use the same `registerStructuredToolTask<TInput, TResult>()` abstraction with config objects (observed in `src/tools/analyze-pr-impact.ts`, `src/tools/generate-review-summary.ts`, `src/tools/inspect-code-quality.ts`, `src/tools/suggest-search-replace.ts`, `src/tools/generate-test-plan.ts`)
   - Human-readable output summaries provided via `formatOutput` hook in tool config, appearing in `content[0].text`
   - Gemini response schemas are auto-derived from result schemas by stripping JSON Schema constraints (`stripJsonSchemaConstraints` in `src/lib/gemini-schema.ts`), eliminating manual duplication
   - Dual content output: every tool response includes both `content` (JSON text) and `structuredContent` for backward compatibility (observed in `src/lib/tool-response.ts`)
@@ -79,7 +79,7 @@
 - Do not use `z.ZodTypeAny`; use `z.ZodType` (without generics) — `ZodTypeAny` is deprecated in Zod v4 (see `src/lib/tool-factory.ts`).
 - Do not import `zod-to-json-schema` directly; use Zod v4's built-in `z.toJSONSchema()` instead (see `src/lib/tool-factory.ts`).
 - Do not disable or bypass existing lint/type rules without explicit approval (see `eslint.config.mjs`, `tsconfig.json`).
-- Do not change public tool APIs (`review_diff`, `risk_score`, `suggest_patch`) without updating `README.md`, `src/instructions.md`, schemas, and tests.
+- Do not change public tool APIs (`analyze_pr_impact`, `generate_review_summary`, `inspect_code_quality`, `suggest_search_replace`, `generate_test_plan`) without updating `README.md`, `src/instructions.md`, schemas, and tests.
 - Do not omit `.js` extensions in local imports — required for NodeNext module resolution (see `tsconfig.json#module`, observed in all source files).
 - Do not omit `.describe()` on Zod schema fields — required for LLM parameter guidance (see `.github/instructions/typescript-mcp-server.instructions.md`).
 
@@ -91,12 +91,14 @@
   - `tests/` — Primary test directory (see `scripts/tasks.mjs` test patterns: `tests/**/*.test.ts`)
   - `src/__tests__/` — Additional test location (pattern configured but directory currently empty)
 - **Test files:**
-  - `tests/review-diff.test.ts` — Tool registration smoke test, input schema rejection of unknown fields, output schema validation
-  - `tests/risk-score.test.ts` — Risk score schema validation tests
-  - `tests/suggest-patch.test.ts` — Patch suggestion schema validation tests
+  - `tests/tool-task-lifecycle.test.ts` — Tool registration smoke test, task lifecycle, input schema rejection of unknown fields, schema validation, budget error paths
+  - `tests/new-schemas.test.ts` — Input schema validation tests
+  - `tests/diff-parser.test.ts` — Unit tests for diff parsing and stats utilities
   - `tests/gemini-schema.test.ts` — Unit + integration tests for `stripJsonSchemaConstraints` utility
-  - `tests/server-discovery.test.ts` — Integration tests using `InMemoryTransport` client/server pairs: resource discoverability, resource content reading, prompt discoverability, prompt content
-  - `tests/gemini.integration.test.ts` — Gemini adapter integration tests
+  - `tests/gemini-thinking.test.ts` — Gemini thinking budget integration tests
+  - `tests/server-discovery.test.ts` — Integration tests using `InMemoryTransport` client/server pairs: resource discoverability, resource content reading, prompt discoverability, prompt content, completion RPC
+  - `tests/inspect-file-context.test.ts` — Unit tests for `sanitizeContent` and `sanitizePath` in `inspect-code-quality.ts`
+  - `tests/gemini.integration.test.ts` — Gemini adapter integration tests (requires API key)
 - **Approach:** Unit tests for schema validation (parse/safeParse), smoke tests for tool registration, integration tests for MCP server discovery using in-memory transport (no external services required for unit/integration tests). No mocking framework — tests use direct schema validation and `InMemoryTransport` from MCP SDK.
 - **Running single test files:** `node --test --import tsx/esm tests/<file>.test.ts`
 

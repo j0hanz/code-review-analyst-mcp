@@ -24,6 +24,8 @@ const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const SERVER_CAPABILITIES = {
   logging: {},
   completions: {},
+  resources: {},
+  tools: {},
   tasks: {
     list: {},
     cancel: {},
@@ -107,7 +109,12 @@ function loadInstructions(): string {
 
 const SERVER_INSTRUCTIONS = loadInstructions();
 
-export function createServer(): McpServer {
+export interface ServerHandle {
+  server: McpServer;
+  shutdown: () => Promise<void>;
+}
+
+export function createServer(): ServerHandle {
   const taskStore = new InMemoryTaskStore();
   const server = new McpServer(
     {
@@ -124,11 +131,11 @@ export function createServer(): McpServer {
   registerAllTools(server);
   registerAllResources(server, SERVER_INSTRUCTIONS);
   registerAllPrompts(server, SERVER_INSTRUCTIONS);
-  const close = server.close.bind(server);
-  server.close = async (): Promise<void> => {
-    await close();
+
+  const shutdown = async (): Promise<void> => {
+    await server.close();
     taskStore.cleanup();
   };
 
-  return server;
+  return { server, shutdown };
 }

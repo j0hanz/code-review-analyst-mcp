@@ -51,7 +51,7 @@ async function shutdown(server: ServerInstance): Promise<void> {
   }
 
   shuttingDown = true;
-  await server.close();
+  await server.shutdown();
   process.exit(0);
 }
 
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
 
   registerShutdownHandlers(server);
-  await server.connect(transport);
+  await server.server.connect(transport);
 }
 
 main().catch((error: unknown) => {

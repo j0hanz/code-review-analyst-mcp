@@ -8,7 +8,8 @@ import { debuglog } from 'node:util';
 import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
-import { getErrorMessage } from './errors.js';
+import { createCachedEnvInt } from './env-config.js';
+import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import type { GeminiStructuredRequest } from './types.js';
 
 // Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
@@ -30,6 +31,10 @@ const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
 const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
+
+const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
+let activeCalls = 0;
+
 const RETRYABLE_TRANSIENT_CODES = new Set([
   'RESOURCE_EXHAUSTED',
   'UNAVAILABLE',
@@ -37,8 +42,6 @@ const RETRYABLE_TRANSIENT_CODES = new Set([
   'INTERNAL',
   'ABORTED',
 ]);
-const RETRYABLE_MESSAGE_PATTERN =
-  /(429|500|502|503|504|rate limit|unavailable|timeout|invalid json)/i;
 
 const SAFETY_CATEGORIES = [
   HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -306,7 +309,7 @@ function shouldRetry(error: unknown): boolean {
   }
 
   const message = getErrorMessage(error);
-  return RETRYABLE_MESSAGE_PATTERN.test(message);
+  return RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message);
 }
 
 function getRetryDelayMs(attempt: number): number {
@@ -504,10 +507,22 @@ export async function generateStructuredJson(
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
   const { onLog } = request;
 
-  return geminiContext.run(
-    { requestId: nextRequestId(), model },
-    async (): Promise<unknown> => {
-      return runWithRetries(request, model, timeoutMs, maxRetries, onLog);
-    }
-  );
+  const limit = maxConcurrentCallsConfig.get();
+  if (activeCalls >= limit) {
+    throw new Error(
+      `Too many concurrent Gemini calls (limit: ${formatNumber(limit)}).`
+    );
+  }
+
+  activeCalls += 1;
+  try {
+    return await geminiContext.run(
+      { requestId: nextRequestId(), model },
+      async (): Promise<unknown> => {
+        return runWithRetries(request, model, timeoutMs, maxRetries, onLog);
+      }
+    );
+  } finally {
+    activeCalls -= 1;
+  }
 }

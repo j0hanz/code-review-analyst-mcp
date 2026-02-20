@@ -1,10 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { type z } from 'zod';
+import type { z } from 'zod';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
 import { computeDiffStats } from '../lib/diff-parser.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
+import { DEFAULT_LANGUAGE, FLASH_MODEL } from '../lib/model-config.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
@@ -12,7 +12,6 @@ import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
 const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
   stats: true,
 });
-const DEFAULT_LANGUAGE = 'detect';
 const SYSTEM_INSTRUCTION = `
 You are a senior code reviewer.
 Summarize the changes in this pull request and provide a high-level risk assessment.
@@ -51,12 +50,11 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     model: FLASH_MODEL,
     validateInput: (input) => validateDiffBudget(input.diff),
     transformResult: (input, result) => {
-      const partial = result as z.infer<typeof ReviewSummaryModelSchema>;
       const stats = getCachedStats(input);
       statsCache.delete(input);
 
       return {
-        ...partial,
+        ...result,
         stats: {
           filesChanged: stats.files,
           linesAdded: stats.added,
@@ -65,8 +63,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
       };
     },
     formatOutput: (result) => {
-      const typed = result as z.infer<typeof ReviewSummaryResultSchema>;
-      return `Review Summary: ${typed.summary}\nRecommendation: ${typed.recommendation}`;
+      return `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`;
     },
     buildPrompt: (input) => {
       const stats = getCachedStats(input);
