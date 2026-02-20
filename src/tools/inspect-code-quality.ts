@@ -108,7 +108,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const fileContext = formatFileContext(input.files);
       const prompt = `
 Repository: ${input.repository}
-Language: ${input.language ?? DEFAULT_LANGUAGE}
+Language: ${input.language ?? (DEFAULT_LANGUAGE as string)}
 Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}
 Max Findings: ${input.maxFindings ?? DEFAULT_MAX_FINDINGS}
 Changed Files:

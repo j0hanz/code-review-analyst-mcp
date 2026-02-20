@@ -30,7 +30,6 @@ export interface PromptParts {
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 const TASK_PROGRESS_TOTAL = 4;
 const INPUT_VALIDATION_FAILED = 'Input validation failed';
-const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
@@ -133,10 +132,6 @@ function createGenerationRequest<
       : undefined),
     ...(signal !== undefined ? { signal } : undefined),
   };
-}
-
-function isTerminalTaskStatus(status: string): boolean {
-  return TERMINAL_TASK_STATUSES.has(status);
 }
 
 function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
@@ -259,9 +254,6 @@ export function registerStructuredToolTask<
         readOnlyHint: true,
         openWorldHint: true,
       },
-      execution: {
-        taskSupport: 'optional',
-      },
     },
     {
       createTask: async (
@@ -287,30 +279,18 @@ export function registerStructuredToolTask<
             }
           };
 
-          const storeResultIfTaskActive = async (
+          const storeResultSafely = async (
             status: 'completed' | 'failed',
             result: CallToolResult
-          ): Promise<boolean> => {
-            try {
-              const currentTask = await extra.taskStore.getTask(task.taskId);
-              if (isTerminalTaskStatus(currentTask.status)) {
-                return false;
-              }
-            } catch {
-              // Task may have been cancelled/cleaned up.
-              return false;
-            }
-
+          ): Promise<void> => {
             try {
               await extra.taskStore.storeTaskResult(
                 task.taskId,
                 status,
                 result
               );
-              return true;
             } catch {
-              // Ignore race conditions between cancellation and result persistence.
-              return false;
+              // storing the result failed, possibly because the task is already marked as failed due to an uncaught error. There's not much we can do at this point, so we swallow the error to avoid unhandled rejections.
             }
           };
 
@@ -329,7 +309,7 @@ export function registerStructuredToolTask<
                   validationError.structuredContent.error?.message ??
                   INPUT_VALIDATION_FAILED;
                 await updateStatusMessage(validationMessage);
-                await storeResultIfTaskActive('failed', validationError);
+                await storeResultSafely('completed', validationError);
                 return;
               }
             }
@@ -367,7 +347,8 @@ export function registerStructuredToolTask<
               ? config.formatOutput(finalResult)
               : undefined;
 
-            await storeResultIfTaskActive(
+            await sendTaskProgress(extra, TASK_PROGRESS_TOTAL);
+            await storeResultSafely(
               'completed',
               createToolResponse(
                 {
@@ -377,13 +358,11 @@ export function registerStructuredToolTask<
                 textContent
               )
             );
-
-            await sendTaskProgress(extra, 4);
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             const errorMeta = classifyErrorMeta(error, errorMessage);
             await updateStatusMessage(errorMessage);
-            await storeResultIfTaskActive(
+            await storeResultSafely(
               'failed',
               createErrorToolResponse(
                 config.errorCode,
@@ -395,7 +374,7 @@ export function registerStructuredToolTask<
           }
         };
 
-        setImmediate(() => {
+        queueMicrotask(() => {
           void runTask().catch((error: unknown) => {
             console.error(
               `[task-runner:${config.name}] ${getErrorMessage(error)}`

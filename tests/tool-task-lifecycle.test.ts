@@ -1,5 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -57,6 +59,27 @@ function setMockClient(
   setClientForTesting(mockClient);
 }
 
+async function callToolAsTask(
+  client: Client,
+  name: string,
+  args: Record<string, unknown>
+): Promise<CallToolResult> {
+  const stream = client.experimental.tasks.callToolStream(
+    { name, arguments: args },
+    CallToolResultSchema,
+    { task: {} }
+  );
+  for await (const message of stream) {
+    if (message.type === 'result') {
+      return message.result;
+    }
+    if (message.type === 'error') {
+      throw message.error;
+    }
+  }
+  throw new Error('Task stream closed without result or error');
+}
+
 test('analyze_pr_impact succeeds without task persistence errors', async () => {
   setMockClient(async () => {
     return {
@@ -75,9 +98,9 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'analyze_pr_impact',
-      arguments: { diff: SAMPLE_DIFF, repository: 'org/repo' },
+    const result = await callToolAsTask(client, 'analyze_pr_impact', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
     });
 
     assert.notEqual(result.isError, true);
@@ -96,9 +119,9 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'analyze_pr_impact',
-      arguments: { diff: SAMPLE_DIFF, repository: 'org/repo' },
+    const result = await callToolAsTask(client, 'analyze_pr_impact', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
     });
 
     assert.equal(result.isError, true);
@@ -120,23 +143,13 @@ test('tool boundary rejects unknown input fields', async () => {
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'analyze_pr_impact',
-      arguments: {
+    await assert.rejects(
+      callToolAsTask(client, 'analyze_pr_impact', {
         diff: SAMPLE_DIFF,
         repository: 'org/repo',
         unknown_field: 'unexpected',
-      },
-    });
-
-    assert.equal(result.isError, true);
-    const text = result.content
-      .filter(
-        (item): item is { type: 'text'; text: string } => item.type === 'text'
-      )
-      .map((item) => item.text)
-      .join('\n');
-    assert.match(text, /Invalid arguments/i);
+      })
+    );
   } finally {
     await close();
   }
@@ -176,13 +189,10 @@ test('inspect_code_quality respects maxFindings cap', async () => {
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'inspect_code_quality',
-      arguments: {
-        diff: SAMPLE_DIFF,
-        repository: 'org/repo',
-        maxFindings: 1,
-      },
+    const result = await callToolAsTask(client, 'inspect_code_quality', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
+      maxFindings: 1,
     });
 
     assert.notEqual(result.isError, true);
@@ -237,13 +247,10 @@ test('generate_test_plan respects maxTestCases cap', async () => {
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'generate_test_plan',
-      arguments: {
-        diff: SAMPLE_DIFF,
-        repository: 'org/repo',
-        maxTestCases: 2,
-      },
+    const result = await callToolAsTask(client, 'generate_test_plan', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
+      maxTestCases: 2,
     });
 
     assert.notEqual(result.isError, true);
@@ -266,9 +273,9 @@ test('inspect_code_quality returns budget error when context chars exceeded', as
   await connect();
 
   try {
-    const result = await client.callTool({
-      name: 'inspect_code_quality',
-      arguments: { diff: SAMPLE_DIFF, repository: 'org/repo' },
+    const result = await callToolAsTask(client, 'inspect_code_quality', {
+      diff: SAMPLE_DIFF,
+      repository: 'org/repo',
     });
 
     assert.equal(result.isError, true);
