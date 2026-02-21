@@ -6,7 +6,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
@@ -79,7 +79,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     name: 'inspect_code_quality',
     title: 'Inspect Code Quality',
     description:
-      'Deep-dive code review with optional file context. Call generate_diff first.',
+      'Deep code review. Prerequisite: generate_diff. Auto-infer repo/language/focus. Provide file content for best results.',
     inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
     resultSchema: CodeQualityOutputSchema,
@@ -95,8 +95,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';
     },
-    validateInput: (input) => {
-      const slot = getDiff();
+    validateInput: (input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       const diffError = validateDiffBudget(slot.diff);
       if (diffError) return diffError;
@@ -118,9 +118,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const cappedFindings = capFindings(result.findings, input.maxFindings);
       return { ...result, findings: cappedFindings, totalFindings };
     },
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const parsedFiles = parseDiffFiles(diff);
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(parsedFiles);

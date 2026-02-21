@@ -5,7 +5,7 @@ import {
   extractChangedPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
@@ -28,7 +28,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     name: 'suggest_search_replace',
     title: 'Suggest Search & Replace',
     description:
-      'Generate search-and-replace blocks to fix a finding from the cached diff. Call generate_diff first.',
+      'Generate fix patches. Prerequisite: inspect_code_quality findings. Pass verbatim finding title/details.',
     inputSchema: SuggestSearchReplaceInputSchema,
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
@@ -39,8 +39,8 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
@@ -50,9 +50,8 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
       const patches = formatPatchCount(count);
       return `${result.summary}\n${patches} • Checklist: ${result.validationChecklist.join(' | ')}`;
     },
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const files = parseDiffFiles(diff);
       const paths = extractChangedPathsFromFiles(files);
 

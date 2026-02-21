@@ -12,6 +12,7 @@ import type {
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
+import { type DiffSlot, getDiff } from './diff-store.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
 import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
@@ -25,6 +26,17 @@ import type { GeminiStructuredRequest } from './types.js';
 export interface PromptParts {
   systemInstruction: string;
   prompt: string;
+}
+
+/**
+ * Immutable snapshot of server-side state captured once at the start of a
+ * tool execution, before `validateInput` runs.  Threading it through both
+ * `validateInput` and `buildPrompt` eliminates the TOCTOU gap that would
+ * otherwise allow a concurrent `generate_diff` call to replace the cached
+ * diff between the budget check and prompt assembly.
+ */
+export interface ToolExecutionContext {
+  readonly diffSlot: DiffSlot | undefined;
 }
 
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
@@ -90,11 +102,16 @@ export interface StructuredToolTaskConfig<
   errorCode: string;
 
   /** Optional post-processing hook called after resultSchema.parse(). The return value replaces the parsed result. */
-  transformResult?: (input: TInput, result: TResult) => TFinal;
+  transformResult?: (
+    input: TInput,
+    result: TResult,
+    ctx: ToolExecutionContext
+  ) => TFinal;
 
   /** Optional validation hook for input parameters. */
   validateInput?: (
-    input: TInput
+    input: TInput,
+    ctx: ToolExecutionContext
   ) =>
     | Promise<ReturnType<typeof createErrorToolResponse> | undefined>
     | ReturnType<typeof createErrorToolResponse>
@@ -125,7 +142,7 @@ export interface StructuredToolTaskConfig<
   formatOutcome?: (result: TFinal) => string;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
-  buildPrompt: (input: TInput) => PromptParts;
+  buildPrompt: (input: TInput, ctx: ToolExecutionContext) => PromptParts;
 }
 
 function createGeminiResponseSchema(config: {
@@ -489,6 +506,12 @@ export function registerStructuredToolTask<
               config.progressContext?.(inputRecord)
             );
 
+            // Snapshot the diff slot ONCE before any async work so that
+            // validateInput and buildPrompt observe the same state. Without
+            // this, a concurrent generate_diff call between the two awaits
+            // could replace the slot and silently bypass the budget check.
+            const ctx: ToolExecutionContext = { diffSlot: getDiff() };
+
             await reportProgressStepUpdate(
               reportProgress,
               config.name,
@@ -498,7 +521,10 @@ export function registerStructuredToolTask<
             );
 
             if (config.validateInput) {
-              const validationError = await config.validateInput(inputRecord);
+              const validationError = await config.validateInput(
+                inputRecord,
+                ctx
+              );
               if (validationError) {
                 const validationMessage =
                   validationError.structuredContent.error?.message ??
@@ -524,7 +550,7 @@ export function registerStructuredToolTask<
               'preparing'
             );
 
-            const promptParts = config.buildPrompt(inputRecord);
+            const promptParts = config.buildPrompt(inputRecord, ctx);
             const { prompt } = promptParts;
             const { systemInstruction } = promptParts;
 
@@ -588,7 +614,7 @@ export function registerStructuredToolTask<
 
             const finalResult = (
               config.transformResult
-                ? config.transformResult(inputRecord, parsed)
+                ? config.transformResult(inputRecord, parsed, ctx)
                 : parsed
             ) as TFinal;
 

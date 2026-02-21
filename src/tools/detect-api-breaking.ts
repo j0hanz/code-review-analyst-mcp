@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
@@ -20,7 +20,7 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     name: 'detect_api_breaking_changes',
     title: 'Detect API Breaking Changes',
     description:
-      'Detect breaking changes to public APIs in the cached diff. Call generate_diff first.',
+      'Detect breaking API changes. Prerequisite: generate_diff. Auto-infer language.',
     inputSchema: DetectApiBreakingInputSchema,
     fullInputSchema: DetectApiBreakingInputSchema,
     resultSchema: DetectApiBreakingResultSchema,
@@ -28,8 +28,8 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
@@ -39,9 +39,8 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
       result.hasBreakingChanges
         ? `API Breaking Changes: ${result.breakingChanges.length} found.`
         : 'No API breaking changes detected.',
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const languageLine = input.language
         ? `\nLanguage: ${input.language}`
         : '';

@@ -7,9 +7,12 @@ import {
   computeDiffStatsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
-import { registerStructuredToolTask } from '../lib/tool-factory.js';
+import {
+  registerStructuredToolTask,
+  type ToolExecutionContext,
+} from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
 
@@ -28,12 +31,25 @@ function formatLanguageSegment(language: string | undefined): string {
   return language ? `\nLanguage: ${language}` : '';
 }
 
+function getDiffStats(ctx: ToolExecutionContext): {
+  diff: string;
+  files: number;
+  added: number;
+  deleted: number;
+} {
+  const diff = ctx.diffSlot?.diff ?? '';
+  const { files, added, deleted } = computeDiffStatsFromFiles(
+    parseDiffFiles(diff)
+  );
+  return { diff, files, added, deleted };
+}
+
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_review_summary',
     title: 'Generate Review Summary',
     description:
-      'Summarize the cached diff and assess high-level risk. Call generate_diff first.',
+      'Summarize diff and risk level. Prerequisite: generate_diff. Auto-infer repo/language.',
     inputSchema: GenerateReviewSummaryInputSchema,
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
@@ -41,41 +57,34 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
-    transformResult: (input: ReviewSummaryInput, result) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
-      const parsedFiles = parseDiffFiles(diff);
-      const stats = computeDiffStatsFromFiles(parsedFiles);
-
+    transformResult: (_input: ReviewSummaryInput, result, ctx) => {
+      const { files, added, deleted } = getDiffStats(ctx);
       return {
         ...result,
         stats: {
-          filesChanged: stats.files,
-          linesAdded: stats.added,
-          linesRemoved: stats.deleted,
+          filesChanged: files,
+          linesAdded: added,
+          linesRemoved: deleted,
         },
       };
     },
     formatOutput: (result) =>
       `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
-    buildPrompt: (input: ReviewSummaryInput) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
-      const parsedFiles = parseDiffFiles(diff);
-      const stats = computeDiffStatsFromFiles(parsedFiles);
+    buildPrompt: (input: ReviewSummaryInput, ctx) => {
+      const { diff, files, added, deleted } = getDiffStats(ctx);
       const languageSegment = formatLanguageSegment(input.language);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt: `
 Repository: ${input.repository}${languageSegment}
-Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
+Stats: ${files} files, +${added}, -${deleted}
 
 Diff:
 ${diff}

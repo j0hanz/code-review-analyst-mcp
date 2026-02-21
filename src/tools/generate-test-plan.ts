@@ -5,7 +5,7 @@ import {
   computeDiffStatsAndPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
@@ -31,7 +31,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     name: 'generate_test_plan',
     title: 'Generate Test Plan',
     description:
-      'Create a test plan covering the cached diff changes. Call generate_diff first.',
+      'Generate test cases. Prerequisite: generate_diff. Auto-infer repo/language/framework.',
     inputSchema: GenerateTestPlanInputSchema,
     fullInputSchema: GenerateTestPlanInputSchema,
     resultSchema: TestPlanResultSchema,
@@ -42,8 +42,8 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
@@ -57,9 +57,8 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
       );
       return { ...result, testCases: cappedTestCases };
     },
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const parsedFiles = parseDiffFiles(diff);
       const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
       const languageLine = formatOptionalLine('Language', input.language);

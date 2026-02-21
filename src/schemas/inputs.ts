@@ -32,11 +32,17 @@ function createOptionalBoundedString(
   return createBoundedString(min, max, description).optional();
 }
 
-function createLanguageSchema(description: string): z.ZodOptional<z.ZodString> {
+const LANGUAGE_DESCRIPTION =
+  'Primary programming language (e.g. TypeScript, Python, Rust). Auto-infer from file extensions. Omit if multi-language.';
+
+const REPOSITORY_DESCRIPTION =
+  'Repository identifier (owner/repo). Auto-infer from git remote or directory name.';
+
+function createLanguageSchema(): z.ZodOptional<z.ZodString> {
   return createOptionalBoundedString(
     INPUT_LIMITS.language.min,
     INPUT_LIMITS.language.max,
-    description
+    LANGUAGE_DESCRIPTION
   );
 }
 
@@ -44,7 +50,7 @@ function createRepositorySchema(): z.ZodString {
   return createBoundedString(
     INPUT_LIMITS.repository.min,
     INPUT_LIMITS.repository.max,
-    'Repository identifier, e.g. org/repo.'
+    REPOSITORY_DESCRIPTION
   );
 }
 
@@ -60,7 +66,7 @@ export const FileContextSchema = z.strictObject({
   path: createBoundedString(
     INPUT_LIMITS.fileContext.path.min,
     INPUT_LIMITS.fileContext.path.max,
-    'File path relative to repo root.'
+    'Repo-relative path (e.g. src/utils/helpers.ts).'
   ),
   content: createBoundedString(
     INPUT_LIMITS.fileContext.content.min,
@@ -71,33 +77,35 @@ export const FileContextSchema = z.strictObject({
 
 export const AnalyzePrImpactInputSchema = z.strictObject({
   repository: createRepositorySchema(),
-  language: createLanguageSchema('Primary language to bias analysis.'),
+  language: createLanguageSchema(),
 });
 
 export const GenerateReviewSummaryInputSchema = z.strictObject({
   repository: createRepositorySchema(),
-  language: createLanguageSchema('Primary implementation language.'),
+  language: createLanguageSchema(),
 });
 
 export const InspectCodeQualityInputSchema = z.strictObject({
   repository: createRepositorySchema(),
-  language: createLanguageSchema('Primary language.'),
+  language: createLanguageSchema(),
   focusAreas: z
     .array(
       createBoundedString(
         INPUT_LIMITS.focusArea.min,
         INPUT_LIMITS.focusArea.max,
-        'Focus area tag value.'
+        'Focus tag (e.g. security, performance, bug, logic).'
       )
     )
     .min(1)
     .max(INPUT_LIMITS.focusArea.maxItems)
     .optional()
-    .describe('Specific areas to inspect: security, correctness, etc.'),
+    .describe(
+      'Review focus areas. Standard tags: security, performance, correctness, maintainability, concurrency. Omit for general review.'
+    ),
   maxFindings: createOptionalBoundedInteger(
     INPUT_LIMITS.maxFindings.min,
     INPUT_LIMITS.maxFindings.max,
-    'Maximum number of findings to return.'
+    'Max findings (1-25). Default: 10.'
   ),
   files: z
     .array(FileContextSchema)
@@ -105,7 +113,7 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     .max(INPUT_LIMITS.fileContext.maxItems)
     .optional()
     .describe(
-      'Full file contents for context-aware analysis. Provide the files changed in the diff for best results.'
+      'Full content of changed files. Highly recommended for accurate analysis. Omit if unavailable.'
     ),
 });
 
@@ -113,34 +121,34 @@ export const SuggestSearchReplaceInputSchema = z.strictObject({
   findingTitle: createBoundedString(
     INPUT_LIMITS.findingTitle.min,
     INPUT_LIMITS.findingTitle.max,
-    'Short title of the finding to fix.'
+    'Exact finding title from inspect_code_quality.'
   ),
   findingDetails: createBoundedString(
     INPUT_LIMITS.findingDetails.min,
     INPUT_LIMITS.findingDetails.max,
-    'Detailed explanation of the bug or risk.'
+    'Exact finding explanation from inspect_code_quality.'
   ),
 });
 
 export const GenerateTestPlanInputSchema = z.strictObject({
   repository: createRepositorySchema(),
-  language: createLanguageSchema('Primary language.'),
+  language: createLanguageSchema(),
   testFramework: createOptionalBoundedString(
     INPUT_LIMITS.testFramework.min,
     INPUT_LIMITS.testFramework.max,
-    'Test framework to use, e.g. jest, vitest, pytest, node:test.'
+    'Test framework (jest, vitest, pytest, node:test, junit). Auto-infer from package.json/config.'
   ),
   maxTestCases: createOptionalBoundedInteger(
     INPUT_LIMITS.maxTestCases.min,
     INPUT_LIMITS.maxTestCases.max,
-    'Maximum number of test cases to return.'
+    'Max test cases (1-30). Default: 15.'
   ),
 });
 
 export const AnalyzeComplexityInputSchema = z.strictObject({
-  language: createLanguageSchema('Primary language to bias analysis.'),
+  language: createLanguageSchema(),
 });
 
 export const DetectApiBreakingInputSchema = z.strictObject({
-  language: createLanguageSchema('Primary language to bias analysis.'),
+  language: createLanguageSchema(),
 });

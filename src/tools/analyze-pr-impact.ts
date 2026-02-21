@@ -5,7 +5,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
@@ -28,7 +28,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     name: 'analyze_pr_impact',
     title: 'Analyze PR Impact',
     description:
-      'Assess the impact and risk of the cached diff. Call generate_diff first.',
+      'Assess impact and risk from cached diff. Prerequisite: generate_diff. Auto-infer repo/language.',
     inputSchema: AnalyzePrImpactInputSchema,
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
@@ -36,17 +36,16 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) =>
       `Impact Analysis (${result.severity}): ${result.summary}`,
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const files = parseDiffFiles(diff);
       const { stats, summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(files);

@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import { createNoDiffError, getDiff } from '../lib/diff-store.js';
+import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzeComplexityInputSchema } from '../schemas/inputs.js';
@@ -20,7 +20,7 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     name: 'analyze_time_space_complexity',
     title: 'Analyze Time & Space Complexity',
     description:
-      'Analyze Big-O complexity of the cached diff changes. Call generate_diff first.',
+      'Analyze Big-O complexity. Prerequisite: generate_diff. Auto-infer language.',
     inputSchema: AnalyzeComplexityInputSchema,
     fullInputSchema: AnalyzeComplexityInputSchema,
     resultSchema: AnalyzeComplexityResultSchema,
@@ -31,8 +31,8 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: () => {
-      const slot = getDiff();
+    validateInput: (_input, ctx) => {
+      const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
       return validateDiffBudget(slot.diff);
     },
@@ -42,9 +42,8 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
         : 'No degradation',
     formatOutput: (result) =>
       `Complexity Analysis: Time=${result.timeComplexity}, Space=${result.spaceComplexity}. ${result.explanation}`,
-    buildPrompt: (input) => {
-      const slot = getDiff();
-      const diff = slot?.diff ?? '';
+    buildPrompt: (input, ctx) => {
+      const diff = ctx.diffSlot?.diff ?? '';
       const languageLine = input.language
         ? `\nLanguage: ${input.language}`
         : '';
