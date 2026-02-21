@@ -399,14 +399,18 @@ function findFirstStringCode(
   return undefined;
 }
 
+const NUMERIC_ERROR_KEYS = ['status', 'statusCode', 'code'] as const;
+
 function getNumericErrorCode(error: unknown): number | undefined {
   const record = getNestedError(error);
   if (!record) {
     return undefined;
   }
 
-  return findFirstNumericCode(record, ['status', 'statusCode', 'code']);
+  return findFirstNumericCode(record, NUMERIC_ERROR_KEYS);
 }
+
+const TRANSIENT_ERROR_KEYS = ['code', 'status', 'statusText'] as const;
 
 function getTransientErrorCode(error: unknown): string | undefined {
   const record = getNestedError(error);
@@ -414,7 +418,7 @@ function getTransientErrorCode(error: unknown): string | undefined {
     return undefined;
   }
 
-  return findFirstStringCode(record, ['code', 'status', 'statusText']);
+  return findFirstStringCode(record, TRANSIENT_ERROR_KEYS);
 }
 
 function shouldRetry(error: unknown): boolean {

@@ -2,10 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateContextBudget } from '../lib/context-budget.js';
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  computeDiffStatsAndSummaryFromFiles,
-  parseDiffFiles,
-} from '../lib/diff-parser.js';
+import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
 import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -123,7 +120,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     },
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
-      const parsedFiles = parseDiffFiles(diff);
+      const parsedFiles = ctx.diffSlot?.parsedFiles ?? [];
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(parsedFiles);
       const fileContext = formatFileContext(input.files);

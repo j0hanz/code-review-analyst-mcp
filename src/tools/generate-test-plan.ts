@@ -1,10 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  computeDiffStatsAndPathsFromFiles,
-  parseDiffFiles,
-} from '../lib/diff-parser.js';
+import { computeDiffStatsAndPathsFromFiles } from '../lib/diff-parser.js';
 import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -62,7 +59,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     },
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
-      const parsedFiles = parseDiffFiles(diff);
+      const parsedFiles = ctx.diffSlot?.parsedFiles ?? [];
       const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
       const languageLine = formatOptionalLine('Language', input.language);
       const frameworkLine = formatOptionalLine(

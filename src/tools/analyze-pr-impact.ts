@@ -1,10 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  computeDiffStatsAndSummaryFromFiles,
-  parseDiffFiles,
-} from '../lib/diff-parser.js';
+import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
 import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -52,7 +49,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
       `Impact Analysis (${result.severity}): ${result.summary}`,
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
-      const files = parseDiffFiles(diff);
+      const files = ctx.diffSlot?.parsedFiles ?? [];
       const { stats, summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(files);
       const languageSegment = formatLanguageSegment(input.language);

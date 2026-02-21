@@ -3,10 +3,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { z } from 'zod';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  computeDiffStatsFromFiles,
-  parseDiffFiles,
-} from '../lib/diff-parser.js';
 import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import {
@@ -37,11 +33,16 @@ function getDiffStats(ctx: ToolExecutionContext): {
   added: number;
   deleted: number;
 } {
-  const diff = ctx.diffSlot?.diff ?? '';
-  const { files, added, deleted } = computeDiffStatsFromFiles(
-    parseDiffFiles(diff)
-  );
-  return { diff, files, added, deleted };
+  const slot = ctx.diffSlot;
+  if (!slot) {
+    return { diff: '', files: 0, added: 0, deleted: 0 };
+  }
+  return {
+    diff: slot.diff,
+    files: slot.stats.files,
+    added: slot.stats.added,
+    deleted: slot.stats.deleted,
+  };
 }
 
 export function registerGenerateReviewSummaryTool(server: McpServer): void {

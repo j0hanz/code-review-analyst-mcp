@@ -213,8 +213,10 @@ function createGenerationRequest<
   return request;
 }
 
+const VALIDATION_ERROR_PATTERN = /validation/i;
+
 function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
-  if (error instanceof z.ZodError || /validation/i.test(message)) {
+  if (error instanceof z.ZodError || VALIDATION_ERROR_PATTERN.test(message)) {
     return {
       kind: 'validation',
       retryable: false,

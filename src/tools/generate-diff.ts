@@ -112,7 +112,7 @@ export function registerGenerateDiffTool(server: McpServer): void {
         const stats = computeDiffStatsFromFiles(parsedFiles);
         const generatedAt = new Date().toISOString();
 
-        storeDiff({ diff: cleaned, stats, generatedAt, mode });
+        storeDiff({ diff: cleaned, parsedFiles, stats, generatedAt, mode });
 
         const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
 

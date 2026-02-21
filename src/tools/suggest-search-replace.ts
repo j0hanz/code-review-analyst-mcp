@@ -1,10 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
-import {
-  extractChangedPathsFromFiles,
-  parseDiffFiles,
-} from '../lib/diff-parser.js';
+import { extractChangedPathsFromFiles } from '../lib/diff-parser.js';
 import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -55,7 +52,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     },
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
-      const files = parseDiffFiles(diff);
+      const files = ctx.diffSlot?.parsedFiles ?? [];
       const paths = extractChangedPathsFromFiles(files);
 
       return {

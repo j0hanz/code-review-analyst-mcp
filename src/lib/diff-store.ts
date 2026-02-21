@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import type { ParsedFile } from './diff-parser.js';
 import { createErrorToolResponse } from './tool-response.js';
 
 export const DIFF_RESOURCE_URI = 'diff://current';
@@ -12,6 +13,7 @@ export interface DiffStats {
 
 export interface DiffSlot {
   diff: string;
+  parsedFiles: readonly ParsedFile[];
   stats: DiffStats;
   generatedAt: string;
   mode: string;
