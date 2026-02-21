@@ -427,6 +427,63 @@ function createGeminiLogger(
   };
 }
 
+export function wrapToolHandler<TInput, TResult extends CallToolResult>(
+  options: {
+    toolName: string;
+    progressContext?: (input: TInput) => string;
+  },
+  handler: (input: TInput, extra: ProgressExtra) => Promise<TResult> | TResult
+) {
+  return async (input: TInput, extra: ProgressExtra): Promise<TResult> => {
+    const context = normalizeProgressContext(options.progressContext?.(input));
+
+    // Start progress (0/1)
+    await sendTaskProgress(extra, {
+      current: 0,
+      total: 1,
+      message: formatProgressStep(options.toolName, context, 'starting'),
+    });
+
+    try {
+      const result = await handler(input, extra);
+
+      // End progress (1/1)
+      const outcome = result.isError ? 'failed' : 'completed';
+      const success = !result.isError;
+
+      await sendTaskProgress(extra, {
+        current: 1,
+        total: 1,
+        message: formatProgressCompletion(
+          options.toolName,
+          context,
+          outcome,
+          success
+        ),
+      });
+
+      return result;
+    } catch (error) {
+      // Progress is best-effort; must never mask the original error.
+      try {
+        await sendTaskProgress(extra, {
+          current: 1,
+          total: 1,
+          message: formatProgressCompletion(
+            options.toolName,
+            context,
+            'failed',
+            false
+          ),
+        });
+      } catch {
+        // Swallow progress delivery errors so the original error propagates.
+      }
+      throw error;
+    }
+  };
+}
+
 export function registerStructuredToolTask<
   TInput extends object,
   TResult extends object = Record<string, unknown>,

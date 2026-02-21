@@ -57,7 +57,7 @@
 - **Exports:** Named exports only, no default exports. Explicit return types required on exported functions via `@typescript-eslint/explicit-function-return-type` (see `eslint.config.mjs`).
 - **Formatting:** Prettier with single quotes, trailing commas (es5), 2-space indent, LF line endings (see `.prettierrc`).
 - **Patterns Observed:**
-  - **Tool Factory pattern:** All tools use `registerStructuredToolTask()` which handles input validation, prompt building, Gemini call with schema retry loop (`MAX_SCHEMA_RETRIES = 1`), output parsing, progress reporting (4-step: starting/preparing/model/processing), and MCP task lifecycle — observed in `src/lib/tool-factory.ts`, used by all tools in `src/tools/`
+  - **Tool Factory pattern:** Tools use `registerStructuredToolTask()` (for Gemini tasks) or `wrapToolHandler()` (for simple tools) to ensure standardized progress reporting and error handling — observed in `src/lib/tool-factory.ts`, used by all tools in `src/tools/`
   - **Canonical typed tool contracts:** `TOOL_CONTRACTS` constant in `src/lib/tool-contracts.ts` is the single source of truth for model, timeout, maxOutputTokens, thinkingBudget, and parameter constraints per tool; consumed by `src/resources/instructions.ts` and individual tool files via `requireToolContract()`
   - **Zod `z.strictObject()` for all schemas:** Rejects unknown keys at validation boundary — observed in `src/schemas/inputs.ts`, `src/schemas/outputs.ts`
   - **Dual output (`content` + `structuredContent`):** Every tool response includes both JSON text and structured content for backward compatibility — observed in `src/lib/tool-response.ts`

@@ -14,6 +14,7 @@ import {
   parseDiffFiles,
 } from '../lib/diff-parser.js';
 import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff-store.js';
+import { wrapToolHandler } from '../lib/tool-factory.js';
 import {
   createErrorToolResponse,
   createToolResponse,
@@ -58,71 +59,77 @@ export function registerGenerateDiffTool(server: McpServer): void {
           ),
       },
     },
-    (input) => {
-      const { mode } = input;
-      const args = buildGitArgs(mode);
+    wrapToolHandler(
+      {
+        toolName: 'generate_diff',
+        progressContext: (input) => input.mode,
+      },
+      (input) => {
+        const { mode } = input;
+        const args = buildGitArgs(mode);
 
-      // spawnSync with an explicit args array — no shell, no interpolation.
-      // 'git' is resolved via PATH which is controlled by the server environment.
-      // eslint-disable-next-line sonarjs/no-os-command-from-path
-      const result = spawnSync('git', args, {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-        maxBuffer: GIT_MAX_BUFFER,
-        timeout: GIT_TIMEOUT_MS,
-      });
+        // spawnSync with an explicit args array — no shell, no interpolation.
+        // 'git' is resolved via PATH which is controlled by the server environment.
+        // eslint-disable-next-line sonarjs/no-os-command-from-path
+        const result = spawnSync('git', args, {
+          cwd: process.cwd(),
+          encoding: 'utf8',
+          maxBuffer: GIT_MAX_BUFFER,
+          timeout: GIT_TIMEOUT_MS,
+        });
 
-      if (result.error) {
-        return createErrorToolResponse(
-          'E_GENERATE_DIFF',
-          `Failed to run git: ${result.error.message}. Ensure git is installed and the working directory is a git repository.`,
-          undefined,
-          { retryable: false, kind: 'internal' }
-        );
-      }
+        if (result.error) {
+          return createErrorToolResponse(
+            'E_GENERATE_DIFF',
+            `Failed to run git: ${result.error.message}. Ensure git is installed and the working directory is a git repository.`,
+            undefined,
+            { retryable: false, kind: 'internal' }
+          );
+        }
 
-      if (result.status !== 0) {
-        const stderr = result.stderr.trim();
-        return createErrorToolResponse(
-          'E_GENERATE_DIFF',
-          `git exited with code ${String(result.status)}: ${stderr || 'unknown error'}. Ensure the working directory is a git repository.`,
-          undefined,
-          { retryable: false, kind: 'internal' }
-        );
-      }
+        if (result.status !== 0) {
+          const stderr = result.stderr.trim();
+          return createErrorToolResponse(
+            'E_GENERATE_DIFF',
+            `git exited with code ${String(result.status)}: ${stderr || 'unknown error'}. Ensure the working directory is a git repository.`,
+            undefined,
+            { retryable: false, kind: 'internal' }
+          );
+        }
 
-      const cleaned = cleanDiff(result.stdout);
+        const cleaned = cleanDiff(result.stdout);
 
-      if (isEmptyDiff(cleaned)) {
-        return createErrorToolResponse(
-          'E_NO_CHANGES',
-          `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
-          undefined,
-          { retryable: false, kind: 'validation' }
-        );
-      }
+        if (isEmptyDiff(cleaned)) {
+          return createErrorToolResponse(
+            'E_NO_CHANGES',
+            `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
+            undefined,
+            { retryable: false, kind: 'validation' }
+          );
+        }
 
-      const parsedFiles = parseDiffFiles(cleaned);
-      const stats = computeDiffStatsFromFiles(parsedFiles);
-      const generatedAt = new Date().toISOString();
+        const parsedFiles = parseDiffFiles(cleaned);
+        const stats = computeDiffStatsFromFiles(parsedFiles);
+        const generatedAt = new Date().toISOString();
 
-      storeDiff({ diff: cleaned, stats, generatedAt, mode });
+        storeDiff({ diff: cleaned, stats, generatedAt, mode });
 
-      const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
+        const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
 
-      return createToolResponse(
-        {
-          ok: true as const,
-          result: {
-            diffRef: DIFF_RESOURCE_URI,
-            stats,
-            generatedAt,
-            mode,
-            message: summary,
+        return createToolResponse(
+          {
+            ok: true as const,
+            result: {
+              diffRef: DIFF_RESOURCE_URI,
+              stats,
+              generatedAt,
+              mode,
+              message: summary,
+            },
           },
-        },
-        summary
-      );
-    }
+          summary
+        );
+      }
+    )
   );
 }
