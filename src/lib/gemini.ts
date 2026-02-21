@@ -52,11 +52,8 @@ const concurrencyWaitMsConfig = createCachedEnvInt(
   'MAX_CONCURRENT_CALLS_WAIT_MS',
   2_000
 );
-const concurrencyPollMsConfig = createCachedEnvInt(
-  'MAX_CONCURRENT_CALLS_POLL_MS',
-  25
-);
 let activeCalls = 0;
+const slotWaiters: (() => void)[] = [];
 
 const RETRYABLE_TRANSIENT_CODES = new Set([
   'RESOURCE_EXHAUSTED',
@@ -654,25 +651,71 @@ function canRetryAttempt(
   return attempt < maxRetries && shouldRetry(error);
 }
 
+function tryWakeNextWaiter(): void {
+  const next = slotWaiters.shift();
+  if (next !== undefined) {
+    next();
+  }
+}
+
 async function waitForConcurrencySlot(
   limit: number,
   requestSignal?: AbortSignal
 ): Promise<void> {
-  const waitLimitMs = concurrencyWaitMsConfig.get();
-  const pollMs = concurrencyPollMsConfig.get();
-  const deadline = performance.now() + waitLimitMs;
-
-  while (activeCalls >= limit) {
-    if (requestSignal?.aborted) {
-      throw new Error('Gemini request was cancelled.');
-    }
-
-    if (performance.now() >= deadline) {
-      throw new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs));
-    }
-
-    await sleep(pollMs, undefined, SLEEP_UNREF_OPTIONS);
+  if (activeCalls < limit) {
+    return;
   }
+
+  if (requestSignal?.aborted) {
+    throw new Error('Gemini request was cancelled.');
+  }
+
+  const waitLimitMs = concurrencyWaitMsConfig.get();
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const waiter = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadlineTimer);
+      if (requestSignal) {
+        requestSignal.removeEventListener('abort', onAbort);
+      }
+      resolve();
+    };
+
+    slotWaiters.push(waiter);
+
+    const deadlineTimer = setTimeout((): void => {
+      if (settled) return;
+      settled = true;
+      const idx = slotWaiters.indexOf(waiter);
+      if (idx !== -1) {
+        slotWaiters.splice(idx, 1);
+      }
+      if (requestSignal) {
+        requestSignal.removeEventListener('abort', onAbort);
+      }
+      reject(new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs)));
+    }, waitLimitMs);
+    deadlineTimer.unref();
+
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      const idx = slotWaiters.indexOf(waiter);
+      if (idx !== -1) {
+        slotWaiters.splice(idx, 1);
+      }
+      clearTimeout(deadlineTimer);
+      reject(new Error('Gemini request was cancelled.'));
+    };
+
+    if (requestSignal) {
+      requestSignal.addEventListener('abort', onAbort, { once: true });
+    }
+  });
 }
 
 export async function generateStructuredJson(
@@ -693,5 +736,6 @@ export async function generateStructuredJson(
     );
   } finally {
     activeCalls -= 1;
+    tryWakeNextWaiter();
   }
 }
