@@ -7,6 +7,7 @@ import {
   computeDiffStatsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
@@ -22,48 +23,17 @@ Be specific — name the exact logic changed, not generic patterns.
 Return strict JSON only.
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
-interface CachedStats {
-  files: number;
-  added: number;
-  deleted: number;
-}
-
-const statsCache = new WeakMap<ReviewSummaryInput, CachedStats>();
-
-function getCachedStats(input: ReviewSummaryInput): CachedStats {
-  const cached = statsCache.get(input);
-  if (cached) {
-    return cached;
-  }
-
-  const parsedFiles = parseDiffFiles(input.diff);
-  const stats = computeDiffStatsFromFiles(parsedFiles);
-  statsCache.set(input, stats);
-  return stats;
-}
 
 function formatLanguageSegment(language: string | undefined): string {
   return language ? `\nLanguage: ${language}` : '';
-}
-
-function buildReviewSummaryPrompt(input: ReviewSummaryInput): string {
-  const stats = getCachedStats(input);
-  const languageSegment = formatLanguageSegment(input.language);
-
-  return `
-Repository: ${input.repository}${languageSegment}
-Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
-
-Diff:
-${input.diff}
-`;
 }
 
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_review_summary',
     title: 'Generate Review Summary',
-    description: 'Summarize a pull request diff and assess high-level risk.',
+    description:
+      'Summarize the cached diff and assess high-level risk. Call generate_diff first.',
     inputSchema: GenerateReviewSummaryInputSchema,
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
@@ -71,11 +41,17 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
-    transformResult: (input, result) => {
-      const stats = getCachedStats(input);
-      statsCache.delete(input);
+    transformResult: (input: ReviewSummaryInput, result) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const parsedFiles = parseDiffFiles(diff);
+      const stats = computeDiffStatsFromFiles(parsedFiles);
 
       return {
         ...result,
@@ -88,9 +64,23 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     },
     formatOutput: (result) =>
       `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildReviewSummaryPrompt(input),
-    }),
+    buildPrompt: (input: ReviewSummaryInput) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const parsedFiles = parseDiffFiles(diff);
+      const stats = computeDiffStatsFromFiles(parsedFiles);
+      const languageSegment = formatLanguageSegment(input.language);
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `
+Repository: ${input.repository}${languageSegment}
+Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
+
+Diff:
+${diff}
+`,
+      };
+    },
   });
 }

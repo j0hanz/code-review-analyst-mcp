@@ -9,7 +9,6 @@ import {
 describe('New Schemas', () => {
   it('validates AnalyzePrImpactInputSchema', () => {
     const input = {
-      diff: 'diff --git a/file b/file\nindex ...',
       repository: 'org/repo',
       language: 'TypeScript',
     };
@@ -19,7 +18,6 @@ describe('New Schemas', () => {
 
   it('validates SuggestSearchReplaceInputSchema', () => {
     const input = {
-      diff: 'diff --git a/file b/file\nindex ...',
       findingTitle: 'Bug in foo',
       findingDetails: 'Details about bug which is long enough',
     };
@@ -30,7 +28,6 @@ describe('New Schemas', () => {
   it('rejects unknown fields', () => {
     assert.throws(() => {
       AnalyzePrImpactInputSchema.parse({
-        diff: 'diff --git ...',
         repository: 'repo',
         extra: 'field',
       });

@@ -13,6 +13,7 @@ import type { GoogleGenAI } from '@google/genai';
 
 import { resetMaxContextCharsCacheForTesting } from '../src/lib/context-budget.js';
 import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff-budget.js';
+import { setDiffForTesting } from '../src/lib/diff-store.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
 import {
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
@@ -28,6 +29,13 @@ index 123..456 100644
 -console.log('old');
 +console.log('new');
 `;
+
+const SAMPLE_DIFF_SLOT = {
+  diff: SAMPLE_DIFF,
+  stats: { files: 1, added: 1, deleted: 1 },
+  generatedAt: '2026-02-21T00:00:00.000Z',
+  mode: 'unstaged',
+} as const;
 
 function createClientServerPair(): {
   client: Client;
@@ -141,6 +149,7 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     };
   });
 
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
   const { client, connect, close } = createClientServerPair();
   await connect();
 
@@ -149,10 +158,7 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     const result = await callToolAsTask(
       client,
       'analyze_pr_impact',
-      {
-        diff: SAMPLE_DIFF,
-        repository: 'org/repo',
-      },
+      { repository: 'org/repo' },
       {
         onprogress: (progress) => {
           progressUpdates.push(progress);
@@ -166,12 +172,14 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     assertProgressLifecycle(progressUpdates, 'severity: low');
   } finally {
     await close();
+    setDiffForTesting(undefined);
   }
 });
 
 test('analyze_pr_impact returns budget error without crashing task flow', async () => {
   process.env.MAX_DIFF_CHARS = '20';
   resetMaxDiffCharsCacheForTesting();
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
 
   const { client, connect, close } = createClientServerPair();
   await connect();
@@ -181,10 +189,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
     const result = await callToolAsTask(
       client,
       'analyze_pr_impact',
-      {
-        diff: SAMPLE_DIFF,
-        repository: 'org/repo',
-      },
+      { repository: 'org/repo' },
       {
         onprogress: (progress) => {
           progressUpdates.push(progress);
@@ -202,6 +207,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
     assertProgressLifecycle(progressUpdates, 'rejected');
   } finally {
     await close();
+    setDiffForTesting(undefined);
     delete process.env.MAX_DIFF_CHARS;
     resetMaxDiffCharsCacheForTesting();
   }
@@ -214,7 +220,6 @@ test('tool boundary rejects unknown input fields', async () => {
   try {
     await assert.rejects(
       callToolAsTask(client, 'analyze_pr_impact', {
-        diff: SAMPLE_DIFF,
         repository: 'org/repo',
         unknown_field: 'unexpected',
       })
@@ -254,12 +259,12 @@ test('inspect_code_quality respects maxFindings cap', async () => {
     };
   });
 
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
   const { client, connect, close } = createClientServerPair();
   await connect();
 
   try {
     const result = await callToolAsTask(client, 'inspect_code_quality', {
-      diff: SAMPLE_DIFF,
       repository: 'org/repo',
       maxFindings: 1,
     });
@@ -273,6 +278,7 @@ test('inspect_code_quality respects maxFindings cap', async () => {
     assert.equal(structuredResult.findings.length, 1);
   } finally {
     await close();
+    setDiffForTesting(undefined);
   }
 });
 
@@ -312,12 +318,12 @@ test('generate_test_plan respects maxTestCases cap', async () => {
     };
   });
 
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
   const { client, connect, close } = createClientServerPair();
   await connect();
 
   try {
     const result = await callToolAsTask(client, 'generate_test_plan', {
-      diff: SAMPLE_DIFF,
       repository: 'org/repo',
       maxTestCases: 2,
     });
@@ -331,19 +337,20 @@ test('generate_test_plan respects maxTestCases cap', async () => {
     assert.equal(structuredResult.testCases.length, 2);
   } finally {
     await close();
+    setDiffForTesting(undefined);
   }
 });
 
 test('inspect_code_quality returns budget error when context chars exceeded', async () => {
   process.env.MAX_CONTEXT_CHARS = '20';
   resetMaxContextCharsCacheForTesting();
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
 
   const { client, connect, close } = createClientServerPair();
   await connect();
 
   try {
     const result = await callToolAsTask(client, 'inspect_code_quality', {
-      diff: SAMPLE_DIFF,
       repository: 'org/repo',
     });
 
@@ -356,6 +363,7 @@ test('inspect_code_quality returns budget error when context chars exceeded', as
     );
   } finally {
     await close();
+    setDiffForTesting(undefined);
     delete process.env.MAX_CONTEXT_CHARS;
     resetMaxContextCharsCacheForTesting();
   }
@@ -379,12 +387,12 @@ test('tool-specific maxOutputTokens are passed to Gemini calls', async () => {
     };
   });
 
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
   const { client, connect, close } = createClientServerPair();
   await connect();
 
   try {
     await callToolAsTask(client, 'analyze_pr_impact', {
-      diff: SAMPLE_DIFF,
       repository: 'org/repo',
     });
 
@@ -413,11 +421,11 @@ test('tool-specific maxOutputTokens are passed to Gemini calls', async () => {
     });
 
     await callToolAsTask(client, 'inspect_code_quality', {
-      diff: SAMPLE_DIFF,
       repository: 'org/repo',
     });
   } finally {
     await close();
+    setDiffForTesting(undefined);
   }
 
   assert.deepEqual(observedMaxOutputTokens, [

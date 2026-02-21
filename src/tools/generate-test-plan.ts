@@ -5,6 +5,7 @@ import {
   computeDiffStatsAndPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
@@ -25,37 +26,12 @@ function formatOptionalLine(
   return value === undefined ? '' : `\n${label}: ${value}`;
 }
 
-function buildGenerateTestPlanPrompt(input: {
-  repository: string;
-  language?: string | undefined;
-  testFramework?: string | undefined;
-  maxTestCases?: number | undefined;
-  diff: string;
-}): string {
-  const parsedFiles = parseDiffFiles(input.diff);
-  const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
-  const languageLine = formatOptionalLine('Language', input.language);
-  const frameworkLine = formatOptionalLine(
-    'Test Framework',
-    input.testFramework
-  );
-  const maxCasesLine = formatOptionalLine('Max Test Cases', input.maxTestCases);
-
-  return `
-Repository: ${input.repository}${languageLine}${frameworkLine}${maxCasesLine}
-Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
-Changed Files: ${paths.join(', ')}
-
-Diff:
-${input.diff}
-`;
-}
-
 export function registerGenerateTestPlanTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_test_plan',
     title: 'Generate Test Plan',
-    description: 'Create a test plan covering the changes in the diff.',
+    description:
+      'Create a test plan covering the cached diff changes. Call generate_diff first.',
     inputSchema: GenerateTestPlanInputSchema,
     fullInputSchema: GenerateTestPlanInputSchema,
     resultSchema: TestPlanResultSchema,
@@ -66,7 +42,11 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) => `${result.testCases.length} test cases`,
     formatOutput: (result) =>
       `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`,
@@ -75,15 +55,34 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
         0,
         input.maxTestCases ?? result.testCases.length
       );
+      return { ...result, testCases: cappedTestCases };
+    },
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const parsedFiles = parseDiffFiles(diff);
+      const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
+      const languageLine = formatOptionalLine('Language', input.language);
+      const frameworkLine = formatOptionalLine(
+        'Test Framework',
+        input.testFramework
+      );
+      const maxCasesLine = formatOptionalLine(
+        'Max Test Cases',
+        input.maxTestCases
+      );
 
       return {
-        ...result,
-        testCases: cappedTestCases,
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `
+Repository: ${input.repository}${languageLine}${frameworkLine}${maxCasesLine}
+Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
+Changed Files: ${paths.join(', ')}
+
+Diff:
+${diff}
+`,
       };
     },
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildGenerateTestPlanPrompt(input),
-    }),
   });
 }

@@ -12,6 +12,7 @@ const RESOURCE_LIST = [
   '- `internal://workflows`: Recommended multi-step tool workflows.',
   '- `internal://server-config`: Runtime limits and model configuration.',
   '- `internal://tool-info/{toolName}`: Per-tool contract details.',
+  '- `diff://current`: Cached diff from the most recent generate_diff run.',
 ];
 
 function formatParameterLine(parameter: {
@@ -30,6 +31,17 @@ function formatToolSection(
   const parameterLines = contract.params.map((parameter) =>
     formatParameterLine(parameter)
   );
+
+  if (contract.model === 'none') {
+    // Synchronous built-in tool (no Gemini call)
+    return `### \`${contract.name}\`
+- Purpose: ${contract.purpose}
+- Model: \`none\` (synchronous built-in)
+- Parameters:
+${parameterLines.join('\n')}
+- Output shape: \`${contract.outputShape}\``;
+  }
+
   const thinkingLine =
     contract.thinkingBudget === undefined
       ? '- Thinking budget: disabled'

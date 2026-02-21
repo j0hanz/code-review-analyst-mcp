@@ -3,6 +3,7 @@ import {
   ResourceTemplate,
 } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { DIFF_RESOURCE_URI, getDiff } from '../lib/diff-store.js';
 import { buildServerConfig } from './server-config.js';
 import { buildToolCatalog } from './tool-catalog.js';
 import { getToolInfo, getToolInfoNames } from './tool-info.js';
@@ -113,6 +114,30 @@ function registerToolInfoResources(server: McpServer): void {
   );
 }
 
+function registerDiffResource(server: McpServer): void {
+  server.registerResource(
+    'diff-current',
+    new ResourceTemplate(DIFF_RESOURCE_URI, { list: undefined }),
+    {
+      title: 'Current Diff',
+      description:
+        'The most recently generated diff, cached by generate_diff. Read by all review tools automatically.',
+      mimeType: 'text/x-patch',
+      annotations: {
+        audience: ['assistant' as const],
+        priority: 1.0,
+      },
+    },
+    (uri) => {
+      const slot = getDiff();
+      const text = slot
+        ? `# Diff — ${slot.mode} — ${slot.generatedAt}\n# ${slot.stats.files} file(s), +${slot.stats.added} -${slot.stats.deleted}\n\n${slot.diff}`
+        : '# No diff cached. Call generate_diff first.';
+      return { contents: [{ uri: uri.href, mimeType: 'text/x-patch', text }] };
+    }
+  );
+}
+
 export function registerAllResources(
   server: McpServer,
   instructions: string
@@ -124,4 +149,5 @@ export function registerAllResources(
   }
 
   registerToolInfoResources(server);
+  registerDiffResource(server);
 }

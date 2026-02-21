@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readFileSync } from 'node:fs';
 import { findPackageJSON } from 'node:module';
 
+import { initDiffStore } from './lib/diff-store.js';
 import { getErrorMessage } from './lib/errors.js';
 import { registerAllPrompts } from './prompts/index.js';
 import { registerAllResources } from './resources/index.js';
@@ -22,7 +23,7 @@ const VERSION_FIELD_ERROR = 'missing or invalid version field';
 const SERVER_CAPABILITIES = {
   logging: {},
   completions: {},
-  resources: {},
+  resources: { subscribe: true },
   tools: {},
   tasks: {
     list: {},
@@ -115,6 +116,7 @@ function createMcpServer(taskStore: InMemoryTaskStore): McpServer {
 }
 
 function registerServerCapabilities(server: McpServer): void {
+  initDiffStore(server);
   registerAllTools(server);
   registerAllResources(server, SERVER_INSTRUCTIONS);
   registerAllPrompts(server, SERVER_INSTRUCTIONS);

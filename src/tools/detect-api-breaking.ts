@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
@@ -14,24 +15,12 @@ Return strict JSON only.
 `;
 const TOOL_CONTRACT = requireToolContract('detect_api_breaking_changes');
 
-function formatOptionalLine(label: string, value: string | undefined): string {
-  return value === undefined ? '' : `\n${label}: ${value}`;
-}
-
-function buildDetectApiBreakingPrompt(input: {
-  diff: string;
-  language?: string | undefined;
-}): string {
-  const languageLine = formatOptionalLine('Language', input.language);
-  return `${languageLine}\nDiff:\n${input.diff}`.trimStart();
-}
-
 export function registerDetectApiBreakingTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'detect_api_breaking_changes',
     title: 'Detect API Breaking Changes',
     description:
-      'Detect breaking changes to public APIs, interfaces, and contracts in a unified diff.',
+      'Detect breaking changes to public APIs in the cached diff. Call generate_diff first.',
     inputSchema: DetectApiBreakingInputSchema,
     fullInputSchema: DetectApiBreakingInputSchema,
     resultSchema: DetectApiBreakingResultSchema,
@@ -39,16 +28,28 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) =>
       `${result.breakingChanges.length} breaking change(s) found`,
     formatOutput: (result) =>
       result.hasBreakingChanges
         ? `API Breaking Changes: ${result.breakingChanges.length} found.`
         : 'No API breaking changes detected.',
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildDetectApiBreakingPrompt(input),
-    }),
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const languageLine = input.language
+        ? `\nLanguage: ${input.language}`
+        : '';
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `${languageLine}\nDiff:\n${diff}`.trimStart(),
+      };
+    },
   });
 }

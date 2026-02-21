@@ -25,9 +25,12 @@ export interface ToolParameterContract {
 export interface ToolContract {
   name: string;
   purpose: string;
+  /** Set to 'none' for synchronous (non-Gemini) tools. */
   model: string;
+  /** Set to 0 for synchronous (non-Gemini) tools. */
   timeoutMs: number;
   thinkingBudget?: number;
+  /** Set to 0 for synchronous (non-Gemini) tools. */
   maxOutputTokens: number;
   params: readonly ToolParameterContract[];
   outputShape: string;
@@ -38,6 +41,34 @@ export interface ToolContract {
 
 export const TOOL_CONTRACTS = [
   {
+    name: 'generate_diff',
+    purpose:
+      'Generate a diff of current changes and cache it server-side. MUST be called before any other tool. Uses git to capture unstaged or staged changes in the current working directory.',
+    model: 'none',
+    timeoutMs: 0,
+    maxOutputTokens: 0,
+    params: [
+      {
+        name: 'mode',
+        type: 'string',
+        required: true,
+        constraints: "'unstaged' | 'staged'",
+        description:
+          "'unstaged': working tree changes not yet staged. 'staged': changes added to the index (git add).",
+      },
+    ],
+    outputShape:
+      '{ok, result: {diffRef, stats{files, added, deleted}, generatedAt, mode, message}}',
+    gotchas: [
+      'Must be called first — all other tools return E_NO_DIFF if no diff is cached.',
+      'Noisy files (lock files, dist/, build/, minified assets) are excluded automatically.',
+      'Empty diff (no changes) returns E_NO_CHANGES.',
+    ],
+    crossToolFlow: [
+      'Caches diff at diff://current — consumed automatically by all review tools.',
+    ],
+  },
+  {
     name: 'analyze_pr_impact',
     purpose:
       'Assess severity, categories, breaking changes, and rollback complexity.',
@@ -45,13 +76,6 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     params: [
-      {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
       {
         name: 'repository',
         type: 'string',
@@ -70,8 +94,8 @@ export const TOOL_CONTRACTS = [
     outputShape:
       '{severity, categories[], summary, breakingChanges[], affectedAreas[], rollbackComplexity}',
     gotchas: [
+      'Requires generate_diff to be called first.',
       'Flash triage tool optimized for speed.',
-      'Diff-only analysis (no full-file context).',
     ],
     crossToolFlow: [
       'severity/categories feed triage and merge-gate decisions.',
@@ -84,13 +108,6 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     params: [
-      {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
       {
         name: 'repository',
         type: 'string',
@@ -109,8 +126,8 @@ export const TOOL_CONTRACTS = [
     outputShape:
       '{summary, overallRisk, keyChanges[], recommendation, stats{filesChanged, linesAdded, linesRemoved}}',
     gotchas: [
+      'Requires generate_diff to be called first.',
       'stats are computed locally from the diff.',
-      'Flash triage tool optimized for speed.',
     ],
     crossToolFlow: [
       'Use before deep review to decide whether Pro analysis is needed.',
@@ -124,13 +141,6 @@ export const TOOL_CONTRACTS = [
     thinkingBudget: PRO_THINKING_BUDGET,
     maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
     params: [
-      {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
       {
         name: 'repository',
         type: 'string',
@@ -170,6 +180,7 @@ export const TOOL_CONTRACTS = [
     outputShape:
       '{summary, overallRisk, findings[], testsNeeded[], contextualInsights[], totalFindings}',
     gotchas: [
+      'Requires generate_diff to be called first.',
       'Combined diff + file context is bounded by MAX_CONTEXT_CHARS.',
       'maxFindings caps output after generation.',
     ],
@@ -188,13 +199,6 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
     params: [
       {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff containing the target issue.',
-      },
-      {
         name: 'findingTitle',
         type: 'string',
         required: true,
@@ -211,6 +215,7 @@ export const TOOL_CONTRACTS = [
     ],
     outputShape: '{summary, blocks[], validationChecklist[]}',
     gotchas: [
+      'Requires generate_diff to be called first.',
       'One finding per call to avoid mixed patch intent.',
       'search must be exact whitespace-preserving match.',
     ],
@@ -227,13 +232,6 @@ export const TOOL_CONTRACTS = [
     thinkingBudget: FLASH_THINKING_BUDGET,
     maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
     params: [
-      {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
       {
         name: 'repository',
         type: 'string',
@@ -264,7 +262,10 @@ export const TOOL_CONTRACTS = [
       },
     ],
     outputShape: '{summary, testCases[], coverageSummary}',
-    gotchas: ['maxTestCases caps output after generation.'],
+    gotchas: [
+      'Requires generate_diff to be called first.',
+      'maxTestCases caps output after generation.',
+    ],
     crossToolFlow: [
       'Pair with inspect_code_quality to validate high-risk paths.',
     ],
@@ -279,13 +280,6 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
     params: [
       {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
-      {
         name: 'language',
         type: 'string',
         required: false,
@@ -295,7 +289,10 @@ export const TOOL_CONTRACTS = [
     ],
     outputShape:
       '{timeComplexity, spaceComplexity, explanation, potentialBottlenecks[], isDegradation}',
-    gotchas: ['Analyzes only changed code visible in the diff.'],
+    gotchas: [
+      'Requires generate_diff to be called first.',
+      'Analyzes only changed code visible in the diff.',
+    ],
     crossToolFlow: ['Use for algorithmic/performance-sensitive changes.'],
   },
   {
@@ -306,13 +303,6 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
     params: [
       {
-        name: 'diff',
-        type: 'string',
-        required: true,
-        constraints: '10-120K chars',
-        description: 'Unified diff text.',
-      },
-      {
         name: 'language',
         type: 'string',
         required: false,
@@ -321,7 +311,10 @@ export const TOOL_CONTRACTS = [
       },
     ],
     outputShape: '{hasBreakingChanges, breakingChanges[]}',
-    gotchas: ['Targets public API contracts over internal refactors.'],
+    gotchas: [
+      'Requires generate_diff to be called first.',
+      'Targets public API contracts over internal refactors.',
+    ],
     crossToolFlow: ['Run before merge for API-surface-sensitive changes.'],
   },
 ] as const satisfies readonly ToolContract[];

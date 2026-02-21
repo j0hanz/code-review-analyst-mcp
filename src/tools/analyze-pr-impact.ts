@@ -5,6 +5,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
@@ -22,32 +23,12 @@ function formatLanguageSegment(language: string | undefined): string {
   return language ? `\nLanguage: ${language}` : '';
 }
 
-function buildAnalyzePrImpactPrompt(input: {
-  repository: string;
-  language?: string | undefined;
-  diff: string;
-}): string {
-  const files = parseDiffFiles(input.diff);
-  const { stats, summary: fileSummary } =
-    computeDiffStatsAndSummaryFromFiles(files);
-  const languageSegment = formatLanguageSegment(input.language);
-
-  return `
-Repository: ${input.repository}${languageSegment}
-Change Stats: ${stats.files} files, +${stats.added} lines, -${stats.deleted} lines.
-Changed Files:
-${fileSummary}
-
-Diff:
-${input.diff}
-`;
-}
-
 export function registerAnalyzePrImpactTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'analyze_pr_impact',
     title: 'Analyze PR Impact',
-    description: 'Assess the impact and risk of a pull request diff.',
+    description:
+      'Assess the impact and risk of the cached diff. Call generate_diff first.',
     inputSchema: AnalyzePrImpactInputSchema,
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
@@ -55,13 +36,34 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) =>
       `Impact Analysis (${result.severity}): ${result.summary}`,
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildAnalyzePrImpactPrompt(input),
-    }),
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const files = parseDiffFiles(diff);
+      const { stats, summary: fileSummary } =
+        computeDiffStatsAndSummaryFromFiles(files);
+      const languageSegment = formatLanguageSegment(input.language);
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `
+Repository: ${input.repository}${languageSegment}
+Change Stats: ${stats.files} files, +${stats.added} lines, -${stats.deleted} lines.
+Changed Files:
+${fileSummary}
+
+Diff:
+${diff}
+`,
+      };
+    },
   });
 }

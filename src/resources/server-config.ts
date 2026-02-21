@@ -58,6 +58,7 @@ export function buildServerConfig(): string {
   const defaultModel = getModelOverride();
   const safetyThreshold = getSafetyThreshold();
   const toolRows = getToolContracts()
+    .filter((contract) => contract.model !== 'none')
     .map((contract) => {
       return `| \`${contract.name}\` | \`${contract.model}\` | ${formatThinkingBudget(contract.thinkingBudget)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
     })

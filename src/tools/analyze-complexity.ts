@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateDiffBudget } from '../lib/diff-budget.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzeComplexityInputSchema } from '../schemas/inputs.js';
@@ -14,24 +15,12 @@ Return strict JSON only.
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_time_space_complexity');
 
-function formatOptionalLine(label: string, value: string | undefined): string {
-  return value === undefined ? '' : `\n${label}: ${value}`;
-}
-
-function buildAnalyzeComplexityPrompt(input: {
-  diff: string;
-  language?: string | undefined;
-}): string {
-  const languageLine = formatOptionalLine('Language', input.language);
-  return `${languageLine}\nDiff:\n${input.diff}`.trimStart();
-}
-
 export function registerAnalyzeComplexityTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'analyze_time_space_complexity',
     title: 'Analyze Time & Space Complexity',
     description:
-      'Analyze Big-O time and space complexity of code changes and detect performance degradations.',
+      'Analyze Big-O complexity of the cached diff changes. Call generate_diff first.',
     inputSchema: AnalyzeComplexityInputSchema,
     fullInputSchema: AnalyzeComplexityInputSchema,
     resultSchema: AnalyzeComplexityResultSchema,
@@ -42,16 +31,28 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) =>
       result.isDegradation
         ? 'Performance degradation detected'
         : 'No degradation',
     formatOutput: (result) =>
       `Complexity Analysis: Time=${result.timeComplexity}, Space=${result.spaceComplexity}. ${result.explanation}`,
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildAnalyzeComplexityPrompt(input),
-    }),
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const languageLine = input.language
+        ? `\nLanguage: ${input.language}`
+        : '';
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `${languageLine}\nDiff:\n${diff}`.trimStart(),
+      };
+    },
   });
 }

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 const INPUT_LIMITS = {
-  diff: { min: 10 },
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
   fileContext: {
@@ -41,15 +40,6 @@ function createLanguageSchema(description: string): z.ZodOptional<z.ZodString> {
   );
 }
 
-function createDiffSchema(description: string): z.ZodString {
-  return z
-    .string()
-    .min(INPUT_LIMITS.diff.min)
-    .describe(
-      `${description} Budget is enforced at runtime via MAX_DIFF_CHARS (default 120,000 chars).`
-    );
-}
-
 function createRepositorySchema(): z.ZodString {
   return createBoundedString(
     INPUT_LIMITS.repository.min,
@@ -80,19 +70,16 @@ export const FileContextSchema = z.strictObject({
 });
 
 export const AnalyzePrImpactInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff text for the PR or commit.'),
   repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language to bias analysis.'),
 });
 
 export const GenerateReviewSummaryInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff text for one PR or commit.'),
   repository: createRepositorySchema(),
   language: createLanguageSchema('Primary implementation language.'),
 });
 
 export const InspectCodeQualityInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff text for in-depth analysis.'),
   repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language.'),
   focusAreas: z
@@ -123,7 +110,6 @@ export const InspectCodeQualityInputSchema = z.strictObject({
 });
 
 export const SuggestSearchReplaceInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff that contains the issue to fix.'),
   findingTitle: createBoundedString(
     INPUT_LIMITS.findingTitle.min,
     INPUT_LIMITS.findingTitle.max,
@@ -137,7 +123,6 @@ export const SuggestSearchReplaceInputSchema = z.strictObject({
 });
 
 export const GenerateTestPlanInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff to generate tests for.'),
   repository: createRepositorySchema(),
   language: createLanguageSchema('Primary language.'),
   testFramework: createOptionalBoundedString(
@@ -153,13 +138,9 @@ export const GenerateTestPlanInputSchema = z.strictObject({
 });
 
 export const AnalyzeComplexityInputSchema = z.strictObject({
-  diff: createDiffSchema(
-    'Unified diff to analyze for time and space complexity.'
-  ),
   language: createLanguageSchema('Primary language to bias analysis.'),
 });
 
 export const DetectApiBreakingInputSchema = z.strictObject({
-  diff: createDiffSchema('Unified diff to scan for API breaking changes.'),
   language: createLanguageSchema('Primary language to bias analysis.'),
 });

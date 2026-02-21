@@ -6,6 +6,7 @@ import {
   computeDiffStatsAndSummaryFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
@@ -73,41 +74,12 @@ ${sanitizeContent(file.content)}
   return `${FILE_CONTEXT_HEADING}${fileBlocks.join('\n')}`;
 }
 
-function buildInspectPrompt(input: {
-  repository: string;
-  language?: string | undefined;
-  focusAreas?: string[] | undefined;
-  maxFindings?: number | undefined;
-  diff: string;
-  files?: readonly { path: string; content: string }[] | undefined;
-}): string {
-  const parsedFiles = parseDiffFiles(input.diff);
-  const { summary: fileSummary } =
-    computeDiffStatsAndSummaryFromFiles(parsedFiles);
-  const fileContext = formatFileContext(input.files);
-  const languageLine = formatOptionalLine('Language', input.language);
-  const maxFindingsLine = formatOptionalLine('Max Findings', input.maxFindings);
-  const noFilesNote = !input.files?.length
-    ? '\nNote: No file context provided. Leave contextualInsights empty.'
-    : '';
-
-  return `
-Repository: ${input.repository}${languageLine}
-Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}${noFilesNote}
-Changed Files:
-${fileSummary}
-
-Diff:
-${input.diff}
-${fileContext}
-`;
-}
-
 export function registerInspectCodeQualityTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'inspect_code_quality',
     title: 'Inspect Code Quality',
-    description: 'Deep-dive code review with optional file context.',
+    description:
+      'Deep-dive code review with optional file context. Call generate_diff first.',
     inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
     resultSchema: CodeQualityOutputSchema,
@@ -123,13 +95,15 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';
     },
+    validateInput: (input) => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      const diffError = validateDiffBudget(slot.diff);
+      if (diffError) return diffError;
+      return validateContextBudget(slot.diff, input.files);
+    },
     formatOutcome: (result) =>
       `${result.findings.length} findings, risk: ${result.overallRisk}`,
-    validateInput: (input) => {
-      const diffError = validateDiffBudget(input.diff);
-      if (diffError) return diffError;
-      return validateContextBudget(input.diff, input.files);
-    },
     formatOutput: (result) => {
       const count = result.findings.length;
       const total = result.totalFindings ?? count;
@@ -142,12 +116,37 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     transformResult: (input, result) => {
       const totalFindings = result.findings.length;
       const cappedFindings = capFindings(result.findings, input.maxFindings);
-
       return { ...result, findings: cappedFindings, totalFindings };
     },
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildInspectPrompt(input),
-    }),
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const parsedFiles = parseDiffFiles(diff);
+      const { summary: fileSummary } =
+        computeDiffStatsAndSummaryFromFiles(parsedFiles);
+      const fileContext = formatFileContext(input.files);
+      const languageLine = formatOptionalLine('Language', input.language);
+      const maxFindingsLine = formatOptionalLine(
+        'Max Findings',
+        input.maxFindings
+      );
+      const noFilesNote = !input.files?.length
+        ? '\nNote: No file context provided. Leave contextualInsights empty.'
+        : '';
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `
+Repository: ${input.repository}${languageLine}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}${noFilesNote}
+Changed Files:
+${fileSummary}
+
+Diff:
+${diff}
+${fileContext}
+`,
+      };
+    },
   });
 }

@@ -5,6 +5,7 @@ import {
   extractChangedPathsFromFiles,
   parseDiffFiles,
 } from '../lib/diff-parser.js';
+import { createNoDiffError, getDiff } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
@@ -22,29 +23,12 @@ function formatPatchCount(count: number): string {
   return `${count} ${count === 1 ? 'patch' : 'patches'}`;
 }
 
-function buildSuggestSearchReplacePrompt(input: {
-  findingTitle: string;
-  findingDetails: string;
-  diff: string;
-}): string {
-  const files = parseDiffFiles(input.diff);
-  const paths = extractChangedPathsFromFiles(files);
-
-  return `
-Finding: ${input.findingTitle}
-Details: ${input.findingDetails}
-Changed Files: ${paths.join(', ')}
-
-Diff:
-${input.diff}
-`;
-}
-
 export function registerSuggestSearchReplaceTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'suggest_search_replace',
     title: 'Suggest Search & Replace',
-    description: 'Generate search-and-replace blocks to fix a finding.',
+    description:
+      'Generate search-and-replace blocks to fix a finding from the cached diff. Call generate_diff first.',
     inputSchema: SuggestSearchReplaceInputSchema,
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
@@ -55,16 +39,34 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
-    validateInput: (input) => validateDiffBudget(input.diff),
+    validateInput: () => {
+      const slot = getDiff();
+      if (!slot) return createNoDiffError();
+      return validateDiffBudget(slot.diff);
+    },
     formatOutcome: (result) => formatPatchCount(result.blocks.length),
     formatOutput: (result) => {
       const count = result.blocks.length;
       const patches = formatPatchCount(count);
       return `${result.summary}\n${patches} • Checklist: ${result.validationChecklist.join(' | ')}`;
     },
-    buildPrompt: (input) => ({
-      systemInstruction: SYSTEM_INSTRUCTION,
-      prompt: buildSuggestSearchReplacePrompt(input),
-    }),
+    buildPrompt: (input) => {
+      const slot = getDiff();
+      const diff = slot?.diff ?? '';
+      const files = parseDiffFiles(diff);
+      const paths = extractChangedPathsFromFiles(files);
+
+      return {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        prompt: `
+Finding: ${input.findingTitle}
+Details: ${input.findingDetails}
+Changed Files: ${paths.join(', ')}
+
+Diff:
+${diff}
+`,
+      };
+    },
   });
 }
