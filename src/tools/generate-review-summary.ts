@@ -57,8 +57,8 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingBudget !== undefined
-      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+    ...(TOOL_CONTRACT.thinkingLevel !== undefined
+      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
       : undefined),
     ...(TOOL_CONTRACT.temperature !== undefined
       ? { temperature: TOOL_CONTRACT.temperature }
@@ -94,6 +94,8 @@ Stats: ${files} files, +${added}, -${deleted}
 
 Diff:
 ${diff}
+
+Based on the diff and stats above, summarize the PR and provide a merge recommendation.
 `,
       };
     },

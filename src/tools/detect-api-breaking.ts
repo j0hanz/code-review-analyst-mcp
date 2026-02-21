@@ -28,8 +28,8 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingBudget !== undefined
-      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+    ...(TOOL_CONTRACT.thinkingLevel !== undefined
+      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
       : undefined),
     ...(TOOL_CONTRACT.temperature !== undefined
       ? { temperature: TOOL_CONTRACT.temperature }
@@ -53,7 +53,8 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
-        prompt: `${languageLine}\nDiff:\n${diff}`.trimStart(),
+        prompt:
+          `${languageLine}\\nDiff:\\n${diff}\\n\\nBased on the diff above, detect any breaking API changes.`.trimStart(),
       };
     },
   });

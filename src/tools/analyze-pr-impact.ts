@@ -36,8 +36,8 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingBudget !== undefined
-      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+    ...(TOOL_CONTRACT.thinkingLevel !== undefined
+      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
       : undefined),
     ...(TOOL_CONTRACT.temperature !== undefined
       ? { temperature: TOOL_CONTRACT.temperature }
@@ -67,6 +67,8 @@ ${fileSummary}
 
 Diff:
 ${diff}
+
+Based on the diff and change stats above, analyze the PR impact.
 `,
       };
     },

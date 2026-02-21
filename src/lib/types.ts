@@ -6,7 +6,7 @@ export interface GeminiRequestExecutionOptions {
   timeoutMs?: number;
   temperature?: number;
   maxOutputTokens?: number;
-  thinkingBudget?: number;
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   includeThoughts?: boolean;
   signal?: AbortSignal;
   onLog?: GeminiLogHandler;

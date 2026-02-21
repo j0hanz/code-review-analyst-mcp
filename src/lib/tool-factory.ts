@@ -117,11 +117,11 @@ export interface StructuredToolTaskConfig<
     | ReturnType<typeof createErrorToolResponse>
     | undefined;
 
-  /** Optional Gemini model to use (e.g. 'gemini-2.5-pro'). */
+  /** Optional Gemini model to use (e.g. 'gemini-3.1-pro-preview'). */
   model?: string;
 
-  /** Optional thinking budget in tokens. */
-  thinkingBudget?: number;
+  /** Optional thinking level. */
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
 
   /** Optional timeout in ms for the Gemini call. Defaults to 90,000 ms. Use DEFAULT_TIMEOUT_PRO_MS for Pro model calls. */
   timeoutMs?: number;
@@ -191,8 +191,8 @@ function createGenerationRequest<
   if (config.model !== undefined) {
     request.model = config.model;
   }
-  if (config.thinkingBudget !== undefined) {
-    request.thinkingBudget = config.thinkingBudget;
+  if (config.thinkingLevel !== undefined) {
+    request.thinkingLevel = config.thinkingLevel;
   }
   if (config.timeoutMs !== undefined) {
     request.timeoutMs = config.timeoutMs;

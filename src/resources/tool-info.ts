@@ -4,7 +4,7 @@ interface ToolInfoEntry {
   name: string;
   purpose: string;
   model: string;
-  thinkingBudget: string;
+  thinkingLevel: string;
   timeout: string;
   maxOutputTokens: string;
   params: string;
@@ -29,8 +29,8 @@ function formatTimeout(timeoutMs: number): string {
   return `${Math.round(timeoutMs / 1_000)}s`;
 }
 
-function formatThinkingBudget(thinkingBudget: number | undefined): string {
-  return thinkingBudget === undefined ? '-' : formatNumber(thinkingBudget);
+function formatThinkingLevel(thinkingLevel: string | undefined): string {
+  return thinkingLevel === undefined ? '-' : thinkingLevel;
 }
 
 function formatOutputTokens(maxOutputTokens: number): string {
@@ -60,7 +60,7 @@ function toToolInfoEntry(
     name: contract.name,
     purpose: contract.purpose,
     model: contract.model,
-    thinkingBudget: formatThinkingBudget(contract.thinkingBudget),
+    thinkingLevel: formatThinkingLevel(contract.thinkingLevel),
     timeout: formatTimeout(contract.timeoutMs),
     maxOutputTokens: formatOutputTokens(contract.maxOutputTokens),
     params: parameterRows.join('\n'),
@@ -105,7 +105,7 @@ function formatToolInfo(entry: ToolInfoEntry): string {
 ${entry.purpose}
 
 ## Model
-\`${entry.model}\` (thinking budget: ${entry.thinkingBudget}, timeout: ${entry.timeout}, max output tokens: ${entry.maxOutputTokens})
+\`${entry.model}\` (thinking level: ${entry.thinkingLevel}, timeout: ${entry.timeout}, max output tokens: ${entry.maxOutputTokens})
 
 ## Parameters
 ${entry.params}

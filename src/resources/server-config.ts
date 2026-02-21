@@ -46,8 +46,8 @@ function formatTimeout(ms: number): string {
   return `${Math.round(ms / 1_000)}s`;
 }
 
-function formatThinkingBudget(budget: number | undefined): string {
-  return budget !== undefined ? formatNumber(budget) : '—';
+function formatThinkingLevel(level: string | undefined): string {
+  return level !== undefined ? level : '—';
 }
 
 export function buildServerConfig(): string {
@@ -60,7 +60,7 @@ export function buildServerConfig(): string {
   const toolRows = getToolContracts()
     .filter((contract) => contract.model !== 'none')
     .map((contract) => {
-      return `| \`${contract.name}\` | \`${contract.model}\` | ${formatThinkingBudget(contract.thinkingBudget)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
+      return `| \`${contract.name}\` | \`${contract.model}\` | ${formatThinkingLevel(contract.thinkingLevel)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
     })
     .join('\n');
 
@@ -79,7 +79,7 @@ export function buildServerConfig(): string {
 
 Default model: \`${defaultModel}\` (override with \`GEMINI_MODEL\`)
 
-| Tool | Model | Thinking Budget | Timeout | Max Output Tokens |
+| Tool | Model | Thinking Level | Timeout | Max Output Tokens |
 |------|-------|----------------|---------|-------------------|
 ${toolRows}
 

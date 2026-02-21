@@ -18,7 +18,7 @@ This server accepts unified diffs and returns structured JSON results — findin
 
 - **Impact Analysis** — Objective severity scoring, breaking change detection, and rollback complexity assessment.
 - **Review Summary** — Concise PR digest with merge recommendation and change statistics.
-- **Deep Code Inspection** — Pro model with 16K thinking budget for context-aware analysis using full file contents.
+- **Deep Code Inspection** — Pro model with high thinking level for context-aware analysis using full file contents.
 - **Search & Replace Fixes** — Verbatim, copy-paste-ready code fixes tied to specific findings.
 - **Test Plan Generation** — Systematic test case generation with priority ranking and pseudocode.
 - **Async Task Support** — All tools support MCP task lifecycle with progress notifications.
@@ -385,13 +385,13 @@ Create a test plan covering the changes in the diff using the Flash model with t
 
 ### Models
 
-| Tool                      | Model              | Thinking Budget |
-| ------------------------- | ------------------ | --------------- |
-| `analyze_pr_impact`       | `gemini-2.5-flash` | —               |
-| `generate_review_summary` | `gemini-2.5-flash` | —               |
-| `inspect_code_quality`    | `gemini-2.5-pro`   | 16,384 tokens   |
-| `suggest_search_replace`  | `gemini-2.5-pro`   | 16,384 tokens   |
-| `generate_test_plan`      | `gemini-2.5-flash` | 8,192 tokens    |
+| Tool                      | Model                    | Thinking Level |
+| ------------------------- | ------------------------ | -------------- |
+| `analyze_pr_impact`       | `gemini-3-flash-preview` | `minimal`      |
+| `generate_review_summary` | `gemini-3-flash-preview` | `minimal`      |
+| `inspect_code_quality`    | `gemini-3.1-pro-preview` | `high`         |
+| `suggest_search_replace`  | `gemini-3.1-pro-preview` | `high`         |
+| `generate_test_plan`      | `gemini-3-flash-preview` | `medium`       |
 
 ## Workflows
 

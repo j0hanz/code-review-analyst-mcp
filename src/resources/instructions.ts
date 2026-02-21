@@ -41,9 +41,9 @@ ${parameterLines.join('\n')}
   }
 
   const thinkingLine =
-    contract.thinkingBudget === undefined
-      ? '- Thinking budget: disabled'
-      : `- Thinking budget: ${contract.thinkingBudget}`;
+    contract.thinkingLevel === undefined
+      ? '- Thinking level: disabled'
+      : `- Thinking level: ${contract.thinkingLevel}`;
 
   return `### \`${contract.name}\`
 - Purpose: ${contract.purpose}

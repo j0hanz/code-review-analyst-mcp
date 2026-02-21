@@ -6,14 +6,14 @@ import {
   FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
   FLASH_MODEL,
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
-  FLASH_THINKING_BUDGET,
+  FLASH_THINKING_LEVEL,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
-  FLASH_TRIAGE_THINKING_BUDGET,
+  FLASH_TRIAGE_THINKING_LEVEL,
   PATCH_TEMPERATURE,
   PRO_MODEL,
   PRO_PATCH_MAX_OUTPUT_TOKENS,
   PRO_REVIEW_MAX_OUTPUT_TOKENS,
-  PRO_THINKING_BUDGET,
+  PRO_THINKING_LEVEL,
   TRIAGE_TEMPERATURE,
 } from './model-config.js';
 
@@ -44,7 +44,7 @@ export interface ToolContract {
   model: string;
   /** Set to 0 for synchronous (non-Gemini) tools. */
   timeoutMs: number;
-  thinkingBudget?: number;
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   /** Set to 0 for synchronous (non-Gemini) tools. */
   maxOutputTokens: number;
   /**
@@ -96,7 +96,7 @@ export const TOOL_CONTRACTS = [
       'Assess severity, categories, breaking changes, and rollback complexity.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
+    thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     params: [
@@ -130,7 +130,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Produce PR summary, risk rating, and merge recommendation.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
+    thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     params: [
@@ -164,7 +164,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Deep code review with optional full-file context.',
     model: PRO_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
-    thinkingBudget: PRO_THINKING_BUDGET,
+    thinkingLevel: PRO_THINKING_LEVEL,
     maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
     params: [
@@ -222,7 +222,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Generate verbatim search/replace fix blocks for one finding.',
     model: PRO_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
-    thinkingBudget: PRO_THINKING_BUDGET,
+    thinkingLevel: PRO_THINKING_LEVEL,
     maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
     temperature: PATCH_TEMPERATURE,
     params: [
@@ -257,7 +257,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Generate prioritized test cases and coverage guidance.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    thinkingBudget: FLASH_THINKING_BUDGET,
+    thinkingLevel: FLASH_THINKING_LEVEL,
     maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
     temperature: CREATIVE_TEMPERATURE,
     params: [
@@ -305,7 +305,7 @@ export const TOOL_CONTRACTS = [
       'Analyze Big-O complexity and detect degradations in changed code.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    thinkingBudget: FLASH_THINKING_BUDGET,
+    thinkingLevel: FLASH_THINKING_LEVEL,
     maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
     params: [
@@ -330,7 +330,7 @@ export const TOOL_CONTRACTS = [
     purpose: 'Detect breaking API/interface changes in a diff.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
-    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
+    thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     params: [

@@ -66,10 +66,10 @@ function getToolGuide(tool: string): string {
     return `Use \`${tool}\` to analyze your code changes.`;
   }
 
-  const { thinkingBudget } = contract;
+  const { thinkingLevel } = contract;
   const modelLine =
-    thinkingBudget !== undefined
-      ? `Model: ${contract.model} (thinking budget ${thinkingBudget}, output cap ${contract.maxOutputTokens}).`
+    thinkingLevel !== undefined
+      ? `Model: ${contract.model} (thinking level ${thinkingLevel}, output cap ${contract.maxOutputTokens}).`
       : `Model: ${contract.model} (output cap ${contract.maxOutputTokens}).`;
   return `Tool: ${contract.name}\n${modelLine}\nOutput: ${contract.outputShape}\nUse: ${contract.purpose}`;
 }

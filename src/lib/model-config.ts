@@ -1,8 +1,8 @@
 /** Fast, cost-effective model for summarization and light analysis. */
-export const FLASH_MODEL = 'gemini-2.5-flash';
+export const FLASH_MODEL = 'gemini-3-flash-preview';
 
 /** High-capability model for deep reasoning, quality inspection, and reliable code generation. */
-export const PRO_MODEL = 'gemini-2.5-pro';
+export const PRO_MODEL = 'gemini-3.1-pro-preview';
 
 /** Default hint for auto-detection. */
 const DEFAULT_DETECT_HINT = 'detect';
@@ -25,13 +25,13 @@ Object.freeze(MODEL_TIMEOUT_MS);
 // Budgets (Thinking & Output)
 // ---------------------------------------------------------------------------
 
-const THINKING_BUDGET_TOKENS = {
-  /** Disabled (0) for triage/classification. */
-  flashTriage: 0,
-  /** ~50% of Flash max (16k). For analysis tasks. */
-  flash: 16_384,
-  /** ~75% of Pro max (24k). For deep review and patches. */
-  pro: 24_576,
+const THINKING_LEVELS = {
+  /** Minimal thinking for triage/classification. */
+  flashTriage: 'minimal',
+  /** Medium thinking for analysis tasks. */
+  flash: 'medium',
+  /** High thinking for deep review and patches. */
+  pro: 'high',
 } as const;
 
 // Thinking budget in tokens for Flash and Pro tools. Note that these are not hard limits, but rather guidelines to encourage concise responses and manage latency/cost.
@@ -44,14 +44,14 @@ const OUTPUT_TOKEN_BUDGET = {
   proReview: 12_288,
 } as const;
 
-/** Thinking budget for Flash triage (disabled). */
-export const FLASH_TRIAGE_THINKING_BUDGET = THINKING_BUDGET_TOKENS.flashTriage;
+/** Thinking level for Flash triage. */
+export const FLASH_TRIAGE_THINKING_LEVEL = THINKING_LEVELS.flashTriage;
 
-/** Thinking budget for Flash analysis. */
-export const FLASH_THINKING_BUDGET = THINKING_BUDGET_TOKENS.flash;
+/** Thinking level for Flash analysis. */
+export const FLASH_THINKING_LEVEL = THINKING_LEVELS.flash;
 
-/** Thinking budget for Pro deep analysis. */
-export const PRO_THINKING_BUDGET = THINKING_BUDGET_TOKENS.pro;
+/** Thinking level for Pro deep analysis. */
+export const PRO_THINKING_LEVEL = THINKING_LEVELS.pro;
 
 /** Output cap for Flash API breaking-change detection. */
 export const FLASH_API_BREAKING_MAX_OUTPUT_TOKENS =
@@ -79,10 +79,10 @@ export const PRO_REVIEW_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.proReview;
 // ---------------------------------------------------------------------------
 
 const TOOL_TEMPERATURE = {
-  analysis: 0.1, // Consistent algorithmic analysis
-  creative: 0.2, // Modest diversity (e.g. test plans)
-  patch: 0.0, // Max precision for code blocks
-  triage: 0.1, // Deterministic extraction
+  analysis: 1.0, // Gemini 3 recommends 1.0 for all tasks
+  creative: 1.0, // Gemini 3 recommends 1.0 for all tasks
+  patch: 1.0, // Gemini 3 recommends 1.0 for all tasks
+  triage: 1.0, // Gemini 3 recommends 1.0 for all tasks
 } as const;
 
 /** Temperature for analytical tools. */

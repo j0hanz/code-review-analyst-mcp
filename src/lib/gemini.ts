@@ -10,6 +10,7 @@ import {
   GoogleGenAI,
   HarmBlockThreshold,
   HarmCategory,
+  ThinkingLevel,
 } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
@@ -19,7 +20,7 @@ import type { GeminiStructuredRequest } from './types.js';
 
 // Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
 let _defaultModel: string | undefined;
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
 const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
 const GEMINI_INCLUDE_THOUGHTS_ENV_VAR = 'GEMINI_INCLUDE_THOUGHTS';
@@ -128,18 +129,34 @@ function parseSafetyThreshold(
 }
 
 function getThinkingConfig(
-  thinkingBudget: number | undefined,
+  thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | undefined,
   includeThoughts: boolean
-): { thinkingBudget: number; includeThoughts?: true } | undefined {
-  if (thinkingBudget === undefined) {
+): { thinkingLevel?: ThinkingLevel; includeThoughts?: true } | undefined {
+  if (thinkingLevel === undefined && !includeThoughts) {
     return undefined;
   }
 
-  if (includeThoughts) {
-    return { includeThoughts: true, thinkingBudget };
+  const config: { thinkingLevel?: ThinkingLevel; includeThoughts?: true } = {};
+  if (thinkingLevel !== undefined) {
+    switch (thinkingLevel) {
+      case 'minimal':
+        config.thinkingLevel = ThinkingLevel.MINIMAL;
+        break;
+      case 'low':
+        config.thinkingLevel = ThinkingLevel.LOW;
+        break;
+      case 'medium':
+        config.thinkingLevel = ThinkingLevel.MEDIUM;
+        break;
+      case 'high':
+        config.thinkingLevel = ThinkingLevel.HIGH;
+        break;
+    }
   }
-
-  return { thinkingBudget };
+  if (includeThoughts) {
+    config.includeThoughts = true;
+  }
+  return config;
 }
 
 function parseBooleanEnv(value: string): boolean | undefined {
@@ -436,11 +453,11 @@ function buildGenerationConfig(
   const includeThoughts =
     request.includeThoughts ?? getDefaultIncludeThoughts();
   const thinkingConfig = getThinkingConfig(
-    request.thinkingBudget,
+    request.thinkingLevel,
     includeThoughts
   );
   const config: GenerateContentConfig = {
-    temperature: request.temperature ?? 0.2,
+    temperature: request.temperature ?? 1.0,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
     responseSchema: request.responseSchema,
