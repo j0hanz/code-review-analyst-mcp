@@ -4,9 +4,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import {
-  INSPECTION_FOCUS_AREAS,
   getToolContract,
   getToolContractNames,
+  INSPECTION_FOCUS_AREAS,
 } from '../lib/tool-contracts.js';
 
 export const PROMPT_DEFINITIONS = [

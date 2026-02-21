@@ -5,7 +5,12 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { debuglog } from 'node:util';
 
-import { FinishReason, GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
+import {
+  FinishReason,
+  GoogleGenAI,
+  HarmBlockThreshold,
+  HarmCategory,
+} from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
 import { createCachedEnvInt } from './env-config.js';
