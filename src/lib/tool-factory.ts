@@ -129,6 +129,14 @@ export interface StructuredToolTaskConfig<
   /** Optional max output tokens for Gemini. */
   maxOutputTokens?: number;
 
+  /**
+   * Optional sampling temperature for this tool's Gemini call.
+   * Lower values (0.0–0.1) favour determinism for structured extraction;
+   * higher values (0.2) add useful diversity for creative synthesis tasks.
+   * Falls back to the global default (0.2) when omitted.
+   */
+  temperature?: number;
+
   /** Optional opt-in to Gemini thought output. Defaults to false. */
   includeThoughts?: boolean;
 
@@ -191,6 +199,9 @@ function createGenerationRequest<
   }
   if (config.maxOutputTokens !== undefined) {
     request.maxOutputTokens = config.maxOutputTokens;
+  }
+  if (config.temperature !== undefined) {
+    request.temperature = config.temperature;
   }
   if (config.includeThoughts !== undefined) {
     request.includeThoughts = config.includeThoughts;

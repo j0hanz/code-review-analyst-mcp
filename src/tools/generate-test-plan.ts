@@ -42,6 +42,9 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     ...(TOOL_CONTRACT.thinkingBudget !== undefined
       ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
       : undefined),
+    ...(TOOL_CONTRACT.temperature !== undefined
+      ? { temperature: TOOL_CONTRACT.temperature }
+      : undefined),
     validateInput: (_input, ctx) => {
       const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();

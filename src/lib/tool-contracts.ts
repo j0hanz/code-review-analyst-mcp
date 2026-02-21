@@ -1,4 +1,6 @@
 import {
+  ANALYSIS_TEMPERATURE,
+  CREATIVE_TEMPERATURE,
   DEFAULT_TIMEOUT_PRO_MS,
   FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
   FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
@@ -6,10 +8,13 @@ import {
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
   FLASH_THINKING_BUDGET,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+  FLASH_TRIAGE_THINKING_BUDGET,
+  PATCH_TEMPERATURE,
   PRO_MODEL,
   PRO_PATCH_MAX_OUTPUT_TOKENS,
   PRO_REVIEW_MAX_OUTPUT_TOKENS,
   PRO_THINKING_BUDGET,
+  TRIAGE_TEMPERATURE,
 } from './model-config.js';
 
 const DEFAULT_TIMEOUT_FLASH_MS = 90_000;
@@ -42,6 +47,13 @@ export interface ToolContract {
   thinkingBudget?: number;
   /** Set to 0 for synchronous (non-Gemini) tools. */
   maxOutputTokens: number;
+  /**
+   * Sampling temperature for the Gemini call.
+   * Lower values (0.0–0.1) favour deterministic structured output;
+   * higher values (0.2) add diversity for creative synthesis tasks.
+   * Omit to use the global default (0.2).
+   */
+  temperature?: number;
   params: readonly ToolParameterContract[];
   outputShape: string;
   gotchas: readonly string[];
@@ -84,7 +96,9 @@ export const TOOL_CONTRACTS = [
       'Assess severity, categories, breaking changes, and rollback complexity.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    temperature: TRIAGE_TEMPERATURE,
     params: [
       {
         name: 'repository',
@@ -116,7 +130,9 @@ export const TOOL_CONTRACTS = [
     purpose: 'Produce PR summary, risk rating, and merge recommendation.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
+    temperature: TRIAGE_TEMPERATURE,
     params: [
       {
         name: 'repository',
@@ -150,6 +166,7 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     thinkingBudget: PRO_THINKING_BUDGET,
     maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
+    temperature: ANALYSIS_TEMPERATURE,
     params: [
       {
         name: 'repository',
@@ -207,6 +224,7 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     thinkingBudget: PRO_THINKING_BUDGET,
     maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
+    temperature: PATCH_TEMPERATURE,
     params: [
       {
         name: 'findingTitle',
@@ -241,6 +259,7 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
     thinkingBudget: FLASH_THINKING_BUDGET,
     maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
+    temperature: CREATIVE_TEMPERATURE,
     params: [
       {
         name: 'repository',
@@ -288,6 +307,7 @@ export const TOOL_CONTRACTS = [
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
     thinkingBudget: FLASH_THINKING_BUDGET,
     maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
+    temperature: ANALYSIS_TEMPERATURE,
     params: [
       {
         name: 'language',
@@ -310,7 +330,9 @@ export const TOOL_CONTRACTS = [
     purpose: 'Detect breaking API/interface changes in a diff.',
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_FLASH_MS,
+    thinkingBudget: FLASH_TRIAGE_THINKING_BUDGET,
     maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
+    temperature: TRIAGE_TEMPERATURE,
     params: [
       {
         name: 'language',

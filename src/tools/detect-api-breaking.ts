@@ -28,6 +28,12 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
+    ...(TOOL_CONTRACT.thinkingBudget !== undefined
+      ? { thinkingBudget: TOOL_CONTRACT.thinkingBudget }
+      : undefined),
+    ...(TOOL_CONTRACT.temperature !== undefined
+      ? { temperature: TOOL_CONTRACT.temperature }
+      : undefined),
     validateInput: (_input, ctx) => {
       const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();
