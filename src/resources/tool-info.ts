@@ -30,7 +30,7 @@ function formatTimeout(timeoutMs: number): string {
 }
 
 function formatThinkingLevel(thinkingLevel: string | undefined): string {
-  return thinkingLevel === undefined ? '-' : thinkingLevel;
+  return thinkingLevel ?? '-';
 }
 
 function formatOutputTokens(maxOutputTokens: number): string {

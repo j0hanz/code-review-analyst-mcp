@@ -31,7 +31,7 @@ describe('Gemini Thinking Config', () => {
       prompt: 'test',
       responseSchema: { type: 'object' },
       thinkingLevel: 'high',
-      model: 'gemini-3.1-pro-preview',
+      model: 'gemini-3-pro-preview',
     });
 
     const call = mockGenerateContent.mock.calls[0];
@@ -63,7 +63,7 @@ describe('Gemini Thinking Config', () => {
       responseSchema: { type: 'object' },
       thinkingLevel: 'high',
       includeThoughts: true,
-      model: 'gemini-3.1-pro-preview',
+      model: 'gemini-3-pro-preview',
     });
 
     const call = mockGenerateContent.mock.calls[0];

@@ -47,7 +47,7 @@ function formatTimeout(ms: number): string {
 }
 
 function formatThinkingLevel(level: string | undefined): string {
-  return level !== undefined ? level : '—';
+  return level ?? '—';
 }
 
 export function buildServerConfig(): string {

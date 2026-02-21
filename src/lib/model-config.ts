@@ -2,7 +2,7 @@
 export const FLASH_MODEL = 'gemini-3-flash-preview';
 
 /** High-capability model for deep reasoning, quality inspection, and reliable code generation. */
-export const PRO_MODEL = 'gemini-3.1-pro-preview';
+export const PRO_MODEL = 'gemini-3-pro-preview';
 
 /** Default hint for auto-detection. */
 const DEFAULT_DETECT_HINT = 'detect';

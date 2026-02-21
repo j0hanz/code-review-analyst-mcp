@@ -117,7 +117,7 @@ export interface StructuredToolTaskConfig<
     | ReturnType<typeof createErrorToolResponse>
     | undefined;
 
-  /** Optional Gemini model to use (e.g. 'gemini-3.1-pro-preview'). */
+  /** Optional Gemini model to use (e.g. 'gemini-3-pro-preview'). */
   model?: string;
 
   /** Optional thinking level. */

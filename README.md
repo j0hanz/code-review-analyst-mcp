@@ -389,8 +389,8 @@ Create a test plan covering the changes in the diff using the Flash model with t
 | ------------------------- | ------------------------ | -------------- |
 | `analyze_pr_impact`       | `gemini-3-flash-preview` | `minimal`      |
 | `generate_review_summary` | `gemini-3-flash-preview` | `minimal`      |
-| `inspect_code_quality`    | `gemini-3.1-pro-preview` | `high`         |
-| `suggest_search_replace`  | `gemini-3.1-pro-preview` | `high`         |
+| `inspect_code_quality`    | `gemini-3-pro-preview`   | `high`         |
+| `suggest_search_replace`  | `gemini-3-pro-preview`   | `high`         |
 | `generate_test_plan`      | `gemini-3-flash-preview` | `medium`       |
 
 ## Workflows
