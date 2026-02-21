@@ -14,6 +14,16 @@ import {
 
 const DEFAULT_TIMEOUT_FLASH_MS = 90_000;
 
+export const INSPECTION_FOCUS_AREAS = [
+  'security',
+  'correctness',
+  'performance',
+  'regressions',
+  'tests',
+  'maintainability',
+  'concurrency',
+] as const;
+
 export interface ToolParameterContract {
   name: string;
   type: string;
@@ -160,7 +170,7 @@ export const TOOL_CONTRACTS = [
         type: 'string[]',
         required: false,
         constraints: '1-12 items, 2-80 chars each',
-        description: 'Focused inspection categories.',
+        description: `Focused inspection categories (e.g. ${INSPECTION_FOCUS_AREAS.join(', ')}).`,
       },
       {
         name: 'maxFindings',

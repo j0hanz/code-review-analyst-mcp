@@ -19,7 +19,7 @@ function createMarkdownContent(
   return { uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text };
 }
 
-interface StaticResourceDef {
+export interface StaticResourceDef {
   id: string;
   uri: string;
   title: string;
@@ -28,7 +28,7 @@ interface StaticResourceDef {
   content: () => string;
 }
 
-const STATIC_RESOURCES: readonly StaticResourceDef[] = [
+export const STATIC_RESOURCES: readonly StaticResourceDef[] = [
   {
     id: 'server-instructions',
     uri: 'internal://instructions',
@@ -114,14 +114,16 @@ function registerToolInfoResources(server: McpServer): void {
   );
 }
 
+export const DIFF_RESOURCE_DESCRIPTION =
+  'The most recently generated diff, cached by generate_diff. Read by all review tools automatically.';
+
 function registerDiffResource(server: McpServer): void {
   server.registerResource(
     'diff-current',
     new ResourceTemplate(DIFF_RESOURCE_URI, { list: undefined }),
     {
       title: 'Current Diff',
-      description:
-        'The most recently generated diff, cached by generate_diff. Read by all review tools automatically.',
+      description: DIFF_RESOURCE_DESCRIPTION,
       mimeType: 'text/x-patch',
       annotations: {
         audience: ['assistant' as const],

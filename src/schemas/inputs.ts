@@ -100,7 +100,7 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     .max(INPUT_LIMITS.focusArea.maxItems)
     .optional()
     .describe(
-      'Review focus areas. Standard tags: security, performance, correctness, maintainability, concurrency. Omit for general review.'
+      'Review focus areas. Standard tags: security, correctness, performance, regressions, tests, maintainability, concurrency. Omit for general review.'
     ),
   maxFindings: createOptionalBoundedInteger(
     INPUT_LIMITS.maxFindings.min,

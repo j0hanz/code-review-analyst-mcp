@@ -1,18 +1,16 @@
 import { getToolContracts } from '../lib/tool-contracts.js';
+import { PROMPT_DEFINITIONS } from '../prompts/index.js';
+import { DIFF_RESOURCE_DESCRIPTION, STATIC_RESOURCES } from './index.js';
 import { getSharedConstraints } from './tool-info.js';
 
-const PROMPT_LIST = [
-  '- `get-help`: Returns these server instructions.',
-  '- `review-guide`: Workflow guide for a selected tool and focus area.',
-];
+const PROMPT_LIST = PROMPT_DEFINITIONS.map(
+  (def) => `- \`${def.name}\`: ${def.description}`
+);
 
 const RESOURCE_LIST = [
-  '- `internal://instructions`: This document.',
-  '- `internal://tool-catalog`: Tool matrix and cross-tool data flow.',
-  '- `internal://workflows`: Recommended multi-step tool workflows.',
-  '- `internal://server-config`: Runtime limits and model configuration.',
+  ...STATIC_RESOURCES.map((def) => `- \`${def.uri}\`: ${def.description}`),
   '- `internal://tool-info/{toolName}`: Per-tool contract details.',
-  '- `diff://current`: Cached diff from the most recent generate_diff run.',
+  `- \`diff://current\`: ${DIFF_RESOURCE_DESCRIPTION}`,
 ];
 
 function formatParameterLine(parameter: {

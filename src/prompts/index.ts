@@ -4,28 +4,27 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import {
+  INSPECTION_FOCUS_AREAS,
   getToolContract,
   getToolContractNames,
 } from '../lib/tool-contracts.js';
 
-const HELP_PROMPT_NAME = 'get-help';
-const HELP_PROMPT_TITLE = 'Get Help';
-const HELP_PROMPT_DESCRIPTION = 'Server instructions.';
-
-const REVIEW_GUIDE_PROMPT_NAME = 'review-guide';
-const REVIEW_GUIDE_PROMPT_TITLE = 'Review Guide';
-const REVIEW_GUIDE_PROMPT_DESCRIPTION = 'Workflow guide for tool/focus area.';
+export const PROMPT_DEFINITIONS = [
+  {
+    name: 'get-help',
+    title: 'Get Help',
+    description: 'Server instructions.',
+  },
+  {
+    name: 'review-guide',
+    title: 'Review Guide',
+    description: 'Workflow guide for tool/focus area.',
+  },
+] as const;
 
 const TOOLS = getToolContractNames();
 
-const FOCUS_AREAS = [
-  'security',
-  'correctness',
-  'performance',
-  'regressions',
-  'tests',
-] as const;
-type FocusArea = (typeof FOCUS_AREAS)[number];
+type FocusArea = (typeof INSPECTION_FOCUS_AREAS)[number];
 const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
 const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
 
@@ -35,6 +34,8 @@ const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   performance: 'Focus: Complexity, allocations, I/O, queries.',
   regressions: 'Focus: Behavior changes, guards, types, breaks.',
   tests: 'Focus: Coverage, edge cases, flakes, error paths.',
+  maintainability: 'Focus: Complexity, readability, structure, patterns.',
+  concurrency: 'Focus: Race conditions, deadlocks, shared state.',
 };
 
 function completeByPrefix<T extends string>(
@@ -82,14 +83,15 @@ function getFocusAreaGuide(focusArea: string): string {
 }
 
 function registerHelpPrompt(server: McpServer, instructions: string): void {
+  const def = PROMPT_DEFINITIONS[0];
   server.registerPrompt(
-    HELP_PROMPT_NAME,
+    def.name,
     {
-      title: HELP_PROMPT_TITLE,
-      description: HELP_PROMPT_DESCRIPTION,
+      title: def.title,
+      description: def.description,
     },
     () => ({
-      description: HELP_PROMPT_DESCRIPTION,
+      description: def.description,
       messages: [
         {
           role: 'user',
@@ -123,18 +125,19 @@ function buildReviewGuideText(tool: string, focusArea: string): string {
 }
 
 function registerReviewGuidePrompt(server: McpServer): void {
+  const def = PROMPT_DEFINITIONS[1];
   server.registerPrompt(
-    REVIEW_GUIDE_PROMPT_NAME,
+    def.name,
     {
-      title: REVIEW_GUIDE_PROMPT_TITLE,
-      description: REVIEW_GUIDE_PROMPT_DESCRIPTION,
+      title: def.title,
+      description: def.description,
       argsSchema: {
         tool: completable(z.string().describe(TOOL_DESCRIPTION_TEXT), (value) =>
           completeByPrefix(TOOLS, value)
         ),
         focusArea: completable(
           z.string().describe(FOCUS_DESCRIPTION_TEXT),
-          (value) => completeByPrefix(FOCUS_AREAS, value)
+          (value) => completeByPrefix(INSPECTION_FOCUS_AREAS, value)
         ),
       },
     },
