@@ -10,7 +10,7 @@ const THINKING_BUDGET_TOKENS = {
 } as const;
 
 const OUTPUT_TOKEN_BUDGET = {
-  flashTriage: 2_048,
+  flashTriage: 4_096,
   flashTestPlan: 4_096,
   flashApiBreaking: 4_096,
   flashComplexity: 2_048,

@@ -5,7 +5,7 @@ import { performance } from 'node:perf_hooks';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { debuglog } from 'node:util';
 
-import { GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
+import { FinishReason, GoogleGenAI, HarmBlockThreshold, HarmCategory } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
 import { createCachedEnvInt } from './env-config.js';
@@ -533,15 +533,24 @@ async function executeAttempt(
   const startedAt = performance.now();
   const response = await generateContentWithTimeout(request, model, timeoutMs);
   const latencyMs = Math.round(performance.now() - startedAt);
+  const finishReason = response.candidates?.[0]?.finishReason;
 
   await emitGeminiLog(onLog, 'info', {
     event: 'gemini_call',
     details: {
       attempt,
       latencyMs,
+      finishReason: finishReason ?? null,
       usageMetadata: response.usageMetadata ?? null,
     },
   });
+
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    const limit = request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+    throw new Error(
+      `Response truncated: model output exceeds limit (maxOutputTokens=${formatNumber(limit)}). Increase maxOutputTokens or reduce prompt complexity.`
+    );
+  }
 
   return parseStructuredResponse(response.text);
 }
