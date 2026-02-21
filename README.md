@@ -371,17 +371,21 @@ Create a test plan covering the changes in the diff using the Flash model with t
 
 ### Environment Variables
 
-| Variable                       | Description                                          | Default      | Required |
-| ------------------------------ | ---------------------------------------------------- | ------------ | -------- |
-| `GEMINI_API_KEY`               | Gemini API key                                       | —            | Yes      |
-| `GOOGLE_API_KEY`               | Alternative API key (if `GEMINI_API_KEY` not set)    | —            | No       |
-| `GEMINI_MODEL`                 | Override default model selection                     | —            | No       |
-| `GEMINI_HARM_BLOCK_THRESHOLD`  | Safety threshold (BLOCK_NONE, BLOCK_ONLY_HIGH, etc.) | `BLOCK_NONE` | No       |
-| `MAX_DIFF_CHARS`               | Max chars for diff input                             | `120000`     | No       |
-| `MAX_CONTEXT_CHARS`            | Max combined context for inspection                  | `500000`     | No       |
-| `MAX_CONCURRENT_CALLS`         | Max concurrent Gemini requests                       | `10`         | No       |
-| `MAX_CONCURRENT_CALLS_WAIT_MS` | Max wait time for a free Gemini slot                 | `2000`       | No       |
-| `MAX_CONCURRENT_CALLS_POLL_MS` | Poll interval while waiting for a free slot          | `25`         | No       |
+| Variable                        | Description                                          | Default      | Required |
+| ------------------------------- | ---------------------------------------------------- | ------------ | -------- |
+| `GEMINI_API_KEY`                | Gemini API key                                       | —            | Yes      |
+| `GOOGLE_API_KEY`                | Alternative API key (if `GEMINI_API_KEY` not set)    | —            | No       |
+| `GEMINI_MODEL`                  | Override default model selection                     | —            | No       |
+| `GEMINI_HARM_BLOCK_THRESHOLD`   | Safety threshold (BLOCK_NONE, BLOCK_ONLY_HIGH, etc.) | `BLOCK_NONE` | No       |
+| `MAX_DIFF_CHARS`                | Max chars for diff input                             | `120000`     | No       |
+| `MAX_CONTEXT_CHARS`             | Max combined context for inspection                  | `500000`     | No       |
+| `MAX_CONCURRENT_CALLS`          | Max concurrent Gemini requests                       | `10`         | No       |
+| `MAX_CONCURRENT_BATCH_CALLS`    | Max concurrent inline batch requests                 | `2`          | No       |
+| `MAX_CONCURRENT_CALLS_WAIT_MS`  | Max wait time for a free Gemini slot                 | `2000`       | No       |
+| `MAX_SCHEMA_RETRY_ERROR_CHARS`  | Max chars from schema error injected into retry text | `1500`       | No       |
+| `GEMINI_BATCH_MODE`             | Request mode for Gemini calls (`off`, `inline`)      | `off`        | No       |
+| `GEMINI_BATCH_POLL_INTERVAL_MS` | Poll interval for batch job status                   | `2000`       | No       |
+| `GEMINI_BATCH_TIMEOUT_MS`       | Max wait for batch completion                        | `120000`     | No       |
 
 ### Models
 

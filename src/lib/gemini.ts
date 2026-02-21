@@ -24,6 +24,7 @@ const DEFAULT_MODEL = 'gemini-3-flash-preview';
 const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
 const GEMINI_INCLUDE_THOUGHTS_ENV_VAR = 'GEMINI_INCLUDE_THOUGHTS';
+const GEMINI_BATCH_MODE_ENV_VAR = 'GEMINI_BATCH_MODE';
 const GEMINI_API_KEY_ENV_VAR = 'GEMINI_API_KEY';
 const GOOGLE_API_KEY_ENV_VAR = 'GOOGLE_API_KEY';
 type GeminiOnLog = GeminiStructuredRequest['onLog'];
@@ -43,18 +44,33 @@ const RETRY_DELAY_MAX_MS = 5_000;
 const RETRY_JITTER_RATIO = 0.2;
 const DEFAULT_SAFETY_THRESHOLD = HarmBlockThreshold.BLOCK_NONE;
 const DEFAULT_INCLUDE_THOUGHTS = false;
+const DEFAULT_BATCH_MODE = 'off';
 const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
 const DIGITS_ONLY_PATTERN = /^\d+$/;
 const SLEEP_UNREF_OPTIONS = { ref: false } as const;
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
+const maxConcurrentBatchCallsConfig = createCachedEnvInt(
+  'MAX_CONCURRENT_BATCH_CALLS',
+  2
+);
 const concurrencyWaitMsConfig = createCachedEnvInt(
   'MAX_CONCURRENT_CALLS_WAIT_MS',
   2_000
 );
+const batchPollIntervalMsConfig = createCachedEnvInt(
+  'GEMINI_BATCH_POLL_INTERVAL_MS',
+  2_000
+);
+const batchTimeoutMsConfig = createCachedEnvInt(
+  'GEMINI_BATCH_TIMEOUT_MS',
+  120_000
+);
 let activeCalls = 0;
+let activeBatchCalls = 0;
 const slotWaiters: (() => void)[] = [];
+const batchSlotWaiters: (() => void)[] = [];
 
 const RETRYABLE_TRANSIENT_CODES = new Set([
   'RESOURCE_EXHAUSTED',
@@ -200,6 +216,35 @@ function getDefaultIncludeThoughts(): boolean {
 
   cachedIncludeThoughts = parseBooleanEnv(value) ?? DEFAULT_INCLUDE_THOUGHTS;
   return cachedIncludeThoughts;
+}
+
+function getDefaultBatchMode(): 'off' | 'inline' {
+  const value = process.env[GEMINI_BATCH_MODE_ENV_VAR]?.trim().toLowerCase();
+  if (value === 'inline') {
+    return 'inline';
+  }
+
+  return DEFAULT_BATCH_MODE;
+}
+
+function applyResponseKeyOrdering(
+  responseSchema: Readonly<Record<string, unknown>>,
+  responseKeyOrdering: readonly string[] | undefined
+): Readonly<Record<string, unknown>> {
+  if (!responseKeyOrdering || responseKeyOrdering.length === 0) {
+    return responseSchema;
+  }
+
+  return {
+    ...responseSchema,
+    propertyOrdering: [...responseKeyOrdering],
+  };
+}
+
+function getPromptWithFunctionCallingContext(
+  request: GeminiStructuredRequest
+): string {
+  return request.prompt;
 }
 
 function getSafetySettings(
@@ -464,7 +509,10 @@ function buildGenerationConfig(
     temperature: request.temperature ?? 1.0,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     responseMimeType: 'application/json',
-    responseSchema: request.responseSchema,
+    responseSchema: applyResponseKeyOrdering(
+      request.responseSchema,
+      request.responseKeyOrdering
+    ),
     safetySettings: getSafetySettings(getSafetyThreshold()),
     topP: 0.95,
     topK: 40,
@@ -528,11 +576,11 @@ async function generateContentWithTimeout(
   try {
     return await getClient().models.generateContent({
       model,
-      contents: request.prompt,
+      contents: getPromptWithFunctionCallingContext(request),
       config: buildGenerationConfig(request, signal),
     });
   } catch (error: unknown) {
-    if (request.signal?.aborted) {
+    if (request.signal?.aborted === true) {
       throw new Error('Gemini request was cancelled.');
     }
 
@@ -679,11 +727,15 @@ function tryWakeNextWaiter(): void {
   }
 }
 
-async function waitForConcurrencySlot(
+async function waitForSlot(
   limit: number,
+  getActiveCount: () => number,
+  acquireSlot: () => void,
+  waiters: (() => void)[],
   requestSignal?: AbortSignal
 ): Promise<void> {
-  if (activeCalls < limit) {
+  if (waiters.length === 0 && getActiveCount() < limit) {
+    acquireSlot();
     return;
   }
 
@@ -703,17 +755,18 @@ async function waitForConcurrencySlot(
       if (requestSignal) {
         requestSignal.removeEventListener('abort', onAbort);
       }
+      acquireSlot();
       resolve();
     };
 
-    slotWaiters.push(waiter);
+    waiters.push(waiter);
 
     const deadlineTimer = setTimeout((): void => {
       if (settled) return;
       settled = true;
-      const idx = slotWaiters.indexOf(waiter);
+      const idx = waiters.indexOf(waiter);
       if (idx !== -1) {
-        slotWaiters.splice(idx, 1);
+        waiters.splice(idx, 1);
       }
       if (requestSignal) {
         requestSignal.removeEventListener('abort', onAbort);
@@ -725,9 +778,9 @@ async function waitForConcurrencySlot(
     const onAbort = (): void => {
       if (settled) return;
       settled = true;
-      const idx = slotWaiters.indexOf(waiter);
+      const idx = waiters.indexOf(waiter);
       if (idx !== -1) {
-        slotWaiters.splice(idx, 1);
+        waiters.splice(idx, 1);
       }
       clearTimeout(deadlineTimer);
       reject(new Error('Gemini request was cancelled.'));
@@ -739,24 +792,374 @@ async function waitForConcurrencySlot(
   });
 }
 
+async function waitForConcurrencySlot(
+  limit: number,
+  requestSignal?: AbortSignal
+): Promise<void> {
+  return waitForSlot(
+    limit,
+    () => activeCalls,
+    () => {
+      activeCalls += 1;
+    },
+    slotWaiters,
+    requestSignal
+  );
+}
+
+function tryWakeNextBatchWaiter(): void {
+  const next = batchSlotWaiters.shift();
+  if (next !== undefined) {
+    next();
+  }
+}
+
+async function waitForBatchConcurrencySlot(
+  limit: number,
+  requestSignal?: AbortSignal
+): Promise<void> {
+  return waitForSlot(
+    limit,
+    () => activeBatchCalls,
+    () => {
+      activeBatchCalls += 1;
+    },
+    batchSlotWaiters,
+    requestSignal
+  );
+}
+
+interface BatchApiClient {
+  batches?: {
+    create: (payload: Record<string, unknown>) => Promise<unknown>;
+    get: (payload: { name: string }) => Promise<unknown>;
+    cancel?: (payload: { name: string }) => Promise<unknown>;
+  };
+}
+
+function getBatchState(payload: unknown): string | undefined {
+  const record = asRecord(payload);
+  if (!record) {
+    return undefined;
+  }
+
+  const directState = toUpperStringCode(record.state);
+  if (directState) {
+    return directState;
+  }
+
+  const metadata = asRecord(record.metadata);
+  if (!metadata) {
+    return undefined;
+  }
+
+  return toUpperStringCode(metadata.state);
+}
+
+function extractBatchResponseText(payload: unknown): string | undefined {
+  const record = asRecord(payload);
+  if (!record) {
+    return undefined;
+  }
+
+  const inlineResponse = asRecord(record.inlineResponse);
+  const inlineText =
+    typeof inlineResponse?.text === 'string' ? inlineResponse.text : undefined;
+  if (inlineText) {
+    return inlineText;
+  }
+
+  const response = asRecord(record.response);
+  if (!response) {
+    return undefined;
+  }
+
+  const responseText =
+    typeof response.text === 'string' ? response.text : undefined;
+  if (responseText) {
+    return responseText;
+  }
+
+  const { inlineResponses } = response;
+  if (!Array.isArray(inlineResponses) || inlineResponses.length === 0) {
+    return undefined;
+  }
+
+  const firstInline = asRecord(inlineResponses[0]);
+  return typeof firstInline?.text === 'string' ? firstInline.text : undefined;
+}
+
+function extractBatchErrorDetail(payload: unknown): string | undefined {
+  const record = asRecord(payload);
+  if (!record) {
+    return undefined;
+  }
+
+  const directError = asRecord(record.error);
+  const directMessage =
+    typeof directError?.message === 'string' ? directError.message : undefined;
+  if (directMessage) {
+    return directMessage;
+  }
+
+  const metadata = asRecord(record.metadata);
+  const metadataError = asRecord(metadata?.error);
+  const metadataMessage =
+    typeof metadataError?.message === 'string'
+      ? metadataError.message
+      : undefined;
+  if (metadataMessage) {
+    return metadataMessage;
+  }
+
+  const response = asRecord(record.response);
+  const responseError = asRecord(response?.error);
+  return typeof responseError?.message === 'string'
+    ? responseError.message
+    : undefined;
+}
+
+function getBatchSuccessResponseText(polled: unknown): string {
+  const responseText = extractBatchResponseText(polled);
+  if (!responseText) {
+    const errorDetail = extractBatchErrorDetail(polled);
+    throw new Error(
+      errorDetail
+        ? `Gemini batch request succeeded but returned no response text: ${errorDetail}`
+        : 'Gemini batch request succeeded but returned no response text.'
+    );
+  }
+
+  return responseText;
+}
+
+function handleBatchTerminalState(
+  state: string | undefined,
+  payload: unknown
+): void {
+  if (state === 'JOB_STATE_FAILED' || state === 'JOB_STATE_CANCELLED') {
+    const errorDetail = extractBatchErrorDetail(payload);
+    throw new Error(
+      errorDetail
+        ? `Gemini batch request ended with state ${state}: ${errorDetail}`
+        : `Gemini batch request ended with state ${state}.`
+    );
+  }
+}
+
+async function pollBatchStatusWithRetries(
+  batches: NonNullable<BatchApiClient['batches']>,
+  batchName: string,
+  onLog: GeminiOnLog,
+  requestSignal?: AbortSignal
+): Promise<unknown> {
+  const maxPollRetries = 2;
+
+  for (let attempt = 0; attempt <= maxPollRetries; attempt += 1) {
+    try {
+      return await batches.get({ name: batchName });
+    } catch (error: unknown) {
+      if (!canRetryAttempt(attempt, maxPollRetries, error)) {
+        throw error;
+      }
+
+      await waitBeforeRetry(attempt, error, onLog, requestSignal);
+    }
+  }
+
+  throw new Error('Batch polling retries exhausted unexpectedly.');
+}
+
+async function cancelBatchIfNeeded(
+  request: GeminiStructuredRequest,
+  batches: NonNullable<BatchApiClient['batches']>,
+  batchName: string | undefined,
+  onLog: GeminiOnLog,
+  completed: boolean,
+  timedOut: boolean
+): Promise<void> {
+  const aborted = request.signal?.aborted === true;
+  if (completed || (!aborted && !timedOut) || !batchName) {
+    return;
+  }
+
+  if (batches.cancel === undefined) {
+    return;
+  }
+
+  try {
+    await batches.cancel({ name: batchName });
+    await emitGeminiLog(onLog, 'info', {
+      event: 'gemini_batch_cancelled',
+      details: {
+        batchName,
+        reason: timedOut ? 'timeout' : 'aborted',
+      },
+    });
+  } catch (error: unknown) {
+    await emitGeminiLog(onLog, 'warning', {
+      event: 'gemini_batch_cancel_failed',
+      details: {
+        batchName,
+        reason: timedOut ? 'timeout' : 'aborted',
+        error: getErrorMessage(error),
+      },
+    });
+  }
+}
+
+async function runInlineBatchWithPolling(
+  request: GeminiStructuredRequest,
+  model: string,
+  onLog: GeminiOnLog
+): Promise<unknown> {
+  const client = getClient() as unknown as BatchApiClient;
+  const { batches } = client;
+  if (batches === undefined) {
+    throw new Error(
+      'Batch mode requires SDK batch support, but batches API is unavailable.'
+    );
+  }
+
+  let batchName: string | undefined;
+  let completed = false;
+  let timedOut = false;
+
+  try {
+    const createPayload: Record<string, unknown> = {
+      model,
+      src: [
+        {
+          contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
+          config: buildGenerationConfig(request, new AbortController().signal),
+        },
+      ],
+    };
+    const createdJob = await batches.create(createPayload);
+    const createdRecord = asRecord(createdJob);
+    batchName =
+      typeof createdRecord?.name === 'string' ? createdRecord.name : undefined;
+    if (!batchName) {
+      throw new Error('Batch mode failed to return a job name.');
+    }
+
+    const pollStart = performance.now();
+    const timeoutMs = batchTimeoutMsConfig.get();
+    const pollIntervalMs = batchPollIntervalMsConfig.get();
+
+    await emitGeminiLog(onLog, 'info', {
+      event: 'gemini_batch_created',
+      details: { batchName },
+    });
+
+    for (;;) {
+      if (request.signal?.aborted === true) {
+        throw new Error('Gemini request was cancelled.');
+      }
+
+      const elapsedMs = Math.round(performance.now() - pollStart);
+      if (elapsedMs > timeoutMs) {
+        timedOut = true;
+        throw new Error(
+          `Gemini batch request timed out after ${formatNumber(timeoutMs)}ms.`
+        );
+      }
+
+      const polled = await pollBatchStatusWithRetries(
+        batches,
+        batchName,
+        onLog,
+        request.signal
+      );
+      const state = getBatchState(polled);
+
+      if (state === 'JOB_STATE_SUCCEEDED') {
+        const responseText = getBatchSuccessResponseText(polled);
+        completed = true;
+        return parseStructuredResponse(responseText);
+      }
+
+      handleBatchTerminalState(state, polled);
+
+      await sleep(
+        pollIntervalMs,
+        undefined,
+        request.signal
+          ? { ...SLEEP_UNREF_OPTIONS, signal: request.signal }
+          : SLEEP_UNREF_OPTIONS
+      );
+    }
+  } finally {
+    await cancelBatchIfNeeded(
+      request,
+      batches,
+      batchName,
+      onLog,
+      completed,
+      timedOut
+    );
+  }
+}
+
+export function getGeminiQueueSnapshot(): {
+  activeCalls: number;
+  waitingCalls: number;
+} {
+  return {
+    activeCalls,
+    waitingCalls: slotWaiters.length,
+  };
+}
+
 export async function generateStructuredJson(
   request: GeminiStructuredRequest
 ): Promise<unknown> {
   const model = request.model ?? getDefaultModel();
   const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const batchMode = request.batchMode ?? getDefaultBatchMode();
   const { onLog } = request;
 
-  const limit = maxConcurrentCallsConfig.get();
-  await waitForConcurrencySlot(limit, request.signal);
+  const limit =
+    batchMode === 'inline'
+      ? maxConcurrentBatchCallsConfig.get()
+      : maxConcurrentCallsConfig.get();
+  const queueWaitStartedAt = performance.now();
+  if (batchMode === 'inline') {
+    await waitForBatchConcurrencySlot(limit, request.signal);
+  } else {
+    await waitForConcurrencySlot(limit, request.signal);
+  }
+  const queueWaitMs = Math.round(performance.now() - queueWaitStartedAt);
 
-  activeCalls += 1;
+  await safeCallOnLog(onLog, 'info', {
+    event: 'gemini_queue_acquired',
+    queueWaitMs,
+    waitingCalls:
+      batchMode === 'inline' ? batchSlotWaiters.length : slotWaiters.length,
+    activeCalls,
+    activeBatchCalls,
+    mode: batchMode,
+  });
+
   try {
-    return await geminiContext.run({ requestId: nextRequestId(), model }, () =>
-      runWithRetries(request, model, timeoutMs, maxRetries, onLog)
+    return await geminiContext.run(
+      { requestId: nextRequestId(), model },
+      () => {
+        if (batchMode === 'inline') {
+          return runInlineBatchWithPolling(request, model, onLog);
+        }
+
+        return runWithRetries(request, model, timeoutMs, maxRetries, onLog);
+      }
     );
   } finally {
-    activeCalls -= 1;
-    tryWakeNextWaiter();
+    if (batchMode === 'inline') {
+      activeBatchCalls -= 1;
+      tryWakeNextBatchWaiter();
+    } else {
+      activeCalls -= 1;
+      tryWakeNextWaiter();
+    }
   }
 }

@@ -34,6 +34,9 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     ...(TOOL_CONTRACT.temperature !== undefined
       ? { temperature: TOOL_CONTRACT.temperature }
       : undefined),
+    ...(TOOL_CONTRACT.deterministicJson !== undefined
+      ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
+      : undefined),
     validateInput: (_input, ctx) => {
       const slot = ctx.diffSlot;
       if (!slot) return createNoDiffError();

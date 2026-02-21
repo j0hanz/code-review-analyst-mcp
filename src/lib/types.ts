@@ -1,6 +1,10 @@
 export type JsonObject = Record<string, unknown>;
 export type GeminiLogHandler = (level: string, data: unknown) => Promise<void>;
 
+export interface GeminiFunctionCallingContext {
+  readonly modelParts: readonly unknown[];
+}
+
 export interface GeminiRequestExecutionOptions {
   maxRetries?: number;
   timeoutMs?: number;
@@ -10,6 +14,9 @@ export interface GeminiRequestExecutionOptions {
   includeThoughts?: boolean;
   signal?: AbortSignal;
   onLog?: GeminiLogHandler;
+  responseKeyOrdering?: readonly string[];
+  functionCallingContext?: GeminiFunctionCallingContext;
+  batchMode?: 'off' | 'inline';
 }
 
 export interface GeminiStructuredRequestOptions extends GeminiRequestExecutionOptions {

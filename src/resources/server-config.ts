@@ -10,6 +10,7 @@ const DEFAULT_SAFETY_THRESHOLD = 'BLOCK_NONE';
 
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
 const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
+const GEMINI_BATCH_MODE_ENV_VAR = 'GEMINI_BATCH_MODE';
 
 const diffCharsConfig = createCachedEnvInt(
   'MAX_DIFF_CHARS',
@@ -23,6 +24,10 @@ const concurrentCallsConfig = createCachedEnvInt(
   'MAX_CONCURRENT_CALLS',
   DEFAULT_MAX_CONCURRENT_CALLS
 );
+const concurrentBatchCallsConfig = createCachedEnvInt(
+  'MAX_CONCURRENT_BATCH_CALLS',
+  2
+);
 const concurrentWaitConfig = createCachedEnvInt(
   'MAX_CONCURRENT_CALLS_WAIT_MS',
   DEFAULT_CONCURRENT_WAIT_MS
@@ -30,6 +35,10 @@ const concurrentWaitConfig = createCachedEnvInt(
 
 function getModelOverride(): string {
   return process.env[GEMINI_MODEL_ENV_VAR] ?? FLASH_MODEL;
+}
+
+function getBatchMode(): string {
+  return process.env[GEMINI_BATCH_MODE_ENV_VAR] ?? 'off';
 }
 
 function getSafetyThreshold(): string {
@@ -54,8 +63,10 @@ export function buildServerConfig(): string {
   const maxDiffChars = diffCharsConfig.get();
   const maxContextChars = contextCharsConfig.get();
   const maxConcurrent = concurrentCallsConfig.get();
+  const maxConcurrentBatch = concurrentBatchCallsConfig.get();
   const concurrentWaitMs = concurrentWaitConfig.get();
   const defaultModel = getModelOverride();
+  const batchMode = getBatchMode();
   const safetyThreshold = getSafetyThreshold();
   const toolRows = getToolContracts()
     .filter((contract) => contract.model !== 'none')
@@ -73,7 +84,9 @@ export function buildServerConfig(): string {
 | Diff limit | ${formatNumber(maxDiffChars)} chars | \`MAX_DIFF_CHARS\` |
 | Context limit (inspect) | ${formatNumber(maxContextChars)} chars | \`MAX_CONTEXT_CHARS\` |
 | Concurrency limit | ${maxConcurrent} | \`MAX_CONCURRENT_CALLS\` |
+| Batch concurrency limit | ${maxConcurrentBatch} | \`MAX_CONCURRENT_BATCH_CALLS\` |
 | Wait timeout | ${formatNumber(concurrentWaitMs)}ms | \`MAX_CONCURRENT_CALLS_WAIT_MS\` |
+| Batch mode | ${batchMode} | \`GEMINI_BATCH_MODE\` |
 
 ## Model Assignments
 
@@ -91,5 +104,11 @@ ${toolRows}
 ## API Keys
 
 - Set \`GEMINI_API_KEY\` or \`GOOGLE_API_KEY\` environment variable (required)
+
+## Batch Mode
+
+- \`GEMINI_BATCH_MODE\`: \`off\` (default) or \`inline\`
+- \`GEMINI_BATCH_POLL_INTERVAL_MS\`: poll cadence for batch status checks
+- \`GEMINI_BATCH_TIMEOUT_MS\`: max wait for batch completion
 `;
 }

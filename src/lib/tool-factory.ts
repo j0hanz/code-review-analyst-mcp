@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
 import { type DiffSlot, getDiff } from './diff-store.js';
+import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
 import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
@@ -48,6 +49,13 @@ const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
 const MAX_SCHEMA_RETRIES = 1;
+const DEFAULT_SCHEMA_RETRY_ERROR_CHARS = 1_500;
+const schemaRetryErrorCharsConfig = createCachedEnvInt(
+  'MAX_SCHEMA_RETRY_ERROR_CHARS',
+  DEFAULT_SCHEMA_RETRY_ERROR_CHARS
+);
+const DETERMINISTIC_JSON_RETRY_NOTE =
+  'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
 
 type ProgressToken = string | number;
 
@@ -140,6 +148,12 @@ export interface StructuredToolTaskConfig<
   /** Optional opt-in to Gemini thought output. Defaults to false. */
   includeThoughts?: boolean;
 
+  /** Optional deterministic JSON mode for stricter key ordering and repair prompting. */
+  deterministicJson?: boolean;
+
+  /** Optional batch execution mode. Defaults to runtime setting. */
+  batchMode?: 'off' | 'inline';
+
   /** Optional formatter for human-readable text output. */
   formatOutput?: (result: TFinal) => string;
 
@@ -168,6 +182,50 @@ function parseToolInput<TInput extends object>(
   fullInputSchema: z.ZodType<TInput>
 ): TInput {
   return fullInputSchema.parse(input);
+}
+
+function extractResponseKeyOrdering(
+  responseSchema: Readonly<Record<string, unknown>>
+): readonly string[] | undefined {
+  const schemaType = responseSchema.type;
+  if (schemaType !== 'object') {
+    return undefined;
+  }
+
+  const { properties } = responseSchema;
+  if (typeof properties !== 'object' || properties === null) {
+    return undefined;
+  }
+
+  return Object.keys(properties as Record<string, unknown>);
+}
+
+export function summarizeSchemaValidationErrorForRetry(
+  errorMessage: string
+): string {
+  const maxChars = Math.max(200, schemaRetryErrorCharsConfig.get());
+  const compact = errorMessage.replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxChars) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxChars - 3)}...`;
+}
+
+function createSchemaRetryPrompt(
+  prompt: string,
+  errorMessage: string,
+  deterministicJson: boolean
+): { prompt: string; summarizedError: string } {
+  const summarizedError = summarizeSchemaValidationErrorForRetry(errorMessage);
+  const deterministicNote = deterministicJson
+    ? `\n${DETERMINISTIC_JSON_RETRY_NOTE}`
+    : '';
+
+  return {
+    summarizedError,
+    prompt: `${prompt}\n\nCRITICAL: The previous response failed schema validation. Error: ${summarizedError}${deterministicNote}`,
+  };
 }
 
 function createGenerationRequest<
@@ -205,6 +263,15 @@ function createGenerationRequest<
   }
   if (config.includeThoughts !== undefined) {
     request.includeThoughts = config.includeThoughts;
+  }
+  if (config.deterministicJson) {
+    const responseKeyOrdering = extractResponseKeyOrdering(responseSchema);
+    if (responseKeyOrdering !== undefined) {
+      request.responseKeyOrdering = responseKeyOrdering;
+    }
+  }
+  if (config.batchMode !== undefined) {
+    request.batchMode = config.batchMode;
   }
   if (signal !== undefined) {
     request.signal = signal;
@@ -669,12 +736,21 @@ export function registerStructuredToolTask<
                 }
 
                 const errorMessage = getErrorMessage(error);
+                const schemaRetryPrompt = createSchemaRetryPrompt(
+                  prompt,
+                  errorMessage,
+                  config.deterministicJson === true
+                );
                 await onLog('warning', {
                   event: 'schema_validation_failed',
-                  details: { attempt, error: errorMessage },
+                  details: {
+                    attempt,
+                    error: schemaRetryPrompt.summarizedError,
+                    originalChars: errorMessage.length,
+                  },
                 });
 
-                retryPrompt = `${prompt}\n\nCRITICAL: The previous response failed schema validation. Error: ${errorMessage}`;
+                retryPrompt = schemaRetryPrompt.prompt;
               }
             }
 

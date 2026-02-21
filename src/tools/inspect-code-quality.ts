@@ -91,6 +91,9 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     ...(TOOL_CONTRACT.temperature !== undefined
       ? { temperature: TOOL_CONTRACT.temperature }
       : undefined),
+    ...(TOOL_CONTRACT.deterministicJson !== undefined
+      ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
+      : undefined),
     progressContext: (input) => {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';

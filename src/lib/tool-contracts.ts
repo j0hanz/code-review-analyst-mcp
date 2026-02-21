@@ -54,6 +54,8 @@ export interface ToolContract {
    * Omit to use the global default (0.2).
    */
   temperature?: number;
+  /** Enables deterministic JSON guidance and schema key ordering. */
+  deterministicJson?: boolean;
   params: readonly ToolParameterContract[];
   outputShape: string;
   gotchas: readonly string[];
@@ -99,6 +101,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'repository',
@@ -133,6 +136,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'repository',
@@ -167,6 +171,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: PRO_THINKING_LEVEL,
     maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'repository',
@@ -225,6 +230,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: PRO_THINKING_LEVEL,
     maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
     temperature: PATCH_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'findingTitle',
@@ -260,6 +266,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: FLASH_THINKING_LEVEL,
     maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
     temperature: CREATIVE_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'repository',
@@ -308,6 +315,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: FLASH_THINKING_LEVEL,
     maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'language',
@@ -333,6 +341,7 @@ export const TOOL_CONTRACTS = [
     thinkingLevel: FLASH_TRIAGE_THINKING_LEVEL,
     maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
+    deterministicJson: true,
     params: [
       {
         name: 'language',
