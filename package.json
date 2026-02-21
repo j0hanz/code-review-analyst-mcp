@@ -1,6 +1,6 @@
 {
   "name": "@j0hanz/code-review-analyst-mcp",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "mcpName": "io.github.j0hanz/code-review-analyst",
   "description": "Gemini-powered MCP server for code review analysis.",
   "type": "module",
