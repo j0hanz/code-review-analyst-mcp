@@ -12,7 +12,8 @@ import type {
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
-import { type DiffSlot, getDiff } from './diff-store.js';
+import { validateDiffBudget } from './diff-budget.js';
+import { createNoDiffError, type DiffSlot, getDiff } from './diff-store.js';
 import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
@@ -48,7 +49,11 @@ const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
 const TIMEOUT_ERROR_PATTERN = /timed out|timeout/i;
 const BUDGET_ERROR_PATTERN = /exceeds limit|max allowed size|input too large/i;
 const BUSY_ERROR_PATTERN = /too many concurrent/i;
-const MAX_SCHEMA_RETRIES = 1;
+const DEFAULT_SCHEMA_RETRIES = 1;
+const geminiSchemaRetriesConfig = createCachedEnvInt(
+  'GEMINI_SCHEMA_RETRIES',
+  DEFAULT_SCHEMA_RETRIES
+);
 const DEFAULT_SCHEMA_RETRY_ERROR_CHARS = 1_500;
 const schemaRetryErrorCharsConfig = createCachedEnvInt(
   'MAX_SCHEMA_RETRY_ERROR_CHARS',
@@ -124,6 +129,12 @@ export interface StructuredToolTaskConfig<
     | Promise<ReturnType<typeof createErrorToolResponse> | undefined>
     | ReturnType<typeof createErrorToolResponse>
     | undefined;
+
+  /** Optional flag to enforce diff presence and budget check before tool execution. */
+  requiresDiff?: boolean;
+
+  /** Optional override for schema validation retries. Defaults to GEMINI_SCHEMA_RETRIES env var. */
+  schemaRetries?: number;
 
   /** Optional Gemini model to use (e.g. 'gemini-3-pro-preview'). */
   model?: string;
@@ -562,6 +573,33 @@ export function wrapToolHandler<TInput, TResult extends CallToolResult>(
   };
 }
 
+async function validateRequest<
+  TInput extends object,
+  TResult extends object,
+  TFinal extends TResult,
+>(
+  config: StructuredToolTaskConfig<TInput, TResult, TFinal>,
+  inputRecord: TInput,
+  ctx: ToolExecutionContext
+): Promise<ReturnType<typeof createErrorToolResponse> | undefined> {
+  if (config.requiresDiff) {
+    if (!ctx.diffSlot) {
+      return createNoDiffError();
+    }
+
+    const budgetError = validateDiffBudget(ctx.diffSlot.diff);
+    if (budgetError) {
+      return budgetError;
+    }
+  }
+
+  if (config.validateInput) {
+    return await config.validateInput(inputRecord, ctx);
+  }
+
+  return undefined;
+}
+
 export function registerStructuredToolTask<
   TInput extends object,
   TResult extends object = Record<string, unknown>,
@@ -655,26 +693,26 @@ export function registerStructuredToolTask<
               'starting'
             );
 
-            if (config.validateInput) {
-              const validationError = await config.validateInput(
-                inputRecord,
-                ctx
+            const validationError = await validateRequest(
+              config,
+              inputRecord,
+              ctx
+            );
+
+            if (validationError) {
+              const validationMessage =
+                validationError.structuredContent.error?.message ??
+                INPUT_VALIDATION_FAILED;
+              await updateStatusMessage(validationMessage);
+              await reportProgressCompletionUpdate(
+                reportProgress,
+                config.name,
+                progressContext,
+                'rejected',
+                false
               );
-              if (validationError) {
-                const validationMessage =
-                  validationError.structuredContent.error?.message ??
-                  INPUT_VALIDATION_FAILED;
-                await updateStatusMessage(validationMessage);
-                await reportProgressCompletionUpdate(
-                  reportProgress,
-                  config.name,
-                  progressContext,
-                  'rejected',
-                  false
-                );
-                await storeResultSafely('completed', validationError);
-                return;
-              }
+              await storeResultSafely('completed', validationError);
+              return;
             }
 
             await reportProgressStepUpdate(
@@ -700,8 +738,10 @@ export function registerStructuredToolTask<
 
             let parsed: TResult | undefined;
             let retryPrompt = prompt;
+            const maxRetries =
+              config.schemaRetries ?? geminiSchemaRetriesConfig.get();
 
-            for (let attempt = 0; attempt <= MAX_SCHEMA_RETRIES; attempt += 1) {
+            for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
               try {
                 const raw = await generateStructuredJson(
                   createGenerationRequest(
@@ -726,10 +766,7 @@ export function registerStructuredToolTask<
                 parsed = config.resultSchema.parse(raw);
                 break;
               } catch (error: unknown) {
-                if (
-                  attempt >= MAX_SCHEMA_RETRIES ||
-                  !(error instanceof z.ZodError)
-                ) {
+                if (attempt >= maxRetries || !(error instanceof z.ZodError)) {
                   throw error;
                 }
 

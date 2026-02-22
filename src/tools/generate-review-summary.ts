@@ -2,8 +2,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type { z } from 'zod';
 
-import { validateDiffBudget } from '../lib/diff-budget.js';
-import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import {
   registerStructuredToolTask,
@@ -67,11 +65,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     ...(TOOL_CONTRACT.deterministicJson !== undefined
       ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
       : undefined),
-    validateInput: (_input, ctx) => {
-      const slot = ctx.diffSlot;
-      if (!slot) return createNoDiffError();
-      return validateDiffBudget(slot.diff);
-    },
+    requiresDiff: true,
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
     transformResult: (_input: ReviewSummaryInput, result, ctx) => {
       const { files, added, deleted } = getDiffStats(ctx);

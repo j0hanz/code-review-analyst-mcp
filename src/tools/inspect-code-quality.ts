@@ -1,9 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateContextBudget } from '../lib/context-budget.js';
-import { validateDiffBudget } from '../lib/diff-budget.js';
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
-import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
@@ -98,12 +96,10 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';
     },
+    requiresDiff: true,
     validateInput: (input, ctx) => {
-      const slot = ctx.diffSlot;
-      if (!slot) return createNoDiffError();
-      const diffError = validateDiffBudget(slot.diff);
-      if (diffError) return diffError;
-      return validateContextBudget(slot.diff, input.files);
+      // Diff presence and budget checked by requiresDiff: true
+      return validateContextBudget(ctx.diffSlot?.diff ?? '', input.files);
     },
     formatOutcome: (result) =>
       `${result.findings.length} findings, risk: ${result.overallRisk}`,

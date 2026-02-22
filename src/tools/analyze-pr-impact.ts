@@ -1,8 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { validateDiffBudget } from '../lib/diff-budget.js';
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
-import { createNoDiffError } from '../lib/diff-store.js';
 import { requireToolContract } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
@@ -42,11 +40,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     ...(TOOL_CONTRACT.deterministicJson !== undefined
       ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
       : undefined),
-    validateInput: (_input, ctx) => {
-      const slot = ctx.diffSlot;
-      if (!slot) return createNoDiffError();
-      return validateDiffBudget(slot.diff);
-    },
+    requiresDiff: true,
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) =>
       `Impact Analysis (${result.severity}): ${result.summary}`,
