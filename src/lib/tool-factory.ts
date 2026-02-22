@@ -340,34 +340,19 @@ function isRetryableUpstreamMessage(message: string): boolean {
   );
 }
 
-async function sendTaskProgress(
+function ignoreProgressInput(value: unknown): void {
+  if (value === null) {
+    return;
+  }
+}
+
+function sendTaskProgress(
   extra: ProgressExtra,
   payload: ProgressPayload
 ): Promise<void> {
-  const progressToken = extra._meta?.progressToken;
-  if (typeof progressToken !== 'string' && typeof progressToken !== 'number') {
-    return;
-  }
-
-  try {
-    const params: ProgressNotificationParams = {
-      progressToken,
-      progress: payload.current,
-    };
-    if (payload.total !== undefined) {
-      params.total = payload.total;
-    }
-    if (payload.message !== undefined) {
-      params.message = payload.message;
-    }
-
-    await extra.sendNotification({
-      method: 'notifications/progress',
-      params,
-    });
-  } catch {
-    // Progress is best-effort; never fail the tool call.
-  }
+  ignoreProgressInput(extra);
+  ignoreProgressInput(payload);
+  return Promise.resolve();
 }
 
 function createProgressReporter(
@@ -422,25 +407,34 @@ function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  const prefix = metadata === 'starting' ? '▸' : '◦';
-  return `${prefix} ${toolName}: ${context} [${metadata}]`;
+  return `${toolName}: ${context} [${metadata}]`;
 }
 
 function friendlyModelName(model: string | undefined): string {
-  if (!model) return 'model';
-  if (model.includes('pro')) return 'Pro';
-  if (model.includes('flash')) return 'Flash';
-  return 'model';
+  if (!model) return 'calling model';
+  const normalized = model.toLowerCase();
+  if (normalized.includes('pro')) return 'calling Pro';
+  if (normalized.includes('flash')) return 'calling Flash';
+  return 'calling model';
 }
 
 function formatProgressCompletion(
   toolName: string,
   context: string,
-  outcome: string,
-  success = true
+  outcome: string
 ): string {
-  const prefix = success ? '◆' : '◇';
-  return `${prefix} ${toolName}: ${context} • ${outcome}`;
+  return `🗒 ${toolName}: ${context} • ${outcome}`;
+}
+
+function createFailureStatusMessage(
+  outcome: 'failed' | 'cancelled',
+  errorMessage: string
+): string {
+  if (outcome === 'cancelled') {
+    return `cancelled: ${errorMessage}`;
+  }
+
+  return errorMessage;
 }
 
 async function reportProgressStepUpdate(
@@ -461,14 +455,33 @@ async function reportProgressCompletionUpdate(
   reportProgress: (payload: ProgressPayload) => Promise<void>,
   toolName: string,
   context: string,
-  outcome: string,
-  success = true
+  outcome: string
 ): Promise<void> {
   await reportProgress({
     current: TASK_PROGRESS_TOTAL,
     total: TASK_PROGRESS_TOTAL,
-    message: formatProgressCompletion(toolName, context, outcome, success),
+    message: formatProgressCompletion(toolName, context, outcome),
   });
+}
+
+async function reportSchemaRetryProgressBestEffort(
+  reportProgress: (payload: ProgressPayload) => Promise<void>,
+  toolName: string,
+  context: string,
+  retryCount: number,
+  maxRetries: number
+): Promise<void> {
+  try {
+    await reportProgressStepUpdate(
+      reportProgress,
+      toolName,
+      context,
+      3,
+      `repairing schema retry ${retryCount}/${maxRetries}`
+    );
+  } catch {
+    // Progress updates are best-effort and must not interrupt retries.
+  }
 }
 
 function toLoggingLevel(level: string): LoggingLevel {
@@ -538,32 +551,25 @@ export function wrapToolHandler<TInput, TResult extends CallToolResult>(
 
       // End progress (1/1)
       const outcome = result.isError ? 'failed' : 'completed';
-      const success = !result.isError;
 
       await sendTaskProgress(extra, {
         current: 1,
         total: 1,
-        message: formatProgressCompletion(
-          options.toolName,
-          context,
-          outcome,
-          success
-        ),
+        message: formatProgressCompletion(options.toolName, context, outcome),
       });
 
       return result;
     } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      const failureMeta = classifyErrorMeta(error, errorMessage);
+      const outcome = failureMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
+
       // Progress is best-effort; must never mask the original error.
       try {
         await sendTaskProgress(extra, {
           current: 1,
           total: 1,
-          message: formatProgressCompletion(
-            options.toolName,
-            context,
-            'failed',
-            false
-          ),
+          message: formatProgressCompletion(options.toolName, context, outcome),
         });
       } catch {
         // Swallow progress delivery errors so the original error propagates.
@@ -708,8 +714,7 @@ export function registerStructuredToolTask<
                 reportProgress,
                 config.name,
                 progressContext,
-                'rejected',
-                false
+                'rejected'
               );
               await storeResultSafely('completed', validationError);
               return;
@@ -720,7 +725,7 @@ export function registerStructuredToolTask<
               config.name,
               progressContext,
               1,
-              'preparing'
+              'building prompt'
             );
 
             const promptParts = config.buildPrompt(inputRecord, ctx);
@@ -759,7 +764,7 @@ export function registerStructuredToolTask<
                     config.name,
                     progressContext,
                     3,
-                    'processing response'
+                    'validating response'
                   );
                 }
 
@@ -784,6 +789,15 @@ export function registerStructuredToolTask<
                     originalChars: errorMessage.length,
                   },
                 });
+
+                const retryCount = attempt + 1;
+                await reportSchemaRetryProgressBestEffort(
+                  reportProgress,
+                  config.name,
+                  progressContext,
+                  retryCount,
+                  maxRetries
+                );
 
                 retryPrompt = schemaRetryPrompt.prompt;
               }
@@ -823,14 +837,11 @@ export function registerStructuredToolTask<
           } catch (error: unknown) {
             const errorMessage = getErrorMessage(error);
             const errorMeta = classifyErrorMeta(error, errorMessage);
-            await reportProgressCompletionUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              'failed',
-              false
+            const outcome =
+              errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
+            await updateStatusMessage(
+              createFailureStatusMessage(outcome, errorMessage)
             );
-            await updateStatusMessage(errorMessage);
             await storeResultSafely(
               'failed',
               createErrorToolResponse(
@@ -839,6 +850,12 @@ export function registerStructuredToolTask<
                 undefined,
                 errorMeta
               )
+            );
+            await reportProgressCompletionUpdate(
+              reportProgress,
+              config.name,
+              progressContext,
+              outcome
             );
           }
         };

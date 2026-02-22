@@ -32,6 +32,7 @@ index 123..456 100644
 
 const SAMPLE_DIFF_SLOT = {
   diff: SAMPLE_DIFF,
+  parsedFiles: [],
   stats: { files: 1, added: 1, deleted: 1 },
   generatedAt: '2026-02-21T00:00:00.000Z',
   mode: 'unstaged',
@@ -99,41 +100,43 @@ async function callToolAsTask(
   throw new Error('Task stream closed without result or error');
 }
 
-function assertProgressLifecycle(
-  updates: readonly Progress[],
-  expectedOutcome: 'completed' | 'failed'
-): void {
-  assert.ok(
-    updates.length >= 2,
-    'Expected at least start and terminal updates'
+function assertNoProgressUpdates(updates: readonly Progress[]): void {
+  assert.equal(
+    updates.length,
+    0,
+    'Expected no progress notifications when progress bars are disabled'
   );
+}
 
-  const first = updates[0];
-  assert.equal(first?.progress, 0);
-  assert.equal(first?.total, 4);
-  assert.match(first?.message ?? '', /\[starting\]/);
-
-  let previous = -1;
-  for (const update of updates) {
-    assert.ok(update.progress >= previous, 'Progress must be monotonic');
-    previous = update.progress;
-  }
-
-  const terminalIndex = updates.findIndex((update) => {
-    return update.total !== undefined && update.total === update.progress;
+test('analyze_pr_impact returns cancelled outcome when upstream cancels', async () => {
+  setMockClient(async () => {
+    throw new Error('request cancelled by caller');
   });
 
-  assert.notEqual(terminalIndex, -1, 'Expected a terminal progress update');
-  assert.equal(
-    terminalIndex,
-    updates.length - 1,
-    'Terminal progress must be the final update'
-  );
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
+  const { client, connect, close } = createClientServerPair();
+  await connect();
 
-  const terminal = updates[updates.length - 1];
-  assert.equal(terminal?.total, terminal?.progress);
-  assert.match(terminal?.message ?? '', new RegExp(`• ${expectedOutcome}$`));
-}
+  try {
+    const progressUpdates: Progress[] = [];
+    await assert.rejects(
+      callToolAsTask(
+        client,
+        'analyze_pr_impact',
+        { repository: 'org/repo' },
+        {
+          onprogress: (progress) => {
+            progressUpdates.push(progress);
+          },
+        }
+      )
+    );
+    assertNoProgressUpdates(progressUpdates);
+  } finally {
+    await close();
+    setDiffForTesting(undefined);
+  }
+});
 
 test('analyze_pr_impact succeeds without task persistence errors', async () => {
   setMockClient(async () => {
@@ -169,7 +172,7 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     assert.notEqual(result.isError, true);
     assert.ok(result.structuredContent);
     assert.equal(result.structuredContent.ok, true);
-    assertProgressLifecycle(progressUpdates, 'severity: low');
+    assertNoProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
@@ -204,12 +207,62 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
       (result.structuredContent.error as { code: string }).code,
       'E_INPUT_TOO_LARGE'
     );
-    assertProgressLifecycle(progressUpdates, 'rejected');
+    assertNoProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
     delete process.env.MAX_DIFF_CHARS;
     resetMaxDiffCharsCacheForTesting();
+  }
+});
+
+test('analyze_pr_impact emits no schema retry progress when progress is disabled', async () => {
+  let attempts = 0;
+  setMockClient(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      return {
+        text: JSON.stringify({
+          severity: 'low',
+          categories: ['bug_fix'],
+        }),
+      };
+    }
+
+    return {
+      text: JSON.stringify({
+        severity: 'low',
+        categories: ['bug_fix'],
+        summary: 'Minor non-breaking bug fix.',
+        breakingChanges: [],
+        affectedAreas: ['src/index.ts'],
+        rollbackComplexity: 'trivial',
+      }),
+    };
+  });
+
+  setDiffForTesting(SAMPLE_DIFF_SLOT);
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const progressUpdates: Progress[] = [];
+    const result = await callToolAsTask(
+      client,
+      'analyze_pr_impact',
+      { repository: 'org/repo' },
+      {
+        onprogress: (progress) => {
+          progressUpdates.push(progress);
+        },
+      }
+    );
+
+    assert.notEqual(result.isError, true);
+    assertNoProgressUpdates(progressUpdates);
+  } finally {
+    await close();
+    setDiffForTesting(undefined);
   }
 });
 
