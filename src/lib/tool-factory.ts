@@ -340,19 +340,25 @@ function isRetryableUpstreamMessage(message: string): boolean {
   );
 }
 
-function ignoreProgressInput(value: unknown): void {
-  if (value === null) {
-    return;
-  }
-}
-
 function sendTaskProgress(
   extra: ProgressExtra,
   payload: ProgressPayload
 ): Promise<void> {
-  ignoreProgressInput(extra);
-  ignoreProgressInput(payload);
-  return Promise.resolve();
+  const rawToken = extra._meta?.progressToken;
+  if (typeof rawToken !== 'string' && typeof rawToken !== 'number') {
+    return Promise.resolve();
+  }
+  const params: ProgressNotificationParams = {
+    progressToken: rawToken,
+    progress: payload.current,
+    ...(payload.total !== undefined ? { total: payload.total } : {}),
+    ...(payload.message !== undefined ? { message: payload.message } : {}),
+  };
+  return extra
+    .sendNotification({ method: 'notifications/progress', params })
+    .catch(() => {
+      // Progress notifications are best-effort; never fail tool execution.
+    });
 }
 
 function createProgressReporter(
@@ -659,6 +665,8 @@ export function registerStructuredToolTask<
             }
           };
 
+          const onLog = createGeminiLogger(server, task.taskId);
+
           const storeResultSafely = async (
             status: 'completed' | 'failed',
             result: CallToolResult
@@ -669,14 +677,15 @@ export function registerStructuredToolTask<
                 status,
                 result
               );
-            } catch {
-              // storing the result failed, possibly because the task is already marked as failed due to an uncaught error. There's not much we can do at this point, so we swallow the error to avoid unhandled rejections.
+            } catch (storeErr: unknown) {
+              await onLog('error', {
+                event: 'store_result_failed',
+                error: getErrorMessage(storeErr),
+              });
             }
           };
 
           try {
-            const onLog = createGeminiLogger(server, task.taskId);
-
             const inputRecord = parseToolInput<TInput>(
               input,
               config.fullInputSchema
@@ -860,11 +869,19 @@ export function registerStructuredToolTask<
           }
         };
 
-        queueMicrotask(() => {
-          void runTask().catch((error: unknown) => {
-            console.error(
-              `[task-runner:${config.name}] ${getErrorMessage(error)}`
-            );
+        setImmediate(() => {
+          void runTask().catch(async (error: unknown) => {
+            try {
+              await server.sendLoggingMessage({
+                level: 'error',
+                logger: 'task-runner',
+                data: { task: config.name, error: getErrorMessage(error) },
+              });
+            } catch {
+              console.error(
+                `[task-runner:${config.name}] ${getErrorMessage(error)}`
+              );
+            }
           });
         });
 

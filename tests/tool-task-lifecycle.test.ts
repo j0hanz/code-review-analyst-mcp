@@ -100,11 +100,10 @@ async function callToolAsTask(
   throw new Error('Task stream closed without result or error');
 }
 
-function assertNoProgressUpdates(updates: readonly Progress[]): void {
-  assert.equal(
-    updates.length,
-    0,
-    'Expected no progress notifications when progress bars are disabled'
+function assertHasProgressUpdates(updates: readonly Progress[]): void {
+  assert.ok(
+    updates.length > 0,
+    'Expected progress notifications to be emitted'
   );
 }
 
@@ -131,7 +130,7 @@ test('analyze_pr_impact returns cancelled outcome when upstream cancels', async 
         }
       )
     );
-    assertNoProgressUpdates(progressUpdates);
+    assertHasProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
@@ -172,7 +171,7 @@ test('analyze_pr_impact succeeds without task persistence errors', async () => {
     assert.notEqual(result.isError, true);
     assert.ok(result.structuredContent);
     assert.equal(result.structuredContent.ok, true);
-    assertNoProgressUpdates(progressUpdates);
+    assertHasProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
@@ -207,7 +206,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
       (result.structuredContent.error as { code: string }).code,
       'E_INPUT_TOO_LARGE'
     );
-    assertNoProgressUpdates(progressUpdates);
+    assertHasProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
@@ -216,7 +215,7 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
   }
 });
 
-test('analyze_pr_impact emits no schema retry progress when progress is disabled', async () => {
+test('analyze_pr_impact emits schema retry progress steps during validation repair', async () => {
   let attempts = 0;
   setMockClient(async () => {
     attempts += 1;
@@ -259,7 +258,7 @@ test('analyze_pr_impact emits no schema retry progress when progress is disabled
     );
 
     assert.notEqual(result.isError, true);
-    assertNoProgressUpdates(progressUpdates);
+    assertHasProgressUpdates(progressUpdates);
   } finally {
     await close();
     setDiffForTesting(undefined);
