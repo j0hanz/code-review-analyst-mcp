@@ -666,23 +666,22 @@ async function waitBeforeRetry(
 }
 
 async function throwGeminiFailure(
-  maxRetries: number,
+  attemptsMade: number,
   lastError: unknown,
   onLog: GeminiOnLog
 ): Promise<never> {
-  const attempts = maxRetries + 1;
   const message = getErrorMessage(lastError);
 
   await emitGeminiLog(onLog, 'error', {
     event: 'gemini_failure',
     details: {
       error: message,
-      attempts,
+      attempts: attemptsMade,
     },
   });
 
   throw new Error(
-    `Gemini request failed after ${attempts} attempts: ${message}`,
+    `Gemini request failed after ${attemptsMade} attempts: ${message}`,
     { cause: lastError }
   );
 }
@@ -695,13 +694,15 @@ async function runWithRetries(
   onLog: GeminiOnLog
 ): Promise<unknown> {
   let lastError: unknown;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+  for (; attempt <= maxRetries; attempt += 1) {
     try {
       return await executeAttempt(request, model, timeoutMs, attempt, onLog);
     } catch (error: unknown) {
       lastError = error;
       if (!canRetryAttempt(attempt, maxRetries, error)) {
+        attempt += 1; // Count this attempt before breaking
         break;
       }
 
@@ -709,7 +710,7 @@ async function runWithRetries(
     }
   }
 
-  return throwGeminiFailure(maxRetries, lastError, onLog);
+  return throwGeminiFailure(attempt, lastError, onLog);
 }
 
 function canRetryAttempt(

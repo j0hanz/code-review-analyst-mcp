@@ -37,7 +37,7 @@ const THINKING_LEVELS = {
 // Thinking budget in tokens for Flash and Pro tools. Note that these are not hard limits, but rather guidelines to encourage concise responses and manage latency/cost.
 const OUTPUT_TOKEN_BUDGET = {
   flashApiBreaking: 4_096,
-  flashComplexity: 2_048,
+  flashComplexity: 4_096,
   flashTestPlan: 8_192,
   flashTriage: 4_096,
   proPatch: 8_192,
