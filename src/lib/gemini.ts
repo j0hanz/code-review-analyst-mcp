@@ -514,8 +514,6 @@ function buildGenerationConfig(
       request.responseKeyOrdering
     ),
     safetySettings: getSafetySettings(getSafetyThreshold()),
-    topP: 0.95,
-    topK: 40,
     abortSignal,
   };
 
@@ -606,6 +604,17 @@ async function executeAttempt(
   const latencyMs = Math.round(performance.now() - startedAt);
   const finishReason = response.candidates?.[0]?.finishReason;
 
+  let thoughts: string | undefined;
+  const parts = response.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    const thoughtParts = parts.filter(
+      (p) => p.thought === true && typeof p.text === 'string'
+    );
+    if (thoughtParts.length > 0) {
+      thoughts = thoughtParts.map((p) => p.text).join('\n\n');
+    }
+  }
+
   await emitGeminiLog(onLog, 'info', {
     event: 'gemini_call',
     details: {
@@ -613,6 +622,7 @@ async function executeAttempt(
       latencyMs,
       finishReason: finishReason ?? null,
       usageMetadata: response.usageMetadata ?? null,
+      ...(thoughts ? { thoughts } : {}),
     },
   });
 

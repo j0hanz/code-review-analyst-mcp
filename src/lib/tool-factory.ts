@@ -139,9 +139,7 @@ export interface StructuredToolTaskConfig<
 
   /**
    * Optional sampling temperature for this tool's Gemini call.
-   * Lower values (0.0–0.1) favour determinism for structured extraction;
-   * higher values (0.2) add useful diversity for creative synthesis tasks.
-   * Falls back to the global default (0.2) when omitted.
+   * Gemini 3 recommends 1.0 for all tasks.
    */
   temperature?: number;
 

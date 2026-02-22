@@ -49,9 +49,7 @@ export interface ToolContract {
   maxOutputTokens: number;
   /**
    * Sampling temperature for the Gemini call.
-   * Lower values (0.0–0.1) favour deterministic structured output;
-   * higher values (0.2) add diversity for creative synthesis tasks.
-   * Omit to use the global default (0.2).
+   * Gemini 3 recommends 1.0 for all tasks.
    */
   temperature?: number;
   /** Enables deterministic JSON guidance and schema key ordering. */
