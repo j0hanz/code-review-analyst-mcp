@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
@@ -22,6 +23,8 @@ import {
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 10 * 1024 * 1024; // 10 MB
+
+const execFileAsync = promisify(execFile);
 
 type DiffMode = 'unstaged' | 'staged';
 
@@ -64,71 +67,75 @@ export function registerGenerateDiffTool(server: McpServer): void {
         toolName: 'generate_diff',
         progressContext: (input) => input.mode,
       },
-      (input) => {
+      async (input) => {
         const { mode } = input;
         const args = buildGitArgs(mode);
 
-        // spawnSync with an explicit args array — no shell, no interpolation.
-        // 'git' is resolved via PATH which is controlled by the server environment.
-        // eslint-disable-next-line sonarjs/no-os-command-from-path
-        const result = spawnSync('git', args, {
-          cwd: process.cwd(),
-          encoding: 'utf8',
-          maxBuffer: GIT_MAX_BUFFER,
-          timeout: GIT_TIMEOUT_MS,
-        });
+        try {
+          // execFileAsync with an explicit args array — no shell, no interpolation.
+          // 'git' is resolved via PATH which is controlled by the server environment.
+          const { stdout } = await execFileAsync('git', args, {
+            cwd: process.cwd(),
+            encoding: 'utf8',
+            maxBuffer: GIT_MAX_BUFFER,
+            timeout: GIT_TIMEOUT_MS,
+          });
 
-        if (result.error) {
-          return createErrorToolResponse(
-            'E_GENERATE_DIFF',
-            `Failed to run git: ${result.error.message}. Ensure git is installed and the working directory is a git repository.`,
-            undefined,
-            { retryable: false, kind: 'internal' }
-          );
-        }
+          const cleaned = cleanDiff(stdout);
 
-        if (result.status !== 0) {
-          const stderr = result.stderr.trim();
-          return createErrorToolResponse(
-            'E_GENERATE_DIFF',
-            `git exited with code ${String(result.status)}: ${stderr || 'unknown error'}. Ensure the working directory is a git repository.`,
-            undefined,
-            { retryable: false, kind: 'internal' }
-          );
-        }
+          if (isEmptyDiff(cleaned)) {
+            return createErrorToolResponse(
+              'E_NO_CHANGES',
+              `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
+              undefined,
+              { retryable: false, kind: 'validation' }
+            );
+          }
 
-        const cleaned = cleanDiff(result.stdout);
+          const parsedFiles = parseDiffFiles(cleaned);
+          const stats = computeDiffStatsFromFiles(parsedFiles);
+          const generatedAt = new Date().toISOString();
 
-        if (isEmptyDiff(cleaned)) {
-          return createErrorToolResponse(
-            'E_NO_CHANGES',
-            `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
-            undefined,
-            { retryable: false, kind: 'validation' }
-          );
-        }
+          storeDiff({ diff: cleaned, parsedFiles, stats, generatedAt, mode });
 
-        const parsedFiles = parseDiffFiles(cleaned);
-        const stats = computeDiffStatsFromFiles(parsedFiles);
-        const generatedAt = new Date().toISOString();
+          const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
 
-        storeDiff({ diff: cleaned, parsedFiles, stats, generatedAt, mode });
-
-        const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
-
-        return createToolResponse(
-          {
-            ok: true as const,
-            result: {
-              diffRef: DIFF_RESOURCE_URI,
-              stats,
-              generatedAt,
-              mode,
-              message: summary,
+          return createToolResponse(
+            {
+              ok: true as const,
+              result: {
+                diffRef: DIFF_RESOURCE_URI,
+                stats,
+                generatedAt,
+                mode,
+                message: summary,
+              },
             },
-          },
-          summary
-        );
+            summary
+          );
+        } catch (error: unknown) {
+          const err = error as Error & {
+            code?: number | string;
+            stderr?: string;
+          };
+
+          if (err.code && typeof err.code === 'number') {
+            const stderr = err.stderr ? err.stderr.trim() : '';
+            return createErrorToolResponse(
+              'E_GENERATE_DIFF',
+              `git exited with code ${String(err.code)}: ${stderr || 'unknown error'}. Ensure the working directory is a git repository.`,
+              undefined,
+              { retryable: false, kind: 'internal' }
+            );
+          }
+
+          return createErrorToolResponse(
+            'E_GENERATE_DIFF',
+            `Failed to run git: ${err.message}. Ensure git is installed and the working directory is a git repository.`,
+            undefined,
+            { retryable: false, kind: 'internal' }
+          );
+        }
       }
     )
   );
