@@ -40,6 +40,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.repository,
     formatOutcome: (result) => `${result.testCases.length} test cases`,
     formatOutput: (result) =>
       `${result.summary}\n${result.testCases.length} test cases.`,

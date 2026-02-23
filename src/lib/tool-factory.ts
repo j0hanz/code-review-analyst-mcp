@@ -42,7 +42,16 @@ export interface ToolExecutionContext {
 }
 
 const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
-const TASK_PROGRESS_TOTAL = 4;
+
+// Named progress step indices for 7-step progress (0–6).
+const STEP_STARTING = 0;
+const STEP_VALIDATING = 1;
+const STEP_BUILDING_PROMPT = 2;
+const STEP_CALLING_MODEL = 3;
+const STEP_VALIDATING_RESPONSE = 4;
+const STEP_FINALIZING = 5;
+const TASK_PROGRESS_TOTAL = STEP_FINALIZING + 1;
+
 const INPUT_VALIDATION_FAILED = 'Input validation failed';
 const DEFAULT_PROGRESS_CONTEXT = 'request';
 const CANCELLED_ERROR_PATTERN = /cancelled|canceled/i;
@@ -516,8 +525,8 @@ async function reportSchemaRetryProgressBestEffort(
       reportProgress,
       toolName,
       context,
-      3,
-      `repairing schema retry ${retryCount}/${maxRetries}`
+      STEP_VALIDATING_RESPONSE,
+      `schema repair ${retryCount}/${maxRetries}`
     );
   } catch {
     // Progress updates are best-effort and must not interrupt retries.
@@ -792,11 +801,12 @@ export class ToolTaskRunner<
         );
 
         if (attempt === 0) {
+          await this.updateStatusMessage('validating response');
           await reportProgressStepUpdate(
             this.reportProgress,
             this.config.name,
             this.progressContext,
-            3,
+            STEP_VALIDATING_RESPONSE,
             'validating response'
           );
         }
@@ -861,9 +871,19 @@ export class ToolTaskRunner<
         this.reportProgress,
         this.config.name,
         this.progressContext,
-        0,
+        STEP_STARTING,
         'starting'
       );
+      await this.updateStatusMessage('starting');
+
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        STEP_VALIDATING,
+        'validating input'
+      );
+      await this.updateStatusMessage('validating input');
 
       if (!(await this.executeValidation(inputRecord, ctx))) {
         return;
@@ -873,9 +893,10 @@ export class ToolTaskRunner<
         this.reportProgress,
         this.config.name,
         this.progressContext,
-        1,
+        STEP_BUILDING_PROMPT,
         'building prompt'
       );
+      await this.updateStatusMessage('building prompt');
 
       const promptParts = this.config.buildPrompt(inputRecord, ctx);
       const { prompt, systemInstruction } = promptParts;
@@ -885,11 +906,21 @@ export class ToolTaskRunner<
         this.reportProgress,
         this.config.name,
         this.progressContext,
-        2,
+        STEP_CALLING_MODEL,
         modelLabel
       );
+      await this.updateStatusMessage(modelLabel);
 
       const parsed = await this.executeModelCall(systemInstruction, prompt);
+
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        STEP_FINALIZING,
+        'finalizing'
+      );
+      await this.updateStatusMessage('finalizing');
 
       const finalResult = (
         this.config.transformResult
@@ -908,6 +939,7 @@ export class ToolTaskRunner<
         this.progressContext,
         outcome
       );
+      await this.updateStatusMessage(`completed: ${outcome}`);
       await this.storeResultSafely(
         'completed',
         createToolResponse(

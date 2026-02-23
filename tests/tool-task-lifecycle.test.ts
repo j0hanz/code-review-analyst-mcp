@@ -34,7 +34,7 @@ const SAMPLE_DIFF_SLOT = {
   diff: SAMPLE_DIFF,
   parsedFiles: [],
   stats: { files: 1, added: 1, deleted: 1 },
-  generatedAt: '2026-02-21T00:00:00.000Z',
+  generatedAt: new Date().toISOString(),
   mode: 'unstaged',
 } as const;
 

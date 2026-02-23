@@ -62,6 +62,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.repository,
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
     transformResult: (_input: ReviewSummaryInput, result, ctx) => {
       const { files, added, deleted } = getDiffStats(ctx);

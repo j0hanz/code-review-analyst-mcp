@@ -36,6 +36,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.repository,
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) => `[${result.severity}] ${result.summary}`,
     buildPrompt: (input, ctx) => {

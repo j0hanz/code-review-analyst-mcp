@@ -37,6 +37,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.findingTitle,
     formatOutcome: (result) => formatPatchCount(result.blocks.length),
     formatOutput: (result) => {
       const count = result.blocks.length;
