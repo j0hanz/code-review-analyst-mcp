@@ -74,6 +74,7 @@ export function getDiff(key: string = process.cwd()): DiffSlot | undefined {
   const age = Date.now() - new Date(slot.generatedAt).getTime();
   if (age > diffCacheTtlMs.get()) {
     diffSlots.delete(key);
+    notifyDiffUpdated();
     return undefined;
   }
 

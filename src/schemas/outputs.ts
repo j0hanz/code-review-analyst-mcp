@@ -218,7 +218,7 @@ export const CodeQualityResultSchema = z.strictObject({
   ...CODE_QUALITY_SHARED_FIELDS,
 });
 
-export const CodeQualityOutputSchema = z.object({
+export const CodeQualityOutputSchema = z.strictObject({
   ...CODE_QUALITY_SHARED_FIELDS,
   totalFindings: z
     .number()
