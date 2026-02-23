@@ -24,9 +24,11 @@ const PATH_ESCAPE_REPLACEMENTS = {
 } as const;
 const PATH_ESCAPE_PATTERN = /["\n\r<>]/g;
 const SYSTEM_INSTRUCTION = `
-You are a principal engineer performing a deep code review. The unified diff is your primary source of truth — it contains every changed line. File excerpts, if provided, supply supplementary context only (e.g. class structure, imports). Identify bugs, security vulnerabilities, performance issues, and maintainability risks.
-Ignore style issues unless they cause runtime risk. Prioritize correctness and failure modes.
-Return strict JSON only.
+Principal Engineer Code Review.
+Source: Unified diff (primary), File excerpts (supplementary context).
+Goal: Identify bugs, security, performance, maintainability.
+Ignore style. Prioritize correctness/failure modes.
+Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('inspect_code_quality');
 

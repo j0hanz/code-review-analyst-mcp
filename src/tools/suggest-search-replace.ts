@@ -10,10 +10,11 @@ import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a code remediation expert. Generate minimal search-and-replace blocks to fix exactly the described issue.
-CRITICAL: 'search' must be verbatim — character-exact whitespace and indentation.
-Never modify code outside the fix scope. If the target cannot be located precisely, omit the block rather than guessing.
-Return strict JSON only.
+Code Remediation Expert.
+Generate minimal search/replace blocks for described issue.
+CRITICAL: 'search' must be verbatim (exact whitespace/indentation).
+No out-of-scope changes. Omit if imprecise.
+Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('suggest_search_replace');
 

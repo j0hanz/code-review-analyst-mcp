@@ -10,10 +10,11 @@ import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a QA automation architect. Generate an actionable test plan for the diff changes.
-Prioritize: negative cases, edge cases, logical branches, integration points.
-Every test case must target a specific behavior visible in the diff.
-Return strict JSON only.
+QA Automation Architect.
+Test plan for diff.
+Prioritize: negative, edge, branches, integration.
+Target specific visible behavior.
+Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('generate_test_plan');
 

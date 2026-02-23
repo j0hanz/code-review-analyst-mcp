@@ -137,7 +137,7 @@ const CODE_QUALITY_SHARED_FIELDS = {
     .array(ReviewFindingSchema)
     .min(0)
     .max(30)
-    .describe('Findings ordered by severity, highest first.'),
+    .describe('Findings (severity desc).'),
   testsNeeded: createBoundedStringArray(
     1,
     300,
@@ -150,12 +150,12 @@ const CODE_QUALITY_SHARED_FIELDS = {
     500,
     0,
     5,
-    'Cross-file insights only discoverable from the full file context. Omit when no file context was provided.'
+    'Cross-file insights (omit if no file context).'
   ),
 } as const;
 
 export const PrImpactResultSchema = z.strictObject({
-  severity: z.enum(QUALITY_RISK_LEVELS).describe('Overall impact severity.'),
+  severity: z.enum(QUALITY_RISK_LEVELS).describe('Overall severity.'),
   categories: z
     .array(
       z.enum([
@@ -173,51 +173,43 @@ export const PrImpactResultSchema = z.strictObject({
     )
     .min(0)
     .max(10)
-    .describe('Impact categories detected in the diff.'),
-  summary: z.string().min(1).max(1000).describe('Concise impact summary.'),
+    .describe('Impact categories.'),
+  summary: z.string().min(1).max(1000).describe('Concise summary.'),
   breakingChanges: createBoundedStringArray(
     1,
     500,
     0,
     10,
-    'Specific breaking changes identified.'
+    'Specific breaking changes.'
   ),
   affectedAreas: createBoundedStringArray(
     1,
     200,
     0,
     20,
-    'Subsystems or files impacted.'
+    'Impacted subsystems/files.'
   ),
   rollbackComplexity: z
     .enum(['trivial', 'moderate', 'complex', 'irreversible'])
-    .describe('Estimated difficulty to revert this change.'),
+    .describe('Revert difficulty.'),
 });
 
 export const ReviewSummaryResultSchema = z.strictObject({
-  summary: createReviewSummarySchema('Human-readable PR summary.'),
+  summary: createReviewSummarySchema('PR summary.'),
   overallRisk: mergeRiskSchema,
   keyChanges: createBoundedStringArray(
     1,
     300,
     1,
     15,
-    'Most important changes, ordered by significance.'
+    'Key changes (significance desc).'
   ),
-  recommendation: z
-    .string()
-    .min(1)
-    .max(500)
-    .describe('Merge readiness recommendation.'),
+  recommendation: z.string().min(1).max(500).describe('Merge recommendation.'),
   stats: z
     .strictObject({
-      filesChanged: z
-        .number()
-        .int()
-        .min(0)
-        .describe('Number of files changed.'),
-      linesAdded: z.number().int().min(0).describe('Total lines added.'),
-      linesRemoved: z.number().int().min(0).describe('Total lines removed.'),
+      filesChanged: z.number().int().min(0).describe('Files changed.'),
+      linesAdded: z.number().int().min(0).describe('Lines added.'),
+      linesRemoved: z.number().int().min(0).describe('Lines removed.'),
     })
     .describe('Change statistics (computed from diff before Gemini call).'),
 });
@@ -233,54 +225,42 @@ export const CodeQualityOutputSchema = z.object({
     .int()
     .min(0)
     .optional()
-    .describe(
-      'Total findings returned by Gemini before maxFindings capping was applied.'
-    ),
+    .describe('Total findings (before capping).'),
 });
 
 export const SearchReplaceBlockSchema = z.strictObject({
-  file: z.string().min(1).max(500).describe('File path to modify.'),
+  file: z.string().min(1).max(500).describe('File path.'),
   search: z
     .string()
     .min(1)
     .max(5000)
-    .describe(
-      'Verbatim source text to find - character-exact including all whitespace and indentation.'
-    ),
+    .describe('Verbatim search text (exact whitespace/indentation).'),
   replace: z
     .string()
     .min(0)
     .max(5000)
-    .describe('Replacement text. Use empty string to delete.'),
-  explanation: z
-    .string()
-    .min(1)
-    .max(500)
-    .describe('Why this patch fixes the finding.'),
+    .describe('Replacement text (empty to delete).'),
+  explanation: z.string().min(1).max(500).describe('Fix rationale.'),
 });
 
 export const SearchReplaceResultSchema = z.strictObject({
-  summary: z.string().min(1).max(1000).describe('What the fix accomplishes.'),
+  summary: z.string().min(1).max(1000).describe('Fix summary.'),
   blocks: z
     .array(SearchReplaceBlockSchema)
     .min(1)
     .max(10)
-    .describe('Search/replace operations to apply, in order.'),
+    .describe('Search/replace ops (ordered).'),
   validationChecklist: createBoundedStringArray(
     1,
     300,
     1,
     12,
-    'Steps to validate the fix after applying.'
+    'Validation steps.'
   ),
 });
 
 export const TestCaseSchema = z.strictObject({
-  name: z
-    .string()
-    .min(1)
-    .max(200)
-    .describe('Test case name or describe/it string.'),
+  name: z.string().min(1).max(200).describe('Test case name.'),
   type: z
     .enum([
       'unit',
@@ -290,95 +270,83 @@ export const TestCaseSchema = z.strictObject({
       'security',
       'performance',
     ])
-    .describe('Category of test.'),
-  file: z.string().min(1).max(500).describe('Suggested test file path.'),
-  description: z.string().min(1).max(1000).describe('What this test verifies.'),
-  pseudoCode: z
-    .string()
-    .min(1)
-    .max(2000)
-    .describe('Pseudocode or starter implementation.'),
+    .describe('Test category.'),
+  file: z.string().min(1).max(500).describe('Test file path.'),
+  description: z.string().min(1).max(1000).describe('Verification goal.'),
+  pseudoCode: z.string().min(1).max(2000).describe('Pseudocode/starter.'),
   priority: z
     .enum(['must_have', 'should_have', 'nice_to_have'])
-    .describe('Priority relative to merge readiness.'),
+    .describe('Priority.'),
 });
 
 export const TestPlanResultSchema = z.strictObject({
-  summary: z.string().min(1).max(1000).describe('Test plan overview.'),
+  summary: z.string().min(1).max(1000).describe('Plan overview.'),
   testCases: z
     .array(TestCaseSchema)
     .min(1)
     .max(30)
-    .describe('Ordered test cases, must_have first.'),
+    .describe('Test cases (must_have first).'),
   coverageSummary: z
     .string()
     .min(1)
     .max(500)
-    .describe('Summary of coverage gaps this plan addresses.'),
+    .describe('Coverage gaps addressed.'),
 });
 
 export const AnalyzeComplexityResultSchema = z.strictObject({
   timeComplexity: createBoundedString(
     OUTPUT_LIMITS.complexity.timeComplexity.min,
     OUTPUT_LIMITS.complexity.timeComplexity.max,
-    'Big-O time complexity of the changed code (e.g., O(n log n)).'
+    'Big-O time complexity (e.g. O(n log n)).'
   ),
   spaceComplexity: createBoundedString(
     OUTPUT_LIMITS.complexity.spaceComplexity.min,
     OUTPUT_LIMITS.complexity.spaceComplexity.max,
-    'Big-O space complexity of the changed code (e.g., O(n)).'
+    'Big-O space complexity (e.g. O(n)).'
   ),
   explanation: createBoundedString(
     OUTPUT_LIMITS.complexity.explanation.min,
     OUTPUT_LIMITS.complexity.explanation.max,
-    'Detailed explanation of the complexity analysis, including key factors such as loop nesting and recursive calls.'
+    'Analysis explanation (loops, recursion).'
   ),
   potentialBottlenecks: createBoundedStringArray(
     OUTPUT_LIMITS.complexity.bottleneck.min,
     OUTPUT_LIMITS.complexity.bottleneck.max,
     0,
     OUTPUT_LIMITS.complexity.bottleneck.maxItems,
-    'Potential performance bottlenecks identified in the change.'
+    'Potential bottlenecks.'
   ),
-  isDegradation: z
-    .boolean()
-    .describe(
-      'True if the change introduces a performance degradation compared to the original code.'
-    ),
+  isDegradation: z.boolean().describe('True if degradation vs original.'),
 });
 
 export const DetectApiBreakingResultSchema = z.strictObject({
-  hasBreakingChanges: z
-    .boolean()
-    .describe('True if any breaking changes were detected.'),
+  hasBreakingChanges: z.boolean().describe('True if breaking.'),
   breakingChanges: z
     .array(
       z.strictObject({
         element: createBoundedString(
           OUTPUT_LIMITS.apiBreaking.element.min,
           OUTPUT_LIMITS.apiBreaking.element.max,
-          'Name of the API element that changed (e.g., function signature, interface field, exported constant).'
+          'Changed element (signature/field/export).'
         ),
         natureOfChange: createBoundedString(
           OUTPUT_LIMITS.apiBreaking.natureOfChange.min,
           OUTPUT_LIMITS.apiBreaking.natureOfChange.max,
-          'What changed and why it is breaking (e.g., removed parameter, changed return type, renamed export).'
+          'Change details & breaking reason.'
         ),
         consumerImpact: createBoundedString(
           OUTPUT_LIMITS.apiBreaking.consumerImpact.min,
           OUTPUT_LIMITS.apiBreaking.consumerImpact.max,
-          'How existing consumers will be affected by this change.'
+          'Consumer impact.'
         ),
         suggestedMitigation: createBoundedString(
           OUTPUT_LIMITS.apiBreaking.suggestedMitigation.min,
           OUTPUT_LIMITS.apiBreaking.suggestedMitigation.max,
-          'Recommended mitigation strategy for consumers impacted by this breaking change.'
+          'Mitigation strategy.'
         ),
       })
     )
     .min(0)
     .max(OUTPUT_LIMITS.apiBreaking.maxItems)
-    .describe(
-      'List of breaking changes detected. Empty when hasBreakingChanges is false.'
-    ),
+    .describe('Breaking changes list.'),
 });

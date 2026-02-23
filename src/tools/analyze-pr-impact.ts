@@ -10,10 +10,10 @@ import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are a technical change analyst. Analyze the diff for objective, evidence-based impact assessment.
-Classify severity, categories, breaking changes, affected areas, and rollback complexity strictly from diff evidence.
-Never infer behavior not visible in the diff.
-Return strict JSON only.
+Technical Change Analyst.
+Analyze diff for objective impact: severity, categories, breaking changes, affected areas, rollback complexity.
+Strictly diff-based; no inference.
+Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_pr_impact');
 

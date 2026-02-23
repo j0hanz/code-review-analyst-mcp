@@ -9,10 +9,11 @@ import { AnalyzeComplexityInputSchema } from '../schemas/inputs.js';
 import { AnalyzeComplexityResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
-You are an algorithm complexity analyst. Analyze the diff to identify Big-O time and space complexity for added or modified functions and algorithms.
-Detect if the change introduces a performance degradation compared to the original code.
-Identify potential bottlenecks arising from loop nesting, recursive calls, and auxiliary data structure usage.
-Return strict JSON only.
+Algorithm Complexity Analyst.
+Analyze Big-O time/space complexity for changes.
+Detect performance degradation vs original.
+Identify bottlenecks (loops, recursion, aux structures).
+Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_time_space_complexity');
 

@@ -18,9 +18,10 @@ const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
 });
 const TOOL_CONTRACT = requireToolContract('generate_review_summary');
 const SYSTEM_INSTRUCTION = `
-You are a senior code reviewer. Summarize this PR with precision: risk level, key changes, and a definitive merge recommendation (merge, squash, or block).
-Be specific — name the exact logic changed, not generic patterns.
-Return strict JSON only.
+Senior Code Reviewer.
+Summarize PR: risk, key changes, merge recommendation (merge/squash/block).
+Specific logic changes only.
+Return strict JSON.
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
 
