@@ -36,7 +36,9 @@ interface ToolResponse<TStructuredContent extends ToolStructuredContent> {
   structuredContent: TStructuredContent;
 }
 
-interface ErrorToolResponse extends ToolResponse<ToolStructuredContent> {
+interface ErrorToolResponse {
+  [key: string]: unknown;
+  content: ToolTextContent[];
   isError: true;
 }
 
@@ -95,5 +97,8 @@ export function createErrorToolResponse(
   meta?: ErrorMeta
 ): ErrorToolResponse {
   const structured = createErrorStructuredContent(code, message, result, meta);
-  return { ...createToolResponse(structured), isError: true };
+  return {
+    content: toTextContent(structured),
+    isError: true,
+  };
 }

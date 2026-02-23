@@ -200,12 +200,9 @@ test('analyze_pr_impact returns budget error without crashing task flow', async 
     );
 
     assert.equal(result.isError, true);
-    assert.ok(result.structuredContent);
-    assert.equal(result.structuredContent.ok, false);
-    assert.equal(
-      (result.structuredContent.error as { code: string }).code,
-      'E_INPUT_TOO_LARGE'
-    );
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    assert.equal(parsed.ok, false);
+    assert.equal((parsed.error as { code: string }).code, 'E_INPUT_TOO_LARGE');
     assertHasProgressUpdates(progressUpdates);
   } finally {
     await close();
@@ -407,12 +404,9 @@ test('inspect_code_quality returns budget error when context chars exceeded', as
     });
 
     assert.equal(result.isError, true);
-    assert.ok(result.structuredContent);
-    assert.equal(result.structuredContent.ok, false);
-    assert.equal(
-      (result.structuredContent.error as { code: string }).code,
-      'E_INPUT_TOO_LARGE'
-    );
+    const parsed = JSON.parse((result.content[0] as { text: string }).text);
+    assert.equal(parsed.ok, false);
+    assert.equal((parsed.error as { code: string }).code, 'E_INPUT_TOO_LARGE');
   } finally {
     await close();
     setDiffForTesting(undefined);

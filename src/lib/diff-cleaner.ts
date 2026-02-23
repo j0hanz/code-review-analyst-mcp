@@ -36,6 +36,20 @@ function shouldKeepSection(section: string): boolean {
   return true;
 }
 
+function processSection(
+  raw: string,
+  start: number,
+  end: number,
+  sections: string[]
+): void {
+  if (end > start) {
+    const section = raw.slice(start, end);
+    if (shouldKeepSection(section)) {
+      sections.push(section);
+    }
+  }
+}
+
 /**
  * Split raw unified diff into per-file sections and strip:
  * - Binary file sections ("Binary files a/... and b/... differ")
@@ -49,27 +63,24 @@ export function cleanDiff(raw: string): string {
   if (!raw) return '';
 
   const sections: string[] = [];
-  const delimiter = /^diff --git /gm;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let nextIndex = raw.startsWith('diff --git ')
+    ? 0
+    : raw.indexOf('\ndiff --git ');
 
-  while ((match = delimiter.exec(raw)) !== null) {
-    if (match.index > lastIndex) {
-      const section = raw.slice(lastIndex, match.index);
-      if (shouldKeepSection(section)) {
-        sections.push(section);
-      }
-    }
-    lastIndex = match.index;
+  if (nextIndex === -1) {
+    processSection(raw, 0, raw.length, sections);
+    return sections.join('').trim();
   }
 
-  // Process the last section
-  if (lastIndex < raw.length) {
-    const section = raw.slice(lastIndex);
-    if (shouldKeepSection(section)) {
-      sections.push(section);
-    }
+  while (nextIndex !== -1) {
+    const matchIndex = nextIndex === 0 ? 0 : nextIndex + 1; // +1 to skip \n
+    processSection(raw, lastIndex, matchIndex, sections);
+    lastIndex = matchIndex;
+    nextIndex = raw.indexOf('\ndiff --git ', lastIndex);
   }
+
+  processSection(raw, lastIndex, raw.length, sections);
 
   return sections.join('').trim();
 }

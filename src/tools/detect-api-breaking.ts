@@ -47,7 +47,7 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt:
-          `${languageLine}\\nDiff:\\n${diff}\\n\\nBased on the diff above, detect any breaking API changes.`.trimStart(),
+          `${languageLine}\nDiff:\n${diff}\n\nBased on the diff above, detect any breaking API changes.`.trimStart(),
       };
     },
   });

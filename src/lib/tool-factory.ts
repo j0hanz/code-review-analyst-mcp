@@ -736,9 +736,18 @@ export class ToolTaskRunner<
     );
 
     if (validationError) {
-      const validationMessage =
-        validationError.structuredContent.error?.message ??
-        INPUT_VALIDATION_FAILED;
+      let validationMessage = INPUT_VALIDATION_FAILED;
+      try {
+        const text = validationError.content[0]?.text;
+        if (text) {
+          const parsed = JSON.parse(text) as { error?: { message?: string } };
+          if (parsed.error?.message) {
+            validationMessage = parsed.error.message;
+          }
+        }
+      } catch {
+        // fallback to default
+      }
       await this.updateStatusMessage(validationMessage);
       await reportProgressCompletionUpdate(
         this.reportProgress,

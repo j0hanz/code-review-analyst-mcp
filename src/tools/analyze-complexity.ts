@@ -47,7 +47,7 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt:
-          `${languageLine}\\nDiff:\\n${diff}\\n\\nBased on the diff above, analyze the Big-O time and space complexity.`.trimStart(),
+          `${languageLine}\nDiff:\n${diff}\n\nBased on the diff above, analyze the Big-O time and space complexity.`.trimStart(),
       };
     },
   });
