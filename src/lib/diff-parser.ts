@@ -16,13 +16,6 @@ interface DiffStats {
   deleted: number;
 }
 
-interface DiffComputation {
-  added: number;
-  deleted: number;
-  paths: Set<string>;
-  summaries: string[];
-}
-
 /** Parse unified diff string into structured file list. */
 export function parseDiffFiles(diff: string): ParsedFile[] {
   if (!diff) {
@@ -49,58 +42,37 @@ function resolveChangedPath(file: ParsedFile): string | undefined {
   return undefined;
 }
 
-function sortPaths(paths: ReadonlySet<string>): string[] {
-  if (paths.size === 0) {
-    return EMPTY_PATHS;
-  }
-
+function sortPaths(paths: Iterable<string>): string[] {
   return Array.from(paths).sort(PATH_SORTER);
 }
 
-function buildDiffComputation(
-  files: readonly ParsedFile[],
-  options: { needPaths: boolean; needSummaries: boolean }
-): DiffComputation {
-  let added = 0;
-  let deleted = 0;
-  const paths = options.needPaths ? new Set<string>() : undefined;
-  const summaries = options.needSummaries
-    ? new Array<string>(files.length)
-    : undefined;
-
-  let index = 0;
-  for (const file of files) {
-    added += file.additions;
-    deleted += file.deletions;
-
-    if (options.needPaths || options.needSummaries) {
-      const path = resolveChangedPath(file);
-      if (paths && path) {
-        paths.add(path);
-      }
-
-      if (summaries) {
-        summaries[index] =
-          `${path ?? UNKNOWN_PATH} (+${file.additions} -${file.deletions})`;
-      }
-    }
-    index += 1;
-  }
-
-  return {
-    added,
-    deleted,
-    paths: paths ?? new Set<string>(),
-    summaries: summaries ?? [],
-  };
+function calculateStats(files: readonly ParsedFile[]): DiffStats {
+  return files.reduce(
+    (acc, file) => ({
+      files: acc.files + 1,
+      added: acc.added + file.additions,
+      deleted: acc.deleted + file.deletions,
+    }),
+    { files: 0, added: 0, deleted: 0 }
+  );
 }
 
-function buildStats(
-  filesCount: number,
-  added: number,
-  deleted: number
-): DiffStats {
-  return { files: filesCount, added, deleted };
+function getUniquePaths(files: readonly ParsedFile[]): Set<string> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    const path = resolveChangedPath(file);
+    if (path) {
+      paths.add(path);
+    }
+  }
+  return paths;
+}
+
+function generateSummaries(files: readonly ParsedFile[]): string[] {
+  return files.map((file) => {
+    const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
+    return `${path} (+${file.additions} -${file.deletions})`;
+  });
 }
 
 export function computeDiffStatsAndSummaryFromFiles(
@@ -113,15 +85,12 @@ export function computeDiffStatsAndSummaryFromFiles(
     };
   }
 
-  const computed = buildDiffComputation(files, {
-    needPaths: false,
-    needSummaries: true,
-  });
-  const stats = buildStats(files.length, computed.added, computed.deleted);
+  const stats = calculateStats(files);
+  const summaries = generateSummaries(files);
 
   return {
     stats,
-    summary: `${computed.summaries.join(', ')} [${stats.files} files, +${stats.added} -${stats.deleted}]`,
+    summary: `${summaries.join(', ')} [${stats.files} files, +${stats.added} -${stats.deleted}]`,
   };
 }
 
@@ -135,13 +104,12 @@ export function computeDiffStatsAndPathsFromFiles(
     };
   }
 
-  const computed = buildDiffComputation(files, {
-    needPaths: true,
-    needSummaries: false,
-  });
+  const stats = calculateStats(files);
+  const paths = sortPaths(getUniquePaths(files));
+
   return {
-    stats: buildStats(files.length, computed.added, computed.deleted),
-    paths: sortPaths(computed.paths),
+    stats,
+    paths,
   };
 }
 
@@ -152,10 +120,7 @@ export function extractChangedPathsFromFiles(
   if (files.length === 0) {
     return EMPTY_PATHS;
   }
-
-  return sortPaths(
-    buildDiffComputation(files, { needPaths: true, needSummaries: false }).paths
-  );
+  return sortPaths(getUniquePaths(files));
 }
 
 /** Extract all unique changed file paths (renamed: returns new path). */
@@ -169,12 +134,7 @@ export function computeDiffStatsFromFiles(
   if (files.length === 0) {
     return EMPTY_STATS;
   }
-
-  const computed = buildDiffComputation(files, {
-    needPaths: false,
-    needSummaries: false,
-  });
-  return buildStats(files.length, computed.added, computed.deleted);
+  return calculateStats(files);
 }
 
 /** Count changed files, added lines, and deleted lines. */

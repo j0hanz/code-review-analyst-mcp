@@ -4,6 +4,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readFileSync } from 'node:fs';
 import { findPackageJSON } from 'node:module';
 
+import { z } from 'zod';
+
 import { initDiffStore } from './lib/diff-store.js';
 import { getErrorMessage } from './lib/errors.js';
 import { registerAllPrompts } from './prompts/index.js';
@@ -11,14 +13,12 @@ import { registerAllResources } from './resources/index.js';
 import { buildServerInstructions } from './resources/instructions.js';
 import { registerAllTools } from './tools/index.js';
 
-interface PackageJsonMetadata {
-  version: string;
-}
-
 const SERVER_NAME = 'code-review-analyst';
 const UTF8_ENCODING = 'utf8';
-const PACKAGE_VERSION_FIELD = 'version';
-const VERSION_FIELD_ERROR = 'missing or invalid version field';
+
+const PackageJsonSchema = z.object({
+  version: z.string().min(1),
+});
 
 const SERVER_CAPABILITIES = {
   logging: {},
@@ -36,44 +36,6 @@ const SERVER_CAPABILITIES = {
   },
 } as const;
 
-function isPackageJsonMetadata(value: unknown): value is PackageJsonMetadata {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    PACKAGE_VERSION_FIELD in value &&
-    typeof value.version === 'string' &&
-    value.version.trim().length > 0
-  );
-}
-
-function parsePackageJson(
-  packageJson: string,
-  packageJsonPath: string
-): PackageJsonMetadata {
-  const parsed = parseJsonText(packageJson, packageJsonPath);
-  ensurePackageJsonMetadata(parsed, packageJsonPath);
-  return parsed;
-}
-
-function parseJsonText(jsonText: string, sourcePath: string): unknown {
-  try {
-    return JSON.parse(jsonText);
-  } catch (error: unknown) {
-    throw new Error(`Invalid JSON in ${sourcePath}: ${getErrorMessage(error)}`);
-  }
-}
-
-function ensurePackageJsonMetadata(
-  metadata: unknown,
-  packageJsonPath: string
-): asserts metadata is PackageJsonMetadata {
-  if (!isPackageJsonMetadata(metadata)) {
-    throw new Error(
-      `Invalid package.json at ${packageJsonPath}: ${VERSION_FIELD_ERROR}`
-    );
-  }
-}
-
 function readUtf8File(path: string): string {
   try {
     return readFileSync(path, UTF8_ENCODING);
@@ -89,7 +51,14 @@ function loadVersion(): string {
   }
 
   const packageJsonText = readUtf8File(packageJsonPath);
-  return parsePackageJson(packageJsonText, packageJsonPath).version;
+  try {
+    const json: unknown = JSON.parse(packageJsonText);
+    return PackageJsonSchema.parse(json).version;
+  } catch (error: unknown) {
+    throw new Error(
+      `Invalid package.json at ${packageJsonPath}: ${getErrorMessage(error)}`
+    );
+  }
 }
 
 const SERVER_VERSION = loadVersion();

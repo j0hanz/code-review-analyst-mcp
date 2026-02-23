@@ -15,12 +15,7 @@ interface FileContent {
 }
 
 function computeFilesSize(files: readonly FileContent[]): number {
-  let fileSize = 0;
-  for (const file of files) {
-    fileSize += file.content.length;
-  }
-
-  return fileSize;
+  return files.reduce((acc, file) => acc + file.content.length, 0);
 }
 
 function createContextBudgetMessage(size: number, max: number): string {

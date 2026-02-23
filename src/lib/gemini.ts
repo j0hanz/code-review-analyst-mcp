@@ -350,7 +350,7 @@ function logEvent(event: string, details: Record<string, unknown>): void {
   });
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
+function toRecord(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined;
   }
@@ -383,13 +383,13 @@ async function emitGeminiLog(
 }
 
 function getNestedError(error: unknown): Record<string, unknown> | undefined {
-  const record = asRecord(error);
+  const record = toRecord(error);
   if (!record) {
     return undefined;
   }
 
   const nested = record.error;
-  const nestedRecord = asRecord(nested);
+  const nestedRecord = toRecord(nested);
   if (!nestedRecord) {
     return record;
   }
@@ -848,115 +848,118 @@ interface BatchApiClient {
   };
 }
 
-function getBatchState(payload: unknown): string | undefined {
-  const record = asRecord(payload);
-  if (!record) {
-    return undefined;
-  }
+const BatchHelper = {
+  getState(payload: unknown): string | undefined {
+    const record = toRecord(payload);
+    if (!record) {
+      return undefined;
+    }
 
-  const directState = toUpperStringCode(record.state);
-  if (directState) {
-    return directState;
-  }
+    const directState = toUpperStringCode(record.state);
+    if (directState) {
+      return directState;
+    }
 
-  const metadata = asRecord(record.metadata);
-  if (!metadata) {
-    return undefined;
-  }
+    const metadata = toRecord(record.metadata);
+    if (!metadata) {
+      return undefined;
+    }
 
-  return toUpperStringCode(metadata.state);
-}
+    return toUpperStringCode(metadata.state);
+  },
 
-function extractBatchResponseText(payload: unknown): string | undefined {
-  const record = asRecord(payload);
-  if (!record) {
-    return undefined;
-  }
+  getResponseText(payload: unknown): string | undefined {
+    const record = toRecord(payload);
+    if (!record) {
+      return undefined;
+    }
 
-  const inlineResponse = asRecord(record.inlineResponse);
-  const inlineText =
-    typeof inlineResponse?.text === 'string' ? inlineResponse.text : undefined;
-  if (inlineText) {
-    return inlineText;
-  }
+    const inlineResponse = toRecord(record.inlineResponse);
+    const inlineText =
+      typeof inlineResponse?.text === 'string'
+        ? inlineResponse.text
+        : undefined;
+    if (inlineText) {
+      return inlineText;
+    }
 
-  const response = asRecord(record.response);
-  if (!response) {
-    return undefined;
-  }
+    const response = toRecord(record.response);
+    if (!response) {
+      return undefined;
+    }
 
-  const responseText =
-    typeof response.text === 'string' ? response.text : undefined;
-  if (responseText) {
-    return responseText;
-  }
+    const responseText =
+      typeof response.text === 'string' ? response.text : undefined;
+    if (responseText) {
+      return responseText;
+    }
 
-  const { inlineResponses } = response;
-  if (!Array.isArray(inlineResponses) || inlineResponses.length === 0) {
-    return undefined;
-  }
+    const { inlineResponses } = response;
+    if (!Array.isArray(inlineResponses) || inlineResponses.length === 0) {
+      return undefined;
+    }
 
-  const firstInline = asRecord(inlineResponses[0]);
-  return typeof firstInline?.text === 'string' ? firstInline.text : undefined;
-}
+    const firstInline = toRecord(inlineResponses[0]);
+    return typeof firstInline?.text === 'string' ? firstInline.text : undefined;
+  },
 
-function extractBatchErrorDetail(payload: unknown): string | undefined {
-  const record = asRecord(payload);
-  if (!record) {
-    return undefined;
-  }
+  getErrorDetail(payload: unknown): string | undefined {
+    const record = toRecord(payload);
+    if (!record) {
+      return undefined;
+    }
 
-  const directError = asRecord(record.error);
-  const directMessage =
-    typeof directError?.message === 'string' ? directError.message : undefined;
-  if (directMessage) {
-    return directMessage;
-  }
+    const directError = toRecord(record.error);
+    const directMessage =
+      typeof directError?.message === 'string'
+        ? directError.message
+        : undefined;
+    if (directMessage) {
+      return directMessage;
+    }
 
-  const metadata = asRecord(record.metadata);
-  const metadataError = asRecord(metadata?.error);
-  const metadataMessage =
-    typeof metadataError?.message === 'string'
-      ? metadataError.message
+    const metadata = toRecord(record.metadata);
+    const metadataError = toRecord(metadata?.error);
+    const metadataMessage =
+      typeof metadataError?.message === 'string'
+        ? metadataError.message
+        : undefined;
+    if (metadataMessage) {
+      return metadataMessage;
+    }
+
+    const response = toRecord(record.response);
+    const responseError = toRecord(response?.error);
+    return typeof responseError?.message === 'string'
+      ? responseError.message
       : undefined;
-  if (metadataMessage) {
-    return metadataMessage;
-  }
+  },
 
-  const response = asRecord(record.response);
-  const responseError = asRecord(response?.error);
-  return typeof responseError?.message === 'string'
-    ? responseError.message
-    : undefined;
-}
+  getSuccessResponseText(polled: unknown): string {
+    const responseText = this.getResponseText(polled);
+    if (!responseText) {
+      const errorDetail = this.getErrorDetail(polled);
+      throw new Error(
+        errorDetail
+          ? `Gemini batch request succeeded but returned no response text: ${errorDetail}`
+          : 'Gemini batch request succeeded but returned no response text.'
+      );
+    }
 
-function getBatchSuccessResponseText(polled: unknown): string {
-  const responseText = extractBatchResponseText(polled);
-  if (!responseText) {
-    const errorDetail = extractBatchErrorDetail(polled);
-    throw new Error(
-      errorDetail
-        ? `Gemini batch request succeeded but returned no response text: ${errorDetail}`
-        : 'Gemini batch request succeeded but returned no response text.'
-    );
-  }
+    return responseText;
+  },
 
-  return responseText;
-}
-
-function handleBatchTerminalState(
-  state: string | undefined,
-  payload: unknown
-): void {
-  if (state === 'JOB_STATE_FAILED' || state === 'JOB_STATE_CANCELLED') {
-    const errorDetail = extractBatchErrorDetail(payload);
-    throw new Error(
-      errorDetail
-        ? `Gemini batch request ended with state ${state}: ${errorDetail}`
-        : `Gemini batch request ended with state ${state}.`
-    );
-  }
-}
+  handleTerminalState(state: string | undefined, payload: unknown): void {
+    if (state === 'JOB_STATE_FAILED' || state === 'JOB_STATE_CANCELLED') {
+      const errorDetail = this.getErrorDetail(payload);
+      throw new Error(
+        errorDetail
+          ? `Gemini batch request ended with state ${state}: ${errorDetail}`
+          : `Gemini batch request ended with state ${state}.`
+      );
+    }
+  },
+};
 
 async function pollBatchStatusWithRetries(
   batches: NonNullable<BatchApiClient['batches']>,
@@ -1047,7 +1050,7 @@ async function runInlineBatchWithPolling(
       ],
     };
     const createdJob = await batches.create(createPayload);
-    const createdRecord = asRecord(createdJob);
+    const createdRecord = toRecord(createdJob);
     batchName =
       typeof createdRecord?.name === 'string' ? createdRecord.name : undefined;
     if (!batchName) {
@@ -1082,15 +1085,15 @@ async function runInlineBatchWithPolling(
         onLog,
         request.signal
       );
-      const state = getBatchState(polled);
+      const state = BatchHelper.getState(polled);
 
       if (state === 'JOB_STATE_SUCCEEDED') {
-        const responseText = getBatchSuccessResponseText(polled);
+        const responseText = BatchHelper.getSuccessResponseText(polled);
         completed = true;
         return parseStructuredResponse(responseText);
       }
 
-      handleBatchTerminalState(state, polled);
+      BatchHelper.handleTerminalState(state, polled);
 
       await sleep(
         pollIntervalMs,

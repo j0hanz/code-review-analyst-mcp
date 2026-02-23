@@ -619,6 +619,263 @@ async function validateRequest<
   return undefined;
 }
 
+interface TaskLike {
+  taskId: string;
+}
+
+export class ToolTaskRunner<
+  TInput extends object,
+  TResult extends object,
+  TFinal extends TResult,
+> {
+  private readonly responseSchema: Record<string, unknown>;
+  private readonly onLog: (level: string, data: unknown) => Promise<void>;
+  private readonly reportProgress: (payload: ProgressPayload) => Promise<void>;
+  private progressContext: string;
+
+  constructor(
+    private readonly server: McpServer,
+    private readonly config: StructuredToolTaskConfig<TInput, TResult, TFinal>,
+    private readonly extra: CreateTaskRequestHandlerExtra,
+    private readonly task: TaskLike
+  ) {
+    this.responseSchema = createGeminiResponseSchema({
+      geminiSchema: config.geminiSchema,
+      resultSchema: config.resultSchema,
+    });
+    this.onLog = createGeminiLogger(server, task.taskId);
+    this.reportProgress = createProgressReporter(extra);
+    this.progressContext = DEFAULT_PROGRESS_CONTEXT;
+  }
+
+  private async updateStatusMessage(message: string): Promise<void> {
+    try {
+      await this.extra.taskStore.updateTaskStatus(
+        this.task.taskId,
+        'working',
+        message
+      );
+    } catch {
+      // Best-effort
+    }
+  }
+
+  private async storeResultSafely(
+    status: 'completed' | 'failed',
+    result: CallToolResult
+  ): Promise<void> {
+    try {
+      await this.extra.taskStore.storeTaskResult(
+        this.task.taskId,
+        status,
+        result
+      );
+    } catch (storeErr: unknown) {
+      await this.onLog('error', {
+        event: 'store_result_failed',
+        error: getErrorMessage(storeErr),
+      });
+    }
+  }
+
+  private async executeValidation(
+    inputRecord: TInput,
+    ctx: ToolExecutionContext
+  ): Promise<boolean> {
+    const validationError = await validateRequest(
+      this.config,
+      inputRecord,
+      ctx
+    );
+
+    if (validationError) {
+      const validationMessage =
+        validationError.structuredContent.error?.message ??
+        INPUT_VALIDATION_FAILED;
+      await this.updateStatusMessage(validationMessage);
+      await reportProgressCompletionUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        'rejected'
+      );
+      await this.storeResultSafely('completed', validationError);
+      return false;
+    }
+    return true;
+  }
+
+  private async executeModelCall(
+    systemInstruction: string,
+    prompt: string
+  ): Promise<TResult> {
+    let parsed: TResult | undefined;
+    let retryPrompt = prompt;
+    const maxRetries =
+      this.config.schemaRetries ?? geminiSchemaRetriesConfig.get();
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      try {
+        const raw = await generateStructuredJson(
+          createGenerationRequest(
+            this.config,
+            { systemInstruction, prompt: retryPrompt },
+            this.responseSchema,
+            this.onLog,
+            this.extra.signal
+          )
+        );
+
+        if (attempt === 0) {
+          await reportProgressStepUpdate(
+            this.reportProgress,
+            this.config.name,
+            this.progressContext,
+            3,
+            'validating response'
+          );
+        }
+
+        parsed = this.config.resultSchema.parse(raw);
+        break;
+      } catch (error: unknown) {
+        if (attempt >= maxRetries || !isRetryableSchemaError(error)) {
+          throw error;
+        }
+
+        const errorMessage = getErrorMessage(error);
+        const schemaRetryPrompt = createSchemaRetryPrompt(
+          prompt,
+          errorMessage,
+          this.config.deterministicJson === true
+        );
+        await this.onLog('warning', {
+          event: 'schema_validation_failed',
+          details: {
+            attempt,
+            error: schemaRetryPrompt.summarizedError,
+            originalChars: errorMessage.length,
+          },
+        });
+
+        await reportSchemaRetryProgressBestEffort(
+          this.reportProgress,
+          this.config.name,
+          this.progressContext,
+          attempt + 1,
+          maxRetries
+        );
+
+        retryPrompt = schemaRetryPrompt.prompt;
+      }
+    }
+
+    if (!parsed) {
+      throw new Error('Unexpected state: parsed result is undefined');
+    }
+    return parsed;
+  }
+
+  async run(input: unknown): Promise<void> {
+    try {
+      const inputRecord = parseToolInput<TInput>(
+        input,
+        this.config.fullInputSchema
+      );
+      this.progressContext = normalizeProgressContext(
+        this.config.progressContext?.(inputRecord)
+      );
+
+      // Snapshot the diff slot ONCE
+      const ctx: ToolExecutionContext = { diffSlot: getDiff() };
+
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        0,
+        'starting'
+      );
+
+      if (!(await this.executeValidation(inputRecord, ctx))) {
+        return;
+      }
+
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        1,
+        'building prompt'
+      );
+
+      const promptParts = this.config.buildPrompt(inputRecord, ctx);
+      const { prompt, systemInstruction } = promptParts;
+
+      const modelLabel = friendlyModelName(this.config.model);
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        2,
+        modelLabel
+      );
+
+      const parsed = await this.executeModelCall(systemInstruction, prompt);
+
+      const finalResult = (
+        this.config.transformResult
+          ? this.config.transformResult(inputRecord, parsed, ctx)
+          : parsed
+      ) as TFinal;
+
+      const textContent = this.config.formatOutput
+        ? this.config.formatOutput(finalResult)
+        : undefined;
+
+      const outcome = this.config.formatOutcome?.(finalResult) ?? 'completed';
+      await reportProgressCompletionUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        outcome
+      );
+      await this.storeResultSafely(
+        'completed',
+        createToolResponse(
+          {
+            ok: true as const,
+            result: finalResult,
+          },
+          textContent
+        )
+      );
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      const errorMeta = classifyErrorMeta(error, errorMessage);
+      const outcome = errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
+      await this.updateStatusMessage(
+        createFailureStatusMessage(outcome, errorMessage)
+      );
+      await this.storeResultSafely(
+        'failed',
+        createErrorToolResponse(
+          this.config.errorCode,
+          errorMessage,
+          undefined,
+          errorMeta
+        )
+      );
+      await reportProgressCompletionUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        outcome
+      );
+    }
+  }
+}
+
 export function registerStructuredToolTask<
   TInput extends object,
   TResult extends object = Record<string, unknown>,
@@ -627,11 +884,6 @@ export function registerStructuredToolTask<
   server: McpServer,
   config: StructuredToolTaskConfig<TInput, TResult, TFinal>
 ): void {
-  const responseSchema = createGeminiResponseSchema({
-    geminiSchema: config.geminiSchema,
-    resultSchema: config.resultSchema,
-  });
-
   server.experimental.tasks.registerToolTask(
     config.name,
     {
@@ -654,233 +906,10 @@ export function registerStructuredToolTask<
           ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
 
-        const runTask = async (): Promise<void> => {
-          const reportProgress = createProgressReporter(extra);
-          let progressContext = DEFAULT_PROGRESS_CONTEXT;
-
-          const updateStatusMessage = async (
-            message: string
-          ): Promise<void> => {
-            try {
-              await extra.taskStore.updateTaskStatus(
-                task.taskId,
-                'working',
-                message
-              );
-            } catch {
-              // statusMessage is best-effort; task may already be terminal.
-            }
-          };
-
-          const onLog = createGeminiLogger(server, task.taskId);
-
-          const storeResultSafely = async (
-            status: 'completed' | 'failed',
-            result: CallToolResult
-          ): Promise<void> => {
-            try {
-              await extra.taskStore.storeTaskResult(
-                task.taskId,
-                status,
-                result
-              );
-            } catch (storeErr: unknown) {
-              await onLog('error', {
-                event: 'store_result_failed',
-                error: getErrorMessage(storeErr),
-              });
-            }
-          };
-
-          try {
-            const inputRecord = parseToolInput<TInput>(
-              input,
-              config.fullInputSchema
-            );
-            progressContext = normalizeProgressContext(
-              config.progressContext?.(inputRecord)
-            );
-
-            // Snapshot the diff slot ONCE before any async work so that
-            // validateInput and buildPrompt observe the same state. Without
-            // this, a concurrent generate_diff call between the two awaits
-            // could replace the slot and silently bypass the budget check.
-            const ctx: ToolExecutionContext = { diffSlot: getDiff() };
-
-            await reportProgressStepUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              0,
-              'starting'
-            );
-
-            const validationError = await validateRequest(
-              config,
-              inputRecord,
-              ctx
-            );
-
-            if (validationError) {
-              const validationMessage =
-                validationError.structuredContent.error?.message ??
-                INPUT_VALIDATION_FAILED;
-              await updateStatusMessage(validationMessage);
-              await reportProgressCompletionUpdate(
-                reportProgress,
-                config.name,
-                progressContext,
-                'rejected'
-              );
-              await storeResultSafely('completed', validationError);
-              return;
-            }
-
-            await reportProgressStepUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              1,
-              'building prompt'
-            );
-
-            const promptParts = config.buildPrompt(inputRecord, ctx);
-            const { prompt } = promptParts;
-            const { systemInstruction } = promptParts;
-
-            const modelLabel = friendlyModelName(config.model);
-            await reportProgressStepUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              2,
-              modelLabel
-            );
-
-            let parsed: TResult | undefined;
-            let retryPrompt = prompt;
-            const maxRetries =
-              config.schemaRetries ?? geminiSchemaRetriesConfig.get();
-
-            for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-              try {
-                const raw = await generateStructuredJson(
-                  createGenerationRequest(
-                    config,
-                    { systemInstruction, prompt: retryPrompt },
-                    responseSchema,
-                    onLog,
-                    extra.signal
-                  )
-                );
-
-                if (attempt === 0) {
-                  await reportProgressStepUpdate(
-                    reportProgress,
-                    config.name,
-                    progressContext,
-                    3,
-                    'validating response'
-                  );
-                }
-
-                parsed = config.resultSchema.parse(raw);
-                break;
-              } catch (error: unknown) {
-                // Trigger schema repair for Zod validation failures and for
-                // invalid-JSON responses (parseStructuredResponse throws a
-                // plain Error when the model produces unparseable JSON).
-                if (attempt >= maxRetries || !isRetryableSchemaError(error)) {
-                  throw error;
-                }
-
-                const errorMessage = getErrorMessage(error);
-                const schemaRetryPrompt = createSchemaRetryPrompt(
-                  prompt,
-                  errorMessage,
-                  config.deterministicJson === true
-                );
-                await onLog('warning', {
-                  event: 'schema_validation_failed',
-                  details: {
-                    attempt,
-                    error: schemaRetryPrompt.summarizedError,
-                    originalChars: errorMessage.length,
-                  },
-                });
-
-                const retryCount = attempt + 1;
-                await reportSchemaRetryProgressBestEffort(
-                  reportProgress,
-                  config.name,
-                  progressContext,
-                  retryCount,
-                  maxRetries
-                );
-
-                retryPrompt = schemaRetryPrompt.prompt;
-              }
-            }
-
-            if (!parsed) {
-              throw new Error('Unexpected state: parsed result is undefined');
-            }
-
-            const finalResult = (
-              config.transformResult
-                ? config.transformResult(inputRecord, parsed, ctx)
-                : parsed
-            ) as TFinal;
-
-            const textContent = config.formatOutput
-              ? config.formatOutput(finalResult)
-              : undefined;
-
-            const outcome = config.formatOutcome?.(finalResult) ?? 'completed';
-            await reportProgressCompletionUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              outcome
-            );
-            await storeResultSafely(
-              'completed',
-              createToolResponse(
-                {
-                  ok: true as const,
-                  result: finalResult,
-                },
-                textContent
-              )
-            );
-          } catch (error: unknown) {
-            const errorMessage = getErrorMessage(error);
-            const errorMeta = classifyErrorMeta(error, errorMessage);
-            const outcome =
-              errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
-            await updateStatusMessage(
-              createFailureStatusMessage(outcome, errorMessage)
-            );
-            await storeResultSafely(
-              'failed',
-              createErrorToolResponse(
-                config.errorCode,
-                errorMessage,
-                undefined,
-                errorMeta
-              )
-            );
-            await reportProgressCompletionUpdate(
-              reportProgress,
-              config.name,
-              progressContext,
-              outcome
-            );
-          }
-        };
+        const runner = new ToolTaskRunner(server, config, extra, task);
 
         setImmediate(() => {
-          void runTask().catch(async (error: unknown) => {
+          void runner.run(input).catch(async (error: unknown) => {
             try {
               await server.sendLoggingMessage({
                 level: 'error',
