@@ -3,11 +3,6 @@ import { z } from 'zod';
 const INPUT_LIMITS = {
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
-  fileContext: {
-    path: { min: 1, max: 500 },
-    content: { min: 0, max: 100_000 },
-    maxItems: 20,
-  },
   focusArea: { min: 2, max: 80, maxItems: 12 },
   maxFindings: { min: 1, max: 25 },
   findingTitle: { min: 3, max: 160 },
@@ -61,19 +56,6 @@ function createOptionalBoundedInteger(
   return z.number().int().min(min).max(max).optional().describe(description);
 }
 
-export const FileContextSchema = z.strictObject({
-  path: createBoundedString(
-    INPUT_LIMITS.fileContext.path.min,
-    INPUT_LIMITS.fileContext.path.max,
-    'Repo-relative path (e.g. src/utils.ts).'
-  ),
-  content: createBoundedString(
-    INPUT_LIMITS.fileContext.content.min,
-    INPUT_LIMITS.fileContext.content.max,
-    'Relevant excerpt (changed lines + context). Avoid full files.'
-  ),
-});
-
 export const AnalyzePrImpactInputSchema = z.strictObject({
   repository: createRepositorySchema(),
   language: createLanguageSchema(),
@@ -106,14 +88,6 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     INPUT_LIMITS.maxFindings.max,
     'Max findings (1-25). Default: 10.'
   ),
-  files: z
-    .array(FileContextSchema)
-    .min(1)
-    .max(INPUT_LIMITS.fileContext.maxItems)
-    .optional()
-    .describe(
-      'File content (changed files). Omit if large. Diff is primary source.'
-    ),
 });
 
 export const SuggestSearchReplaceInputSchema = z.strictObject({

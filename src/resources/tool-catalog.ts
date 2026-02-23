@@ -7,7 +7,6 @@ const TOOL_CATALOG_CONTENT = `# Tool Catalog Details
 - \`language\`: Primary language hint (auto-detects). All tools except \`suggest_search_replace\`.
 - \`focusAreas\`: Focus tags (security, performance, etc.). \`inspect_code_quality\` only.
 - \`maxFindings\`: Output cap (1–25). \`inspect_code_quality\` only.
-- \`files\`: File context (max 20 files, 100K chars/file). \`inspect_code_quality\` only.
 - \`testFramework\`: Framework hint. \`generate_test_plan\` only.
 - \`maxTestCases\`: Output cap (1–30). \`generate_test_plan\` only.
 

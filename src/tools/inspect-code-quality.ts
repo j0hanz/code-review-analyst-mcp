@@ -1,6 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { validateContextBudget } from '../lib/context-budget.js';
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
 import {
   buildStructuredToolRuntimeOptions,
@@ -14,37 +13,14 @@ import {
 } from '../schemas/outputs.js';
 
 const DEFAULT_FOCUS_AREAS = 'General';
-const FILE_CONTEXT_HEADING = '\nFull File Context:\n';
-const PATH_ESCAPE_REPLACEMENTS = {
-  '"': '\\"',
-  '\n': ' ',
-  '\r': ' ',
-  '<': '&lt;',
-  '>': '&gt;',
-} as const;
-const PATH_ESCAPE_PATTERN = /["\n\r<>]/g;
 const SYSTEM_INSTRUCTION = `
 Principal Engineer Code Review.
-Source: Unified diff (primary), File excerpts (supplementary context).
+Source: Unified diff.
 Goal: Identify bugs, security, performance, maintainability.
 Constraint: Ignore style/formatting. Prioritize correctness/failure modes.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('inspect_code_quality');
-
-export function sanitizePath(path: string): string {
-  return path.replace(PATH_ESCAPE_PATTERN, (match) => {
-    return PATH_ESCAPE_REPLACEMENTS[
-      match as keyof typeof PATH_ESCAPE_REPLACEMENTS
-    ];
-  });
-}
-
-export function sanitizeContent(content: string): string {
-  return content
-    .replaceAll('<<END_FILE>>', '<END_FILE_ESCAPED>')
-    .replaceAll('<<FILE', '<FILE');
-}
 
 function formatOptionalLine(
   label: string,
@@ -57,33 +33,12 @@ function capFindings<T>(findings: readonly T[], maxFindings?: number): T[] {
   return findings.slice(0, maxFindings ?? findings.length);
 }
 
-function formatFileContext(
-  files: readonly { path: string; content: string }[] | undefined
-): string {
-  if (!files || files.length === 0) {
-    return '';
-  }
-
-  return (
-    FILE_CONTEXT_HEADING +
-    files
-      .map(
-        (file) => `
-<<FILE path="${sanitizePath(file.path)}">>
-${sanitizeContent(file.content)}
-<<END_FILE>>
-`
-      )
-      .join('\n')
-  );
-}
-
 export function registerInspectCodeQualityTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'inspect_code_quality',
     title: 'Inspect Code Quality',
     description:
-      'Deep code review. Prerequisite: generate_diff. Auto-infer repo/language/focus. Operates primarily on the diff; files are optional supplementary excerpts only.',
+      'Deep code review. Prerequisite: generate_diff. Auto-infer repo/language/focus. Operates on the cached diff.',
 
     inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
@@ -94,15 +49,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
-    progressContext: (input) => {
-      const fileCount = input.files?.length;
-      return fileCount ? `+${fileCount} files` : '';
-    },
     requiresDiff: true,
-    validateInput: (input, ctx) => {
-      // Diff presence and budget checked by requiresDiff: true
-      return validateContextBudget(ctx.diffSlot?.diff ?? '', input.files);
-    },
     formatOutcome: (result) =>
       `${result.findings.length} findings, risk: ${result.overallRisk}`,
     formatOutput: (result) => {
@@ -122,29 +69,24 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const parsedFiles = ctx.diffSlot?.parsedFiles ?? [];
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(parsedFiles);
-      const fileContext = formatFileContext(input.files);
       const languageLine = formatOptionalLine('Language', input.language);
       const maxFindingsLine = formatOptionalLine(
         'Max Findings',
         input.maxFindings
       );
-      const noFilesNote = !input.files?.length
-        ? '\nNote: No file excerpts provided. Review based on diff only; leave contextualInsights empty.'
-        : '';
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt: `
 Repository: ${input.repository}${languageLine}
-Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}${noFilesNote}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}
 Changed Files:
 ${fileSummary}
 
 Diff:
 ${diff}
-${fileContext}
 
-Based on the diff and file context above, perform a deep code review focusing on the specified areas.
+Based on the diff above, perform a deep code review focusing on the specified areas.
 `,
       };
     },

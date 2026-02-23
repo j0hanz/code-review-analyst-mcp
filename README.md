@@ -305,21 +305,20 @@ Summarize a pull request diff and assess high-level risk using the Flash model.
 
 ### `inspect_code_quality`
 
-Deep-dive code review with optional file context using the Pro model with thinking (16K token budget).
+Deep-dive code review using the Pro model with thinking (16K token budget).
 
-| Parameter     | Type       | Required | Description                                         |
-| ------------- | ---------- | -------- | --------------------------------------------------- |
-| `diff`        | `string`   | Yes      | Unified diff text.                                  |
-| `repository`  | `string`   | Yes      | Repository identifier (e.g. `org/repo`).            |
-| `language`    | `string`   | No       | Primary language hint.                              |
-| `focusAreas`  | `string[]` | No       | Areas to inspect: security, correctness, etc.       |
-| `maxFindings` | `number`   | No       | Maximum findings to return (1-25).                  |
-| `files`       | `object[]` | No       | Full file contents (`path`, `content`) for context. |
+| Parameter     | Type       | Required | Description                                   |
+| ------------- | ---------- | -------- | --------------------------------------------- |
+| `diff`        | `string`   | Yes      | Unified diff text.                            |
+| `repository`  | `string`   | Yes      | Repository identifier (e.g. `org/repo`).      |
+| `language`    | `string`   | No       | Primary language hint.                        |
+| `focusAreas`  | `string[]` | No       | Areas to inspect: security, correctness, etc. |
+| `maxFindings` | `number`   | No       | Maximum findings to return (1-25).            |
 
 **Returns:** `summary`, `overallRisk` (low/medium/high/critical), `findings[]` (severity, file, line, title, explanation, recommendation), `testsNeeded[]`, `contextualInsights[]`.
 
 > [!NOTE]
-> Enforces `MAX_CONTEXT_CHARS` (default 500,000) on combined diff + files size. Expect 60-120s latency due to deep thinking.
+> Diff size bounded by `MAX_DIFF_CHARS` (default 120,000). Expect 60-120s latency due to deep thinking.
 
 ### `suggest_search_replace`
 
@@ -378,7 +377,6 @@ Create a test plan covering the changes in the diff using the Flash model with t
 | `GEMINI_MODEL`                  | Override default model selection                     | —            | No       |
 | `GEMINI_HARM_BLOCK_THRESHOLD`   | Safety threshold (BLOCK_NONE, BLOCK_ONLY_HIGH, etc.) | `BLOCK_NONE` | No       |
 | `MAX_DIFF_CHARS`                | Max chars for diff input                             | `120000`     | No       |
-| `MAX_CONTEXT_CHARS`             | Max combined context for inspection                  | `500000`     | No       |
 | `MAX_CONCURRENT_CALLS`          | Max concurrent Gemini requests                       | `10`         | No       |
 | `MAX_CONCURRENT_BATCH_CALLS`    | Max concurrent inline batch requests                 | `2`          | No       |
 | `MAX_CONCURRENT_CALLS_WAIT_MS`  | Max wait time for a free Gemini slot                 | `2000`       | No       |
@@ -407,7 +405,7 @@ Create a test plan covering the changes in the diff using the Flash model with t
 
 ### Deep Code Inspection
 
-1. Call `inspect_code_quality` with the diff and critical files in `files[]`.
+1. Call `inspect_code_quality` with the cached diff.
 2. Use `focusAreas` to target specific concerns (security, performance).
 3. Review `findings` and `contextualInsights`.
 
@@ -457,7 +455,7 @@ The pipeline runs lint, type-check, test, and build, then publishes to three tar
 | Issue                                      | Solution                                                                             |
 | ------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `Missing GEMINI_API_KEY or GOOGLE_API_KEY` | Set one of the API key env vars in your MCP client config.                           |
-| `E_INPUT_TOO_LARGE`                        | Diff or combined context exceeds budget. Split into smaller diffs or reduce files.   |
+| `E_INPUT_TOO_LARGE`                        | Diff exceeds budget. Split into smaller diffs.                                       |
 | `Gemini request timed out`                 | Pro model tasks may take 60-120s. Increase your client timeout.                      |
 | `Too many concurrent Gemini calls`         | Reduce parallel tool calls or increase `MAX_CONCURRENT_CALLS`.                       |
 | No tool output visible                     | Ensure your MCP client is not swallowing `stderr` — the server uses stdio transport. |

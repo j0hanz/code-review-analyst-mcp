@@ -188,8 +188,7 @@ export const TOOL_CONTRACTS = [
   },
   {
     name: 'inspect_code_quality',
-    purpose:
-      'Deep code review over the cached diff; files are optional supplementary excerpts only.',
+    purpose: 'Deep code review over the cached diff.',
 
     model: PRO_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
@@ -226,28 +225,18 @@ export const TOOL_CONTRACTS = [
         constraints: '1-25',
         description: 'Post-generation cap applied to findings.',
       },
-      {
-        name: 'files',
-        type: 'object[]',
-        required: false,
-        constraints: '1-20 files, 100K chars/file',
-        description:
-          'Optional short excerpts for supplementary context only; avoid full files — the diff is the primary source.',
-      },
     ],
     outputShape:
       '{summary, overallRisk, findings[], testsNeeded[], contextualInsights[], totalFindings}',
     gotchas: [
       'Requires generate_diff to be called first.',
-      'Combined diff + file context is bounded by MAX_CONTEXT_CHARS.',
       'maxFindings caps output after generation.',
-      'files[] is token-expensive — omit unless the diff lacks critical structural context (e.g. class hierarchy, imports). Never pass full files.',
     ],
     crossToolFlow: [
       'findings[].title -> suggest_search_replace.findingTitle',
       'findings[].explanation -> suggest_search_replace.findingDetails',
     ],
-    constraints: ['Context budget (diff + files) < 500K chars.'],
+    constraints: ['Diff budget bounded by MAX_DIFF_CHARS.'],
   },
   {
     name: 'suggest_search_replace',

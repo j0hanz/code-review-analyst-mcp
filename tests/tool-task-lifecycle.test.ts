@@ -11,7 +11,6 @@ import { test } from 'node:test';
 
 import type { GoogleGenAI } from '@google/genai';
 
-import { resetMaxContextCharsCacheForTesting } from '../src/lib/context-budget.js';
 import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff-budget.js';
 import { setDiffForTesting } from '../src/lib/diff-store.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
@@ -387,31 +386,6 @@ test('generate_test_plan respects maxTestCases cap', async () => {
   } finally {
     await close();
     setDiffForTesting(undefined);
-  }
-});
-
-test('inspect_code_quality returns budget error when context chars exceeded', async () => {
-  process.env.MAX_CONTEXT_CHARS = '20';
-  resetMaxContextCharsCacheForTesting();
-  setDiffForTesting(SAMPLE_DIFF_SLOT);
-
-  const { client, connect, close } = createClientServerPair();
-  await connect();
-
-  try {
-    const result = await callToolAsTask(client, 'inspect_code_quality', {
-      repository: 'org/repo',
-    });
-
-    assert.equal(result.isError, true);
-    const parsed = JSON.parse((result.content[0] as { text: string }).text);
-    assert.equal(parsed.ok, false);
-    assert.equal((parsed.error as { code: string }).code, 'E_INPUT_TOO_LARGE');
-  } finally {
-    await close();
-    setDiffForTesting(undefined);
-    delete process.env.MAX_CONTEXT_CHARS;
-    resetMaxContextCharsCacheForTesting();
   }
 });
 

@@ -3,7 +3,6 @@ import { FLASH_MODEL } from '../lib/model-config.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
-const DEFAULT_MAX_CONTEXT_CHARS = 500_000;
 const DEFAULT_MAX_CONCURRENT_CALLS = 10;
 const DEFAULT_CONCURRENT_WAIT_MS = 2_000;
 const DEFAULT_SAFETY_THRESHOLD = 'BLOCK_NONE';
@@ -15,10 +14,6 @@ const GEMINI_BATCH_MODE_ENV_VAR = 'GEMINI_BATCH_MODE';
 const diffCharsConfig = createCachedEnvInt(
   'MAX_DIFF_CHARS',
   DEFAULT_MAX_DIFF_CHARS
-);
-const contextCharsConfig = createCachedEnvInt(
-  'MAX_CONTEXT_CHARS',
-  DEFAULT_MAX_CONTEXT_CHARS
 );
 const concurrentCallsConfig = createCachedEnvInt(
   'MAX_CONCURRENT_CALLS',
@@ -61,7 +56,6 @@ function formatThinkingLevel(level: string | undefined): string {
 
 export function buildServerConfig(): string {
   const maxDiffChars = diffCharsConfig.get();
-  const maxContextChars = contextCharsConfig.get();
   const maxConcurrent = concurrentCallsConfig.get();
   const maxConcurrentBatch = concurrentBatchCallsConfig.get();
   const concurrentWaitMs = concurrentWaitConfig.get();
@@ -82,7 +76,6 @@ export function buildServerConfig(): string {
 | Limit | Value | Env |
 |-------|-------|-----|
 | Diff limit | ${formatNumber(maxDiffChars)} chars | \`MAX_DIFF_CHARS\` |
-| Context limit (inspect) | ${formatNumber(maxContextChars)} chars | \`MAX_CONTEXT_CHARS\` |
 | Concurrency limit | ${maxConcurrent} | \`MAX_CONCURRENT_CALLS\` |
 | Batch concurrency limit | ${maxConcurrentBatch} | \`MAX_CONCURRENT_BATCH_CALLS\` |
 | Wait timeout | ${formatNumber(concurrentWaitMs)}ms | \`MAX_CONCURRENT_CALLS_WAIT_MS\` |

@@ -150,7 +150,7 @@ const CODE_QUALITY_SHARED_FIELDS = {
     500,
     0,
     5,
-    'Cross-file insights (omit if no file context).'
+    'Cross-file insights from diff analysis.'
   ),
 } as const;
 
