@@ -33,10 +33,9 @@ function createOptionalBoundedString(
 }
 
 const LANGUAGE_DESCRIPTION =
-  'Primary programming language (e.g. TypeScript, Python, Rust). Auto-infer from file extensions. Omit if multi-language.';
+  'Primary language (e.g. TypeScript). Auto-infer from files.';
 
-const REPOSITORY_DESCRIPTION =
-  'Repository identifier (owner/repo). Auto-infer from git remote or directory name.';
+const REPOSITORY_DESCRIPTION = 'Repo ID (owner/repo). Auto-infer from git/dir.';
 
 function createLanguageSchema(): z.ZodOptional<z.ZodString> {
   return createOptionalBoundedString(
@@ -66,12 +65,12 @@ export const FileContextSchema = z.strictObject({
   path: createBoundedString(
     INPUT_LIMITS.fileContext.path.min,
     INPUT_LIMITS.fileContext.path.max,
-    'Repo-relative path (e.g. src/utils/helpers.ts).'
+    'Repo-relative path (e.g. src/utils.ts).'
   ),
   content: createBoundedString(
     INPUT_LIMITS.fileContext.content.min,
     INPUT_LIMITS.fileContext.content.max,
-    'Relevant file excerpt. Prefer the changed section plus ≤20 lines of surrounding context. Avoid full files — the diff already contains all changed lines.'
+    'Relevant excerpt (changed lines + context). Avoid full files.'
   ),
 });
 
@@ -93,14 +92,14 @@ export const InspectCodeQualityInputSchema = z.strictObject({
       createBoundedString(
         INPUT_LIMITS.focusArea.min,
         INPUT_LIMITS.focusArea.max,
-        'Focus tag (e.g. security, performance, bug, logic).'
+        'Focus tag (e.g. security, logic).'
       )
     )
     .min(1)
     .max(INPUT_LIMITS.focusArea.maxItems)
     .optional()
     .describe(
-      'Review focus areas. Standard tags: security, correctness, performance, regressions, tests, maintainability, concurrency. Omit for general review.'
+      'Review focus areas. Tags: security, correctness, performance, regressions, tests, maintainability, concurrency.'
     ),
   maxFindings: createOptionalBoundedInteger(
     INPUT_LIMITS.maxFindings.min,
@@ -113,7 +112,7 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     .max(INPUT_LIMITS.fileContext.maxItems)
     .optional()
     .describe(
-      'Optional. Short excerpts for supplementary context (e.g. class structure, imports not visible in the diff). Omit in most cases — the diff is the primary source. Token-expensive; never pass full files.'
+      'File content (changed files). Omit if large. Diff is primary source.'
     ),
 });
 
@@ -136,7 +135,7 @@ export const GenerateTestPlanInputSchema = z.strictObject({
   testFramework: createOptionalBoundedString(
     INPUT_LIMITS.testFramework.min,
     INPUT_LIMITS.testFramework.max,
-    'Test framework (jest, vitest, pytest, node:test, junit). Auto-infer from package.json/config.'
+    'Test framework (jest, pytest, etc). Auto-infer.'
   ),
   maxTestCases: createOptionalBoundedInteger(
     INPUT_LIMITS.maxTestCases.min,

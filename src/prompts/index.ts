@@ -94,20 +94,17 @@ function registerHelpPrompt(server: McpServer, instructions: string): void {
 
 function buildReviewGuideText(tool: string, focusArea: string): string {
   return (
-    `# Code Review Guide\n\n` +
+    `# Guide: ${tool} / ${focusArea}\n\n` +
     `## Tool: \`${tool}\`\n${getToolGuide(tool)}\n\n` +
-    `## Focus Area: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
-    `## Example: Finding → Patch\n\n` +
-    `Given a finding from \`inspect_code_quality\`:\n` +
-    `- **title:** "Uncaught promise rejection in retry loop"\n` +
-    `- **details:** "The catch block swallows errors without logging."\n\n` +
-    `Call \`suggest_search_replace\` with those values. It returns:\n` +
+    `## Focus: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
+    `## Example Fix\n` +
+    `Finding: "Uncaught promise rejection"\n` +
+    `Call \`suggest_search_replace\`:\n` +
     '```\n' +
-    `blocks[0].search: "  } catch {\\n  }"\n` +
-    `blocks[0].replace: "  } catch (err) {\\n    logger.error(err);\\n  }"\n` +
-    '```\n\n' +
-    `Validate that \`blocks[].search\` matches file content verbatim before applying.\n\n` +
-    `> Tip: Run \`get-help\` for full server documentation.`
+    `search: "  } catch {\\n  }"\n` +
+    `replace: "  } catch (err) {\\n    logger.error(err);\\n  }"\n` +
+    '```\n' +
+    `Validate verbatim match.`
   );
 }
 

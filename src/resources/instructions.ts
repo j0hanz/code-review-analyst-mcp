@@ -19,8 +19,8 @@ function formatParameterLine(parameter: {
   required: boolean;
   constraints: string;
 }): string {
-  const required = parameter.required ? 'required' : 'optional';
-  return `- \`${parameter.name}\` (${parameter.type}, ${required}; ${parameter.constraints})`;
+  const req = parameter.required ? 'req' : 'opt';
+  return `  - \`${parameter.name}\` (${parameter.type}, ${req}): ${parameter.constraints}`;
 }
 
 function formatToolSection(
@@ -31,36 +31,27 @@ function formatToolSection(
   );
 
   if (contract.model === 'none') {
-    // Synchronous built-in tool (no Gemini call)
-    return `### \`${contract.name}\`
-- Purpose: ${contract.purpose}
-- Model: \`none\` (synchronous built-in)
-- Parameters:
+    return `### \`${contract.name}\` (Sync)
+${contract.purpose}
+- **Params**:
 ${parameterLines.join('\n')}
-- Output shape: \`${contract.outputShape}\``;
+- **Output**: \`${contract.outputShape}\``;
   }
 
-  const thinkingLine =
-    contract.thinkingLevel === undefined
-      ? '- Thinking level: disabled'
-      : `- Thinking level: ${contract.thinkingLevel}`;
-  const temperatureLine =
-    contract.temperature !== undefined
-      ? `\n- Temperature: ${contract.temperature}`
-      : '';
-  const deterministicLine = contract.deterministicJson
-    ? '\n- Deterministic JSON: enabled'
-    : '';
+  const modelInfo = [
+    contract.model.includes('flash') ? 'Flash' : 'Pro',
+    contract.thinkingLevel ? `Thinking:${contract.thinkingLevel}` : '',
+    `${Math.round(contract.timeoutMs / 1_000)}s`,
+    `MaxTokens:${contract.maxOutputTokens}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
-  return `### \`${contract.name}\`
-- Purpose: ${contract.purpose}
-- Model: \`${contract.model}\`
-- Timeout: ${Math.round(contract.timeoutMs / 1_000)}s
-${thinkingLine}
-- Max output tokens: ${contract.maxOutputTokens}${temperatureLine}${deterministicLine}
-- Parameters:
+  return `### \`${contract.name}\` (${modelInfo})
+${contract.purpose}
+- **Params**:
 ${parameterLines.join('\n')}
-- Output shape: \`${contract.outputShape}\``;
+- **Output**: \`${contract.outputShape}\``;
 }
 
 export function buildServerInstructions(): string {
@@ -73,12 +64,11 @@ export function buildServerInstructions(): string {
     (constraint) => `- ${constraint}`
   );
 
-  return `# CODE REVIEW ANALYST MCP INSTRUCTIONS
+  return `# CODE REVIEW ANALYST MCP
 
-## CORE CAPABILITY
-- Domain: Gemini-powered code review analysis over unified diffs.
+## CORE
+- Domain: Gemini-powered diff review.
 - Tools: ${toolNames}
-- Transport: stdio with task lifecycle support.
 
 ## PROMPTS
 ${PROMPT_LIST.join('\n')}
@@ -86,10 +76,10 @@ ${PROMPT_LIST.join('\n')}
 ## RESOURCES
 ${RESOURCE_LIST.join('\n')}
 
-## TOOL CONTRACTS
+## TOOLS
 ${toolSections.join('\n\n')}
 
-## SHARED CONSTRAINTS
+## CONSTRAINTS
 ${constraintLines.join('\n')}
 `;
 }

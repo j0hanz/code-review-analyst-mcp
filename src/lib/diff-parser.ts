@@ -66,10 +66,22 @@ function getUniquePaths(files: readonly ParsedFile[]): Set<string> {
 }
 
 function generateSummaries(files: readonly ParsedFile[]): string[] {
-  return files.map((file) => {
+  const MAX_SUMMARY_FILES = 40;
+
+  if (files.length <= MAX_SUMMARY_FILES) {
+    return files.map((file) => {
+      const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
+      return `${path} (+${file.additions} -${file.deletions})`;
+    });
+  }
+
+  const summaries = files.slice(0, MAX_SUMMARY_FILES).map((file) => {
     const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
     return `${path} (+${file.additions} -${file.deletions})`;
   });
+
+  summaries.push(`... and ${files.length - MAX_SUMMARY_FILES} more files`);
+  return summaries;
 }
 
 export function computeDiffStatsAndSummaryFromFiles(

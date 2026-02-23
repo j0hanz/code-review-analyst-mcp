@@ -96,23 +96,19 @@ function collectToolConstraints(
 
 function formatToolInfo(entry: ToolInfoEntry): string {
   return `# ${entry.name}
-
-## Purpose
 ${entry.purpose}
 
 ## Model
-\`${entry.model}\` (thinking level: ${entry.thinkingLevel}, timeout: ${entry.timeout}, max output tokens: ${entry.maxOutputTokens})
+\`${entry.model}\` (Thinking: ${entry.thinkingLevel}, Timeout: ${entry.timeout}, Tokens: ${entry.maxOutputTokens})
 
 ## Parameters
 ${entry.params}
 
-## Output Shape
+## Output
 ${entry.outputShape}
 
-## Gotchas
+## Constraints
 ${entry.gotchas.map((g) => `- ${g}`).join('\n')}
-
-## Cross-Tool Flow
 ${entry.crossToolFlow.map((f) => `- ${f}`).join('\n')}
 `;
 }

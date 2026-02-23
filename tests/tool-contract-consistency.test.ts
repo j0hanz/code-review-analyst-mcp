@@ -44,7 +44,14 @@ test('generated instructions include all tools and model assignments', () => {
 
   for (const contract of getToolContracts()) {
     assert.match(instructions, new RegExp(`### \`${contract.name}\``));
-    assert.match(instructions, new RegExp(`Model: \`${contract.model}\``));
+
+    if (contract.model === 'none') {
+      assert.match(instructions, /\(Sync\)/);
+    } else if (contract.model.includes('flash')) {
+      assert.match(instructions, /Flash/);
+    } else if (contract.model.includes('pro')) {
+      assert.match(instructions, /Pro/);
+    }
   }
 });
 
