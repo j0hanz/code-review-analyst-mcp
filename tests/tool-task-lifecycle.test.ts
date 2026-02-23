@@ -11,8 +11,8 @@ import { test } from 'node:test';
 
 import type { GoogleGenAI } from '@google/genai';
 
-import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff-budget.js';
 import { setDiffForTesting } from '../src/lib/diff-store.js';
+import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
 import {
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { extractChangedPathsFromFiles } from '../lib/diff-parser.js';
+import { extractChangedPathsFromFiles } from '../lib/diff.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,

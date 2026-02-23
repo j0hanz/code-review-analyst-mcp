@@ -5,16 +5,14 @@ import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
+import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff-store.js';
 import {
   cleanDiff,
+  computeDiffStatsFromFiles,
   isEmptyDiff,
   NOISY_EXCLUDE_PATHSPECS,
-} from '../lib/diff-cleaner.js';
-import {
-  computeDiffStatsFromFiles,
   parseDiffFiles,
-} from '../lib/diff-parser.js';
-import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff-store.js';
+} from '../lib/diff.js';
 import { wrapToolHandler } from '../lib/tool-factory.js';
 import {
   createErrorToolResponse,

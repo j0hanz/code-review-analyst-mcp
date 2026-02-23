@@ -12,8 +12,8 @@ import type {
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
-import { validateDiffBudget } from './diff-budget.js';
 import { createNoDiffError, type DiffSlot, getDiff } from './diff-store.js';
+import { validateDiffBudget } from './diff.js';
 import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
+import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,

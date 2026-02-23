@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import type { ParsedFile } from './diff-parser.js';
+import type { ParsedFile } from './diff.js';
 import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse } from './tool-response.js';
 
