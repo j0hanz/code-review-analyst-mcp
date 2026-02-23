@@ -24,19 +24,27 @@ const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 10 * 1024 * 1024; // 10 MB
 
 const execFileAsync = promisify(execFile);
+const gitRootByCwd = new Map<string, string>();
 
 type DiffMode = 'unstaged' | 'staged';
 
-async function findGitRoot(): Promise<string> {
+async function findGitRoot(cwd: string = process.cwd()): Promise<string> {
+  const cached = gitRootByCwd.get(cwd);
+  if (cached) {
+    return cached;
+  }
+
   const { stdout } = await execFileAsync(
     'git',
     ['rev-parse', '--show-toplevel'],
     {
-      cwd: process.cwd(),
+      cwd,
       encoding: 'utf8',
     }
   );
-  return stdout.trim();
+  const gitRoot = stdout.trim();
+  gitRootByCwd.set(cwd, gitRoot);
+  return gitRoot;
 }
 
 function buildGitArgs(mode: DiffMode): string[] {

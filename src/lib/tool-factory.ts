@@ -72,6 +72,9 @@ const DETERMINISTIC_JSON_RETRY_NOTE =
   'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
 
 const JSON_PARSE_ERROR_PATTERN = /model produced invalid json/i;
+const MODEL_IMMEDIATE_RESPONSE_META_KEY =
+  'io.modelcontextprotocol/model-immediate-response';
+const responseSchemaCache = new WeakMap<object, Record<string, unknown>>();
 
 type ProgressToken = string | number;
 
@@ -95,6 +98,11 @@ interface ProgressExtra {
     params: ProgressNotificationParams;
   }) => Promise<void>;
 }
+
+const progressReporterCache = new WeakMap<
+  ProgressExtra,
+  (payload: ProgressPayload) => Promise<void>
+>();
 
 export interface ToolAnnotations {
   readOnlyHint?: boolean;
@@ -227,6 +235,26 @@ function createGeminiResponseSchema(config: {
   return stripJsonSchemaConstraints(
     z.toJSONSchema(sourceSchema) as Record<string, unknown>
   );
+}
+
+function getCachedGeminiResponseSchema<
+  TInput extends object,
+  TResult extends object,
+  TFinal extends TResult,
+>(
+  config: StructuredToolTaskConfig<TInput, TResult, TFinal>
+): Record<string, unknown> {
+  const cached = responseSchemaCache.get(config);
+  if (cached) {
+    return cached;
+  }
+
+  const responseSchema = createGeminiResponseSchema({
+    geminiSchema: config.geminiSchema,
+    resultSchema: config.resultSchema,
+  });
+  responseSchemaCache.set(config, responseSchema);
+  return responseSchema;
 }
 
 function parseToolInput<TInput extends object>(
@@ -388,30 +416,17 @@ function isRetryableUpstreamMessage(message: string): boolean {
   );
 }
 
-function sendTaskProgress(
-  extra: ProgressExtra,
-  payload: ProgressPayload
-): Promise<void> {
-  const rawToken = extra._meta?.progressToken;
-  if (typeof rawToken !== 'string' && typeof rawToken !== 'number') {
-    return Promise.resolve();
-  }
-  const params: ProgressNotificationParams = {
-    progressToken: rawToken,
-    progress: payload.current,
-    ...(payload.total !== undefined ? { total: payload.total } : {}),
-    ...(payload.message !== undefined ? { message: payload.message } : {}),
-  };
-  return extra
-    .sendNotification({ method: 'notifications/progress', params })
-    .catch(() => {
-      // Progress notifications are best-effort; never fail tool execution.
-    });
-}
-
 function createProgressReporter(
   extra: ProgressExtra
 ): (payload: ProgressPayload) => Promise<void> {
+  const rawToken = extra._meta?.progressToken;
+  if (typeof rawToken !== 'string' && typeof rawToken !== 'number') {
+    return async (): Promise<void> => {
+      // Request did not provide a progress token.
+    };
+  }
+
+  const progressToken = rawToken;
   let lastCurrent = 0;
   let didSendTerminal = false;
 
@@ -434,13 +449,41 @@ function createProgressReporter(
       progressPayload.message = payload.message;
     }
 
-    await sendTaskProgress(extra, progressPayload);
+    const params: ProgressNotificationParams = {
+      progressToken,
+      progress: progressPayload.current,
+      ...(progressPayload.total !== undefined
+        ? { total: progressPayload.total }
+        : {}),
+      ...(progressPayload.message !== undefined
+        ? { message: progressPayload.message }
+        : {}),
+    };
+
+    await extra
+      .sendNotification({ method: 'notifications/progress', params })
+      .catch(() => {
+        // Progress notifications are best-effort; never fail tool execution.
+      });
 
     lastCurrent = current;
     if (total !== undefined && total === current) {
       didSendTerminal = true;
     }
   };
+}
+
+function getOrCreateProgressReporter(
+  extra: ProgressExtra
+): (payload: ProgressPayload) => Promise<void> {
+  const cached = progressReporterCache.get(extra);
+  if (cached) {
+    return cached;
+  }
+
+  const created = createProgressReporter(extra);
+  progressReporterCache.set(extra, created);
+  return created;
 }
 
 function normalizeProgressContext(context: string | undefined): string {
@@ -498,8 +541,11 @@ async function sendSingleStepProgress(
   current: 0 | 1,
   state: 'starting' | 'completed' | 'failed' | 'cancelled'
 ): Promise<void> {
-  await sendTaskProgress(extra, {
+  const reporter = getOrCreateProgressReporter(extra);
+
+  await reporter({
     current,
+    total: 1,
     message:
       current === 0
         ? formatProgressStep(toolName, context, state)
@@ -707,10 +753,11 @@ export class ToolTaskRunner<
 > {
   private diffSlotSnapshot: DiffSlot | undefined;
   private hasSnapshot = false;
-  private readonly responseSchema: Record<string, unknown>;
+  private responseSchema: Record<string, unknown>;
   private readonly onLog: (level: string, data: unknown) => Promise<void>;
   private readonly reportProgress: (payload: ProgressPayload) => Promise<void>;
   private progressContext: string;
+  private lastStatusMessage: string | undefined;
 
   constructor(
     private readonly server: McpServer,
@@ -718,13 +765,15 @@ export class ToolTaskRunner<
     private readonly extra: CreateTaskRequestHandlerExtra,
     private readonly task: TaskLike
   ) {
-    this.responseSchema = createGeminiResponseSchema({
-      geminiSchema: config.geminiSchema,
-      resultSchema: config.resultSchema,
-    });
+    this.responseSchema = getCachedGeminiResponseSchema(config);
     this.onLog = createGeminiLogger(server, task.taskId);
     this.reportProgress = createProgressReporter(extra);
     this.progressContext = DEFAULT_PROGRESS_CONTEXT;
+  }
+
+  setResponseSchemaOverride(responseSchema: Record<string, unknown>): void {
+    this.responseSchema = responseSchema;
+    responseSchemaCache.set(this.config, responseSchema);
   }
 
   setDiffSlotSnapshot(diffSlotSnapshot: DiffSlot | undefined): void {
@@ -733,12 +782,17 @@ export class ToolTaskRunner<
   }
 
   private async updateStatusMessage(message: string): Promise<void> {
+    if (this.lastStatusMessage === message) {
+      return;
+    }
+
     try {
       await this.extra.taskStore.updateTaskStatus(
         this.task.taskId,
         'working',
         message
       );
+      this.lastStatusMessage = message;
     } catch {
       // Best-effort
     }
@@ -1003,6 +1057,11 @@ export function registerStructuredToolTask<
   server: McpServer,
   config: StructuredToolTaskConfig<TInput, TResult, TFinal>
 ): void {
+  const responseSchema = createGeminiResponseSchema({
+    geminiSchema: config.geminiSchema,
+    resultSchema: config.resultSchema,
+  });
+
   server.experimental.tasks.registerToolTask(
     config.name,
     {
@@ -1026,6 +1085,7 @@ export function registerStructuredToolTask<
         // preserves task-level TOCTOU safety without deep-clone overhead.
         const diffSlotSnapshot = currentDiff;
         const runner = new ToolTaskRunner(server, config, extra, task);
+        runner.setResponseSchemaOverride(responseSchema);
         runner.setDiffSlotSnapshot(diffSlotSnapshot);
 
         setImmediate(() => {
@@ -1044,7 +1104,12 @@ export function registerStructuredToolTask<
           });
         });
 
-        return { task };
+        return {
+          task,
+          _meta: {
+            [MODEL_IMMEDIATE_RESPONSE_META_KEY]: `${config.name} accepted as task ${task.taskId}`,
+          },
+        };
       },
       getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) => {
         return await extra.taskStore.getTask(extra.taskId);

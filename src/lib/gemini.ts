@@ -51,6 +51,7 @@ const DIGITS_ONLY_PATTERN = /^\d+$/;
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off']);
 const SLEEP_UNREF_OPTIONS = { ref: false } as const;
+const JSON_CODE_BLOCK_PATTERN = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u;
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
 const maxConcurrentBatchCallsConfig = createCachedEnvInt(
@@ -71,8 +72,8 @@ const batchTimeoutMsConfig = createCachedEnvInt(
 );
 let activeCalls = 0;
 let activeBatchCalls = 0;
-const slotWaiters: (() => void)[] = [];
-const batchSlotWaiters: (() => void)[] = [];
+const slotWaiters = new Set<() => void>();
+const batchSlotWaiters = new Set<() => void>();
 
 const RETRYABLE_TRANSIENT_CODES = new Set([
   'RESOURCE_EXHAUSTED',
@@ -81,6 +82,46 @@ const RETRYABLE_TRANSIENT_CODES = new Set([
   'INTERNAL',
   'ABORTED',
 ]);
+
+type Waiter = () => void;
+type WaiterCollection = Set<Waiter> | Waiter[];
+
+function getWaiterCount(waiters: WaiterCollection): number {
+  return waiters instanceof Set ? waiters.size : waiters.length;
+}
+
+function addWaiter(waiters: WaiterCollection, waiter: Waiter): void {
+  if (waiters instanceof Set) {
+    waiters.add(waiter);
+    return;
+  }
+
+  waiters.push(waiter);
+}
+
+function removeWaiter(waiters: WaiterCollection, waiter: Waiter): void {
+  if (waiters instanceof Set) {
+    waiters.delete(waiter);
+    return;
+  }
+
+  const index = waiters.indexOf(waiter);
+  if (index !== -1) {
+    waiters.splice(index, 1);
+  }
+}
+
+function popNextWaiter(waiters: WaiterCollection): Waiter | undefined {
+  if (waiters instanceof Set) {
+    const next = waiters.values().next().value;
+    if (next !== undefined) {
+      waiters.delete(next);
+    }
+    return next;
+  }
+
+  return waiters.shift();
+}
 
 const SAFETY_CATEGORIES = [
   HarmCategory.HARM_CATEGORY_HATE_SPEECH,
@@ -538,7 +579,7 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
     // fast-path failed; try extracting from markdown block
   }
 
-  const jsonMatch = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u.exec(responseText);
+  const jsonMatch = JSON_CODE_BLOCK_PATTERN.exec(responseText);
   const jsonText = jsonMatch?.[1] ?? responseText;
 
   try {
@@ -733,7 +774,7 @@ function canRetryAttempt(
 }
 
 function tryWakeNextWaiter(): void {
-  const next = slotWaiters.shift();
+  const next = popNextWaiter(slotWaiters);
   if (next !== undefined) {
     next();
   }
@@ -743,10 +784,10 @@ async function waitForSlot(
   limit: number,
   getActiveCount: () => number,
   acquireSlot: () => void,
-  waiters: (() => void)[],
+  waiters: WaiterCollection,
   requestSignal?: AbortSignal
 ): Promise<void> {
-  if (waiters.length === 0 && getActiveCount() < limit) {
+  if (getWaiterCount(waiters) === 0 && getActiveCount() < limit) {
     acquireSlot();
     return;
   }
@@ -769,13 +810,10 @@ async function waitForSlot(
       resolve();
     };
 
-    waiters.push(waiter);
+    addWaiter(waiters, waiter);
 
-    const removeWaiter = (): void => {
-      const idx = waiters.indexOf(waiter);
-      if (idx !== -1) {
-        waiters.splice(idx, 1);
-      }
+    const removeCurrentWaiter = (): void => {
+      removeWaiter(waiters, waiter);
     };
 
     const detachAbortListener = (): void => {
@@ -787,7 +825,7 @@ async function waitForSlot(
     const deadlineTimer = setTimeout((): void => {
       if (settled) return;
       settled = true;
-      removeWaiter();
+      removeCurrentWaiter();
       detachAbortListener();
       reject(new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs)));
     }, waitLimitMs);
@@ -796,7 +834,7 @@ async function waitForSlot(
     const onAbort = (): void => {
       if (settled) return;
       settled = true;
-      removeWaiter();
+      removeCurrentWaiter();
       clearTimeout(deadlineTimer);
       reject(new Error('Gemini request was cancelled.'));
     };
@@ -823,7 +861,7 @@ async function waitForConcurrencySlot(
 }
 
 function tryWakeNextBatchWaiter(): void {
-  const next = batchSlotWaiters.shift();
+  const next = popNextWaiter(batchSlotWaiters);
   if (next !== undefined) {
     next();
   }
@@ -1125,7 +1163,7 @@ export function getGeminiQueueSnapshot(): {
 } {
   return {
     activeCalls,
-    waitingCalls: slotWaiters.length,
+    waitingCalls: slotWaiters.size,
   };
 }
 
@@ -1154,7 +1192,7 @@ export async function generateStructuredJson(
     event: 'gemini_queue_acquired',
     queueWaitMs,
     waitingCalls:
-      batchMode === 'inline' ? batchSlotWaiters.length : slotWaiters.length,
+      batchMode === 'inline' ? batchSlotWaiters.size : slotWaiters.size,
     activeCalls,
     activeBatchCalls,
     mode: batchMode,
