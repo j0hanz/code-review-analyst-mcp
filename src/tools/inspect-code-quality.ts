@@ -64,16 +64,18 @@ function formatFileContext(
     return '';
   }
 
-  const fileBlocks: string[] = [];
-  for (const file of files) {
-    fileBlocks.push(`
+  return (
+    FILE_CONTEXT_HEADING +
+    files
+      .map(
+        (file) => `
 <<FILE path="${sanitizePath(file.path)}">>
 ${sanitizeContent(file.content)}
 <<END_FILE>>
-`);
-  }
-
-  return `${FILE_CONTEXT_HEADING}${fileBlocks.join('\n')}`;
+`
+      )
+      .join('\n')
+  );
 }
 
 export function registerInspectCodeQualityTool(server: McpServer): void {

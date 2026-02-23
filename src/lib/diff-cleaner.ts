@@ -48,12 +48,30 @@ function shouldKeepSection(section: string): boolean {
 export function cleanDiff(raw: string): string {
   if (!raw) return '';
 
-  // Split on the start of each "diff --git" header, keeping the header.
-  const sections = raw.split(/(?=^diff --git )/m);
+  const sections: string[] = [];
+  const delimiter = /^diff --git /gm;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-  const cleaned = sections.filter(shouldKeepSection);
+  while ((match = delimiter.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      const section = raw.slice(lastIndex, match.index);
+      if (shouldKeepSection(section)) {
+        sections.push(section);
+      }
+    }
+    lastIndex = match.index;
+  }
 
-  return cleaned.join('').trim();
+  // Process the last section
+  if (lastIndex < raw.length) {
+    const section = raw.slice(lastIndex);
+    if (shouldKeepSection(section)) {
+      sections.push(section);
+    }
+  }
+
+  return sections.join('').trim();
 }
 
 export function isEmptyDiff(diff: string): boolean {

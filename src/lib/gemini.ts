@@ -532,6 +532,12 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
     throw new Error('Gemini returned an empty response body.');
   }
 
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    // fast-path failed; try extracting from markdown block
+  }
+
   const jsonMatch = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u.exec(responseText);
   const jsonText = jsonMatch?.[1] ?? responseText;
 

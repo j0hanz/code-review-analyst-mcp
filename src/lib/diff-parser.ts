@@ -65,25 +65,6 @@ function getUniquePaths(files: readonly ParsedFile[]): Set<string> {
   return paths;
 }
 
-function generateSummaries(files: readonly ParsedFile[]): string[] {
-  const MAX_SUMMARY_FILES = 40;
-
-  if (files.length <= MAX_SUMMARY_FILES) {
-    return files.map((file) => {
-      const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
-      return `${path} (+${file.additions} -${file.deletions})`;
-    });
-  }
-
-  const summaries = files.slice(0, MAX_SUMMARY_FILES).map((file) => {
-    const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
-    return `${path} (+${file.additions} -${file.deletions})`;
-  });
-
-  summaries.push(`... and ${files.length - MAX_SUMMARY_FILES} more files`);
-  return summaries;
-}
-
 export function computeDiffStatsAndSummaryFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; summary: string }> {
@@ -94,8 +75,28 @@ export function computeDiffStatsAndSummaryFromFiles(
     };
   }
 
-  const stats = calculateStats(files);
-  const summaries = generateSummaries(files);
+  let added = 0;
+  let deleted = 0;
+  const summaries: string[] = [];
+  const MAX_SUMMARY_FILES = 40;
+
+  let i = 0;
+  for (const file of files) {
+    added += file.additions;
+    deleted += file.deletions;
+
+    if (i < MAX_SUMMARY_FILES) {
+      const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
+      summaries.push(`${path} (+${file.additions} -${file.deletions})`);
+    }
+    i++;
+  }
+
+  if (files.length > MAX_SUMMARY_FILES) {
+    summaries.push(`... and ${files.length - MAX_SUMMARY_FILES} more files`);
+  }
+
+  const stats = { files: files.length, added, deleted };
 
   return {
     stats,
