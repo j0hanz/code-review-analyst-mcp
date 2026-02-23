@@ -8,21 +8,20 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function hasStringProperty<K extends string>(
-  value: unknown,
-  key: K
-): value is Record<K, string> {
+function getStringProperty(value: unknown, key: string): string | undefined {
   if (!isObjectRecord(value) || !(key in value)) {
-    return false;
+    return undefined;
   }
 
-  const record = value as Record<K, unknown>;
-  return typeof record[key] === 'string';
+  const record = value;
+  const property = record[key];
+  return typeof property === 'string' ? property : undefined;
 }
 
 export function getErrorMessage(error: unknown): string {
-  if (hasStringProperty(error, 'message')) {
-    return error.message;
+  const message = getStringProperty(error, 'message');
+  if (message !== undefined) {
+    return message;
   }
 
   if (typeof error === 'string') {

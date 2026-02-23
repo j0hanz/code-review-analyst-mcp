@@ -4,14 +4,11 @@ export const FLASH_MODEL = 'gemini-3-flash-preview';
 /** High-capability model for deep reasoning, quality inspection, and reliable code generation. */
 export const PRO_MODEL = 'gemini-3-pro-preview';
 
-/** Default hint for auto-detection. */
-const DEFAULT_DETECT_HINT = 'detect';
-
 /** Default language hint. */
-export const DEFAULT_LANGUAGE = DEFAULT_DETECT_HINT;
+export const DEFAULT_LANGUAGE = 'detect';
 
 /** Default test-framework hint. */
-export const DEFAULT_FRAMEWORK = DEFAULT_DETECT_HINT;
+export const DEFAULT_FRAMEWORK = 'detect';
 
 /** Extended timeout for Pro model calls (ms). */
 export const DEFAULT_TIMEOUT_PRO_MS = 120_000;

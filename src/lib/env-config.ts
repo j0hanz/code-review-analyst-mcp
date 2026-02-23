@@ -4,12 +4,13 @@ export interface CachedEnvInt {
 }
 
 function parsePositiveInteger(value: string): number | undefined {
-  if (value.length === 0) {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
     return undefined;
   }
 
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed) || parsed <= 0) {
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return undefined;
   }
 

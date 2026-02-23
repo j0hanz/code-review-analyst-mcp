@@ -48,6 +48,8 @@ const DEFAULT_BATCH_MODE = 'off';
 const UNKNOWN_REQUEST_CONTEXT_VALUE = 'unknown';
 const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
 const DIGITS_ONLY_PATTERN = /^\d+$/;
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off']);
 const SLEEP_UNREF_OPTIONS = { ref: false } as const;
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
@@ -181,21 +183,11 @@ function parseBooleanEnv(value: string): boolean | undefined {
     return undefined;
   }
 
-  if (
-    normalized === '1' ||
-    normalized === 'true' ||
-    normalized === 'yes' ||
-    normalized === 'on'
-  ) {
+  if (TRUE_ENV_VALUES.has(normalized)) {
     return true;
   }
 
-  if (
-    normalized === '0' ||
-    normalized === 'false' ||
-    normalized === 'no' ||
-    normalized === 'off'
-  ) {
+  if (FALSE_ENV_VALUES.has(normalized)) {
     return false;
   }
 

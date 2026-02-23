@@ -2,7 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type { z } from 'zod';
 
-import { requireToolContract } from '../lib/tool-contracts.js';
+import {
+  buildStructuredToolRuntimeOptions,
+  requireToolContract,
+} from '../lib/tool-contracts.js';
 import {
   registerStructuredToolTask,
   type ToolExecutionContext,
@@ -56,15 +59,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingLevel !== undefined
-      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
-      : undefined),
-    ...(TOOL_CONTRACT.temperature !== undefined
-      ? { temperature: TOOL_CONTRACT.temperature }
-      : undefined),
-    ...(TOOL_CONTRACT.deterministicJson !== undefined
-      ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
-      : undefined),
+    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
     transformResult: (_input: ReviewSummaryInput, result, ctx) => {

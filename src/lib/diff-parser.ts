@@ -18,11 +18,7 @@ interface DiffStats {
 
 /** Parse unified diff string into structured file list. */
 export function parseDiffFiles(diff: string): ParsedFile[] {
-  if (!diff) {
-    return [];
-  }
-
-  return parseDiff(diff);
+  return diff ? parseDiff(diff) : [];
 }
 
 function cleanPath(path: string): string {
@@ -47,14 +43,15 @@ function sortPaths(paths: Iterable<string>): string[] {
 }
 
 function calculateStats(files: readonly ParsedFile[]): DiffStats {
-  return files.reduce(
-    (acc, file) => ({
-      files: acc.files + 1,
-      added: acc.added + file.additions,
-      deleted: acc.deleted + file.deletions,
-    }),
-    { files: 0, added: 0, deleted: 0 }
-  );
+  let added = 0;
+  let deleted = 0;
+
+  for (const file of files) {
+    added += file.additions;
+    deleted += file.deletions;
+  }
+
+  return { files: files.length, added, deleted };
 }
 
 function getUniquePaths(files: readonly ParsedFile[]): Set<string> {

@@ -450,6 +450,23 @@ function createFailureStatusMessage(
   return errorMessage;
 }
 
+async function sendSingleStepProgress(
+  extra: ProgressExtra,
+  toolName: string,
+  context: string,
+  current: 0 | 1,
+  state: 'starting' | 'completed' | 'failed' | 'cancelled'
+): Promise<void> {
+  await sendTaskProgress(extra, {
+    current,
+    total: 1,
+    message:
+      current === 0
+        ? formatProgressStep(toolName, context, state)
+        : formatProgressCompletion(toolName, context, state),
+  });
+}
+
 async function reportProgressStepUpdate(
   reportProgress: (payload: ProgressPayload) => Promise<void>,
   toolName: string,
@@ -553,23 +570,34 @@ export function wrapToolHandler<TInput, TResult extends CallToolResult>(
     const context = normalizeProgressContext(options.progressContext?.(input));
 
     // Start progress (0/1)
-    await sendTaskProgress(extra, {
-      current: 0,
-      total: 1,
-      message: formatProgressStep(options.toolName, context, 'starting'),
-    });
+    try {
+      await sendSingleStepProgress(
+        extra,
+        options.toolName,
+        context,
+        0,
+        'starting'
+      );
+    } catch {
+      // Progress is best-effort; tool execution must not fail on notification errors.
+    }
 
     try {
       const result = await handler(input, extra);
 
       // End progress (1/1)
       const outcome = result.isError ? 'failed' : 'completed';
-
-      await sendTaskProgress(extra, {
-        current: 1,
-        total: 1,
-        message: formatProgressCompletion(options.toolName, context, outcome),
-      });
+      try {
+        await sendSingleStepProgress(
+          extra,
+          options.toolName,
+          context,
+          1,
+          outcome
+        );
+      } catch {
+        // Progress is best-effort; returning a successful tool result takes precedence.
+      }
 
       return result;
     } catch (error) {
@@ -579,11 +607,13 @@ export function wrapToolHandler<TInput, TResult extends CallToolResult>(
 
       // Progress is best-effort; must never mask the original error.
       try {
-        await sendTaskProgress(extra, {
-          current: 1,
-          total: 1,
-          message: formatProgressCompletion(options.toolName, context, outcome),
-        });
+        await sendSingleStepProgress(
+          extra,
+          options.toolName,
+          context,
+          1,
+          outcome
+        );
       } catch {
         // Swallow progress delivery errors so the original error propagates.
       }

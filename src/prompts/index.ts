@@ -38,26 +38,15 @@ const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   concurrency: 'Focus: Race conditions, deadlocks, shared state.',
 };
 
+function isFocusArea(value: string): value is FocusArea {
+  return INSPECTION_FOCUS_AREAS.includes(value as FocusArea);
+}
+
 function completeByPrefix<T extends string>(
   values: readonly T[],
   prefix: string
 ): T[] {
-  const matches: T[] = [];
-  for (const value of values) {
-    if (value.startsWith(prefix)) {
-      matches.push(value);
-    }
-  }
-  return matches;
-}
-
-function getGuide<T extends string>(
-  guides: Record<T, string>,
-  value: string,
-  fallback: (value: string) => string
-): string {
-  const guide = (guides as Record<string, string>)[value];
-  return guide ?? fallback(value);
+  return values.filter((value) => value.startsWith(prefix));
 }
 
 function getToolGuide(tool: string): string {
@@ -75,11 +64,9 @@ function getToolGuide(tool: string): string {
 }
 
 function getFocusAreaGuide(focusArea: string): string {
-  return getGuide(
-    FOCUS_AREA_GUIDES,
-    focusArea,
-    (area) => `Focus on ${area} concerns.`
-  );
+  return isFocusArea(focusArea)
+    ? FOCUS_AREA_GUIDES[focusArea]
+    : `Focus on ${focusArea} concerns.`;
 }
 
 function registerHelpPrompt(server: McpServer, instructions: string): void {

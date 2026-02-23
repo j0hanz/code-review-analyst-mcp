@@ -1,7 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { extractChangedPathsFromFiles } from '../lib/diff-parser.js';
-import { requireToolContract } from '../lib/tool-contracts.js';
+import {
+  buildStructuredToolRuntimeOptions,
+  requireToolContract,
+} from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
@@ -31,15 +34,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingLevel !== undefined
-      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
-      : undefined),
-    ...(TOOL_CONTRACT.temperature !== undefined
-      ? { temperature: TOOL_CONTRACT.temperature }
-      : undefined),
-    ...(TOOL_CONTRACT.deterministicJson !== undefined
-      ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
-      : undefined),
+    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
     formatOutcome: (result) => formatPatchCount(result.blocks.length),
     formatOutput: (result) => {

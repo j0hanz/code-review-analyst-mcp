@@ -22,12 +22,8 @@ const TOOL_REGISTRARS = [
   registerDetectApiBreakingTool,
 ] as const satisfies readonly ToolRegistrar[];
 
-function applyToolRegistrar(server: McpServer, registrar: ToolRegistrar): void {
-  registrar(server);
-}
-
 export function registerAllTools(server: McpServer): void {
   for (const registrar of TOOL_REGISTRARS) {
-    applyToolRegistrar(server, registrar);
+    registrar(server);
   }
 }

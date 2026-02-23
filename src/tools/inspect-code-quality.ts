@@ -2,7 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { validateContextBudget } from '../lib/context-budget.js';
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff-parser.js';
-import { requireToolContract } from '../lib/tool-contracts.js';
+import {
+  buildStructuredToolRuntimeOptions,
+  requireToolContract,
+} from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import {
@@ -86,15 +89,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...(TOOL_CONTRACT.thinkingLevel !== undefined
-      ? { thinkingLevel: TOOL_CONTRACT.thinkingLevel }
-      : undefined),
-    ...(TOOL_CONTRACT.temperature !== undefined
-      ? { temperature: TOOL_CONTRACT.temperature }
-      : undefined),
-    ...(TOOL_CONTRACT.deterministicJson !== undefined
-      ? { deterministicJson: TOOL_CONTRACT.deterministicJson }
-      : undefined),
+    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     progressContext: (input) => {
       const fileCount = input.files?.length;
       return fileCount ? `+${fileCount} files` : '';

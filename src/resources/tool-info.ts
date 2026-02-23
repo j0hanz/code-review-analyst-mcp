@@ -33,10 +33,6 @@ function formatThinkingLevel(thinkingLevel: string | undefined): string {
   return thinkingLevel ?? '-';
 }
 
-function formatOutputTokens(maxOutputTokens: number): string {
-  return formatNumber(maxOutputTokens);
-}
-
 function formatParameterRow(entry: {
   name: string;
   type: string;
@@ -62,7 +58,7 @@ function toToolInfoEntry(
     model: contract.model,
     thinkingLevel: formatThinkingLevel(contract.thinkingLevel),
     timeout: formatTimeout(contract.timeoutMs),
-    maxOutputTokens: formatOutputTokens(contract.maxOutputTokens),
+    maxOutputTokens: formatNumber(contract.maxOutputTokens),
     params: parameterRows.join('\n'),
     outputShape: `\`${contract.outputShape}\``,
     gotchas: contract.gotchas,

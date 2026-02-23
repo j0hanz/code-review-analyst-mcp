@@ -48,7 +48,7 @@ export function validateDiffBudget(
 
   return createErrorToolResponse(
     'E_INPUT_TOO_LARGE',
-    formatDiffBudgetError(providedChars, maxChars),
+    getDiffBudgetError(providedChars, maxChars),
     { providedChars, maxChars },
     BUDGET_ERROR_META
   );

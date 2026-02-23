@@ -24,6 +24,20 @@ type SendResourceUpdated = (params: { uri: string }) => Promise<void>;
 const diffSlots = new Map<string, DiffSlot>();
 let sendResourceUpdated: SendResourceUpdated | undefined;
 
+function setDiffSlot(key: string, data: DiffSlot | undefined): void {
+  if (data) {
+    diffSlots.set(key, data);
+    return;
+  }
+  diffSlots.delete(key);
+}
+
+function notifyDiffUpdated(): void {
+  void sendResourceUpdated?.({ uri: DIFF_RESOURCE_URI }).catch(() => {
+    // Ignore errors sending resource-updated, which can happen if the server is not fully initialized yet.
+  });
+}
+
 /** Call once during server setup so the store can emit resource-updated notifications. */
 export function initDiffStore(server: McpServer): void {
   const inner = (
@@ -41,10 +55,8 @@ export function initDiffStore(server: McpServer): void {
 }
 
 export function storeDiff(data: DiffSlot, key: string = process.cwd()): void {
-  diffSlots.set(key, data);
-  void sendResourceUpdated?.({ uri: DIFF_RESOURCE_URI }).catch(() => {
-    // Ignore errors sending resource-updated, which can happen if the server is not fully initialized yet.
-  });
+  setDiffSlot(key, data);
+  notifyDiffUpdated();
 }
 
 export function getDiff(key: string = process.cwd()): DiffSlot | undefined {
@@ -60,11 +72,7 @@ export function setDiffForTesting(
   data: DiffSlot | undefined,
   key: string = process.cwd()
 ): void {
-  if (data) {
-    diffSlots.set(key, data);
-  } else {
-    diffSlots.delete(key);
-  }
+  setDiffSlot(key, data);
 }
 
 export function createNoDiffError(): ReturnType<

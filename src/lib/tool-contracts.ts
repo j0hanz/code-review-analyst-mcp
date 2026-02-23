@@ -61,6 +61,31 @@ export interface ToolContract {
   constraints?: readonly string[];
 }
 
+interface StructuredToolRuntimeOptions {
+  thinkingLevel?: NonNullable<ToolContract['thinkingLevel']>;
+  temperature?: NonNullable<ToolContract['temperature']>;
+  deterministicJson?: NonNullable<ToolContract['deterministicJson']>;
+}
+
+export function buildStructuredToolRuntimeOptions(
+  contract: Pick<
+    ToolContract,
+    'thinkingLevel' | 'temperature' | 'deterministicJson'
+  >
+): StructuredToolRuntimeOptions {
+  const options: StructuredToolRuntimeOptions = {};
+  if (contract.thinkingLevel !== undefined) {
+    options.thinkingLevel = contract.thinkingLevel;
+  }
+  if (contract.temperature !== undefined) {
+    options.temperature = contract.temperature;
+  }
+  if (contract.deterministicJson !== undefined) {
+    options.deterministicJson = contract.deterministicJson;
+  }
+  return options;
+}
+
 export const TOOL_CONTRACTS = [
   {
     name: 'generate_diff',

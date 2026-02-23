@@ -10,7 +10,12 @@ import { getToolInfo, getToolInfoNames } from './tool-info.js';
 import { buildWorkflowGuide } from './workflows.js';
 
 const RESOURCE_MIME_TYPE = 'text/markdown';
+const PATCH_MIME_TYPE = 'text/x-patch';
 const RESOURCE_AUDIENCE = ['assistant' as const];
+
+function completeByPrefix(values: readonly string[], prefix: string): string[] {
+  return values.filter((value) => value.startsWith(prefix));
+}
 
 function createMarkdownContent(
   uri: URL,
@@ -93,7 +98,7 @@ function registerToolInfoResources(server: McpServer): void {
     new ResourceTemplate('internal://tool-info/{toolName}', {
       list: undefined,
       complete: {
-        toolName: (value) => toolNames.filter((name) => name.startsWith(value)),
+        toolName: (value) => completeByPrefix(toolNames, value),
       },
     }),
     {
@@ -124,9 +129,9 @@ function registerDiffResource(server: McpServer): void {
     {
       title: 'Current Diff',
       description: DIFF_RESOURCE_DESCRIPTION,
-      mimeType: 'text/x-patch',
+      mimeType: PATCH_MIME_TYPE,
       annotations: {
-        audience: ['assistant' as const],
+        audience: RESOURCE_AUDIENCE,
         priority: 1.0,
       },
     },
@@ -135,7 +140,7 @@ function registerDiffResource(server: McpServer): void {
       const text = slot
         ? `# Diff — ${slot.mode} — ${slot.generatedAt}\n# ${slot.stats.files} file(s), +${slot.stats.added} -${slot.stats.deleted}\n\n${slot.diff}`
         : '# No diff cached. Call generate_diff first.';
-      return { contents: [{ uri: uri.href, mimeType: 'text/x-patch', text }] };
+      return { contents: [{ uri: uri.href, mimeType: PATCH_MIME_TYPE, text }] };
     }
   );
 }

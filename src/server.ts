@@ -44,13 +44,10 @@ function readUtf8File(path: string): string {
   }
 }
 
-function loadVersion(): string {
-  const packageJsonPath = findPackageJSON(import.meta.url);
-  if (!packageJsonPath) {
-    throw new Error(`Unable to locate package.json for ${SERVER_NAME}.`);
-  }
-
-  const packageJsonText = readUtf8File(packageJsonPath);
+function parsePackageVersion(
+  packageJsonText: string,
+  packageJsonPath: string
+): string {
   try {
     const json: unknown = JSON.parse(packageJsonText);
     return PackageJsonSchema.parse(json).version;
@@ -59,6 +56,16 @@ function loadVersion(): string {
       `Invalid package.json at ${packageJsonPath}: ${getErrorMessage(error)}`
     );
   }
+}
+
+function loadVersion(): string {
+  const packageJsonPath = findPackageJSON(import.meta.url);
+  if (!packageJsonPath) {
+    throw new Error(`Unable to locate package.json for ${SERVER_NAME}.`);
+  }
+
+  const packageJsonText = readUtf8File(packageJsonPath);
+  return parsePackageVersion(packageJsonText, packageJsonPath);
 }
 
 const SERVER_VERSION = loadVersion();

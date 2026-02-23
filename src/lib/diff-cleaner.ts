@@ -20,6 +20,22 @@ const GIT_BINARY_PATCH = /^GIT binary patch/m;
 const HAS_HUNK = /^@@/m;
 const HAS_OLD_MODE = /^old mode /m;
 
+function shouldKeepSection(section: string): boolean {
+  if (!section.trim()) {
+    return false;
+  }
+  if (BINARY_FILE_LINE.test(section)) {
+    return false;
+  }
+  if (GIT_BINARY_PATCH.test(section)) {
+    return false;
+  }
+  if (HAS_OLD_MODE.test(section) && !HAS_HUNK.test(section)) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Split raw unified diff into per-file sections and strip:
  * - Binary file sections ("Binary files a/... and b/... differ")
@@ -35,14 +51,7 @@ export function cleanDiff(raw: string): string {
   // Split on the start of each "diff --git" header, keeping the header.
   const sections = raw.split(/(?=^diff --git )/m);
 
-  const cleaned = sections.filter((section) => {
-    if (!section.trim()) return false;
-    if (BINARY_FILE_LINE.test(section)) return false;
-    if (GIT_BINARY_PATCH.test(section)) return false;
-    // Drop mode-only sections that have no actual content hunks.
-    if (HAS_OLD_MODE.test(section) && !HAS_HUNK.test(section)) return false;
-    return true;
-  });
+  const cleaned = sections.filter(shouldKeepSection);
 
   return cleaned.join('').trim();
 }
