@@ -17,3 +17,10 @@ test('summarizeSchemaValidationErrorForRetry preserves short errors', () => {
 
   assert.equal(summarized, shortError);
 });
+
+test('summarizeSchemaValidationErrorForRetry compacts repeated whitespace', () => {
+  const noisyError = 'Validation\n\nfailed\tfor    field: severity';
+  const summarized = summarizeSchemaValidationErrorForRetry(noisyError);
+
+  assert.equal(summarized, 'Validation failed for field: severity');
+});

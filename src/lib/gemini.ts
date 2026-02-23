@@ -764,25 +764,31 @@ async function waitForSlot(
       if (settled) return;
       settled = true;
       clearTimeout(deadlineTimer);
-      if (requestSignal) {
-        requestSignal.removeEventListener('abort', onAbort);
-      }
+      detachAbortListener();
       acquireSlot();
       resolve();
     };
 
     waiters.push(waiter);
 
-    const deadlineTimer = setTimeout((): void => {
-      if (settled) return;
-      settled = true;
+    const removeWaiter = (): void => {
       const idx = waiters.indexOf(waiter);
       if (idx !== -1) {
         waiters.splice(idx, 1);
       }
+    };
+
+    const detachAbortListener = (): void => {
       if (requestSignal) {
         requestSignal.removeEventListener('abort', onAbort);
       }
+    };
+
+    const deadlineTimer = setTimeout((): void => {
+      if (settled) return;
+      settled = true;
+      removeWaiter();
+      detachAbortListener();
       reject(new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs)));
     }, waitLimitMs);
     deadlineTimer.unref();
@@ -790,10 +796,7 @@ async function waitForSlot(
     const onAbort = (): void => {
       if (settled) return;
       settled = true;
-      const idx = waiters.indexOf(waiter);
-      if (idx !== -1) {
-        waiters.splice(idx, 1);
-      }
+      removeWaiter();
       clearTimeout(deadlineTimer);
       reject(new Error('Gemini request was cancelled.'));
     };

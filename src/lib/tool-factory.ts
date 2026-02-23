@@ -103,6 +103,28 @@ export interface ToolAnnotations {
   destructiveHint?: boolean;
 }
 
+function buildToolAnnotations(
+  annotations: ToolAnnotations | undefined
+): ToolAnnotations {
+  if (!annotations) {
+    return {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    };
+  }
+
+  const annotationOverrides = { ...annotations };
+  delete annotationOverrides.destructiveHint;
+
+  return {
+    readOnlyHint: !annotations.destructiveHint,
+    idempotentHint: !annotations.destructiveHint,
+    openWorldHint: true,
+    ...annotationOverrides,
+  };
+}
+
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
   TResult extends object = Record<string, unknown>,
@@ -991,19 +1013,7 @@ export function registerStructuredToolTask<
       description: config.description,
       inputSchema: config.inputSchema,
       outputSchema: DefaultOutputSchema,
-      annotations: {
-        readOnlyHint: !config.annotations?.destructiveHint,
-        idempotentHint: !config.annotations?.destructiveHint,
-        openWorldHint: true,
-        ...(() => {
-          if (!config.annotations) {
-            return {};
-          }
-          const annotationOverrides = { ...config.annotations };
-          delete annotationOverrides.destructiveHint;
-          return annotationOverrides;
-        })(),
-      },
+      annotations: buildToolAnnotations(config.annotations),
     },
     {
       createTask: async (
