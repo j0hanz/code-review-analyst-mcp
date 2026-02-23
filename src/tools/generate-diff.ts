@@ -52,6 +52,7 @@ export function registerGenerateDiffTool(server: McpServer): void {
   server.registerTool(
     'generate_diff',
     {
+      title: 'Generate Diff',
       description:
         'Generate a diff of the current branch working changes and cache it for all review tools. You MUST call this tool before calling any other review tool. Use "unstaged" for working-tree changes not yet staged, or "staged" for changes already added with git add.',
       inputSchema: {
@@ -60,6 +61,12 @@ export function registerGenerateDiffTool(server: McpServer): void {
           .describe(
             '"unstaged": working-tree changes not yet staged. "staged": changes added to the index with git add.'
           ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+        destructiveHint: false,
       },
     },
     wrapToolHandler(

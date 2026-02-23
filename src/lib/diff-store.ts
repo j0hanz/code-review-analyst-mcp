@@ -28,10 +28,16 @@ let sendResourceUpdated: SendResourceUpdated | undefined;
 export function initDiffStore(server: McpServer): void {
   const inner = (
     server as unknown as {
-      server: { sendResourceUpdated: SendResourceUpdated };
+      server?: { sendResourceUpdated?: SendResourceUpdated };
     }
   ).server;
-  sendResourceUpdated = inner.sendResourceUpdated.bind(inner);
+  if (typeof inner?.sendResourceUpdated === 'function') {
+    sendResourceUpdated = inner.sendResourceUpdated.bind(inner);
+  } else {
+    console.error(
+      '[diff-store] sendResourceUpdated not available — diff resource notifications disabled.'
+    );
+  }
 }
 
 export function storeDiff(data: DiffSlot, key: string = process.cwd()): void {

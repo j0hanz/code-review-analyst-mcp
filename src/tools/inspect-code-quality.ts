@@ -16,10 +16,12 @@ const PATH_ESCAPE_REPLACEMENTS = {
   '"': '\\"',
   '\n': ' ',
   '\r': ' ',
+  '<': '&lt;',
+  '>': '&gt;',
 } as const;
-const PATH_ESCAPE_PATTERN = /["\n\r]/g;
+const PATH_ESCAPE_PATTERN = /["\n\r<>]/g;
 const SYSTEM_INSTRUCTION = `
-You are a principal engineer performing a deep code review. Identify bugs, security vulnerabilities, performance issues, and maintainability risks from the diff and file context.
+You are a principal engineer performing a deep code review. The unified diff is your primary source of truth — it contains every changed line. File excerpts, if provided, supply supplementary context only (e.g. class structure, imports). Identify bugs, security vulnerabilities, performance issues, and maintainability risks.
 Ignore style issues unless they cause runtime risk. Prioritize correctness and failure modes.
 Return strict JSON only.
 `;
@@ -74,7 +76,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     name: 'inspect_code_quality',
     title: 'Inspect Code Quality',
     description:
-      'Deep code review. Prerequisite: generate_diff. Auto-infer repo/language/focus. Provide file content for best results.',
+      'Deep code review. Prerequisite: generate_diff. Auto-infer repo/language/focus. Operates primarily on the diff; files are optional supplementary excerpts only.',
+
     inputSchema: InspectCodeQualityInputSchema,
     fullInputSchema: InspectCodeQualityInputSchema,
     resultSchema: CodeQualityOutputSchema,
@@ -129,7 +132,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
         input.maxFindings
       );
       const noFilesNote = !input.files?.length
-        ? '\nNote: No file context provided. Leave contextualInsights empty.'
+        ? '\nNote: No file excerpts provided. Review based on diff only; leave contextualInsights empty.'
         : '';
 
       return {

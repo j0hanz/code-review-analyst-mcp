@@ -62,6 +62,8 @@ const schemaRetryErrorCharsConfig = createCachedEnvInt(
 const DETERMINISTIC_JSON_RETRY_NOTE =
   'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
 
+const JSON_PARSE_ERROR_PATTERN = /model produced invalid json/i;
+
 type ProgressToken = string | number;
 
 interface ProgressNotificationParams {
@@ -235,6 +237,11 @@ function createSchemaRetryPrompt(
     summarizedError,
     prompt: `${prompt}\n\nCRITICAL: The previous response failed schema validation. Error: ${summarizedError}${deterministicNote}`,
   };
+}
+
+function isRetryableSchemaError(error: unknown): boolean {
+  const isZodError = error instanceof z.ZodError;
+  return isZodError || JSON_PARSE_ERROR_PATTERN.test(getErrorMessage(error));
 }
 
 function createGenerationRequest<
@@ -780,7 +787,10 @@ export function registerStructuredToolTask<
                 parsed = config.resultSchema.parse(raw);
                 break;
               } catch (error: unknown) {
-                if (attempt >= maxRetries || !(error instanceof z.ZodError)) {
+                // Trigger schema repair for Zod validation failures and for
+                // invalid-JSON responses (parseStructuredResponse throws a
+                // plain Error when the model produces unparseable JSON).
+                if (attempt >= maxRetries || !isRetryableSchemaError(error)) {
                   throw error;
                 }
 

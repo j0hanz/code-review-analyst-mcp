@@ -71,7 +71,7 @@ export const FileContextSchema = z.strictObject({
   content: createBoundedString(
     INPUT_LIMITS.fileContext.content.min,
     INPUT_LIMITS.fileContext.content.max,
-    'Full file content.'
+    'Relevant file excerpt. Prefer the changed section plus ≤20 lines of surrounding context. Avoid full files — the diff already contains all changed lines.'
   ),
 });
 
@@ -113,7 +113,7 @@ export const InspectCodeQualityInputSchema = z.strictObject({
     .max(INPUT_LIMITS.fileContext.maxItems)
     .optional()
     .describe(
-      'Full content of changed files. Highly recommended for accurate analysis. Omit if unavailable.'
+      'Optional. Short excerpts for supplementary context (e.g. class structure, imports not visible in the diff). Omit in most cases — the diff is the primary source. Token-expensive; never pass full files.'
     ),
 });
 

@@ -44,13 +44,20 @@ ${parameterLines.join('\n')}
     contract.thinkingLevel === undefined
       ? '- Thinking level: disabled'
       : `- Thinking level: ${contract.thinkingLevel}`;
+  const temperatureLine =
+    contract.temperature !== undefined
+      ? `\n- Temperature: ${contract.temperature}`
+      : '';
+  const deterministicLine = contract.deterministicJson
+    ? '\n- Deterministic JSON: enabled'
+    : '';
 
   return `### \`${contract.name}\`
 - Purpose: ${contract.purpose}
 - Model: \`${contract.model}\`
 - Timeout: ${Math.round(contract.timeoutMs / 1_000)}s
 ${thinkingLine}
-- Max output tokens: ${contract.maxOutputTokens}
+- Max output tokens: ${contract.maxOutputTokens}${temperatureLine}${deterministicLine}
 - Parameters:
 ${parameterLines.join('\n')}
 - Output shape: \`${contract.outputShape}\``;

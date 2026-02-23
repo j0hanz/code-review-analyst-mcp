@@ -8,6 +8,8 @@ const CONSTRAINT_KEYS = new Set([
   'minItems',
   'maxItems',
   'multipleOf',
+  'pattern',
+  'format',
 ]);
 const INTEGER_JSON_TYPE = 'integer';
 const NUMBER_JSON_TYPE = 'number';

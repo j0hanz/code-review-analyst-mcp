@@ -163,7 +163,9 @@ export const TOOL_CONTRACTS = [
   },
   {
     name: 'inspect_code_quality',
-    purpose: 'Deep code review with optional full-file context.',
+    purpose:
+      'Deep code review over the cached diff; files are optional supplementary excerpts only.',
+
     model: PRO_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
     thinkingLevel: PRO_THINKING_LEVEL,
@@ -204,7 +206,8 @@ export const TOOL_CONTRACTS = [
         type: 'object[]',
         required: false,
         constraints: '1-20 files, 100K chars/file',
-        description: 'Optional full file content context.',
+        description:
+          'Optional short excerpts for supplementary context only; avoid full files — the diff is the primary source.',
       },
     ],
     outputShape:
@@ -213,6 +216,7 @@ export const TOOL_CONTRACTS = [
       'Requires generate_diff to be called first.',
       'Combined diff + file context is bounded by MAX_CONTEXT_CHARS.',
       'maxFindings caps output after generation.',
+      'files[] is token-expensive — omit unless the diff lacks critical structural context (e.g. class hierarchy, imports). Never pass full files.',
     ],
     crossToolFlow: [
       'findings[].title -> suggest_search_replace.findingTitle',
