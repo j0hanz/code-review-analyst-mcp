@@ -28,6 +28,18 @@ const execFileAsync = promisify(execFile);
 
 type DiffMode = 'unstaged' | 'staged';
 
+async function findGitRoot(): Promise<string> {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['rev-parse', '--show-toplevel'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+  return stdout.trim();
+}
+
 function buildGitArgs(mode: DiffMode): string[] {
   const args = ['diff', '--no-color', '--no-ext-diff'];
 
@@ -79,10 +91,9 @@ export function registerGenerateDiffTool(server: McpServer): void {
         const args = buildGitArgs(mode);
 
         try {
-          // execFileAsync with an explicit args array — no shell, no interpolation.
-          // 'git' is resolved via PATH which is controlled by the server environment.
+          const gitRoot = await findGitRoot();
           const { stdout } = await execFileAsync('git', args, {
-            cwd: process.cwd(),
+            cwd: gitRoot,
             encoding: 'utf8',
             maxBuffer: GIT_MAX_BUFFER,
             timeout: GIT_TIMEOUT_MS,

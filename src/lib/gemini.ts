@@ -532,8 +532,11 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
     throw new Error('Gemini returned an empty response body.');
   }
 
+  const jsonMatch = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u.exec(responseText);
+  const jsonText = jsonMatch?.[1] ?? responseText;
+
   try {
-    return JSON.parse(responseText);
+    return JSON.parse(jsonText);
   } catch (error: unknown) {
     throw new Error(`Model produced invalid JSON: ${getErrorMessage(error)}`);
   }
