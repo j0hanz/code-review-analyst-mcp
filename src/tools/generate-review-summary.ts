@@ -75,7 +75,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
       };
     },
     formatOutput: (result) =>
-      `Review Summary: ${result.summary}\nRecommendation: ${result.recommendation}`,
+      `${result.summary}\nRecommendation: ${result.recommendation}`,
     buildPrompt: (input: ReviewSummaryInput, ctx) => {
       const { diff, files, added, deleted } = getDiffStats(ctx);
       const languageSegment = formatLanguageSegment(input.language);

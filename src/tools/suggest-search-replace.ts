@@ -41,7 +41,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     formatOutput: (result) => {
       const count = result.blocks.length;
       const patches = formatPatchCount(count);
-      return `${result.summary}\n${patches} • Checklist: ${result.validationChecklist.join(' | ')}`;
+      return `${result.summary}\n${patches} • ${result.validationChecklist.join(' | ')}`;
     },
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';

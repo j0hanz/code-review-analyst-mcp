@@ -37,8 +37,7 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
     formatOutcome: (result) => `severity: ${result.severity}`,
-    formatOutput: (result) =>
-      `Impact Analysis (${result.severity}): ${result.summary}`,
+    formatOutput: (result) => `[${result.severity}] ${result.summary}`,
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
       const files = ctx.diffSlot?.parsedFiles ?? [];

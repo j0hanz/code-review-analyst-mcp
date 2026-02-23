@@ -42,7 +42,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     requiresDiff: true,
     formatOutcome: (result) => `${result.testCases.length} test cases`,
     formatOutput: (result) =>
-      `Test Plan: ${result.summary}\n${result.testCases.length} cases proposed.`,
+      `${result.summary}\n${result.testCases.length} test cases.`,
     transformResult: (input, result) => {
       const cappedTestCases = result.testCases.slice(
         0,

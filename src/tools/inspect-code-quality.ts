@@ -109,10 +109,8 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const count = result.findings.length;
       const total = result.totalFindings ?? count;
       const findingsSuffix =
-        count < total
-          ? `${count} of ${total} findings reported.`
-          : `${count} findings reported.`;
-      return `Code Quality Inspection: ${result.summary}\n${findingsSuffix}`;
+        count < total ? `${count} of ${total} findings.` : `${count} findings.`;
+      return `${result.summary}\n${findingsSuffix}`;
     },
     transformResult: (input, result) => {
       const totalFindings = result.findings.length;

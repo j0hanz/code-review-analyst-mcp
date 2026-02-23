@@ -37,7 +37,7 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
         ? 'Performance degradation detected'
         : 'No degradation',
     formatOutput: (result) =>
-      `Complexity Analysis: Time=${result.timeComplexity}, Space=${result.spaceComplexity}. ${result.explanation}`,
+      `Time=${result.timeComplexity}, Space=${result.spaceComplexity}. ${result.explanation}`,
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
       const languageLine = input.language

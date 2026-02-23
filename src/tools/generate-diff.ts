@@ -116,7 +116,7 @@ export function registerGenerateDiffTool(server: McpServer): void {
 
           storeDiff({ diff: cleaned, parsedFiles, stats, generatedAt, mode });
 
-          const summary = `Diff cached at ${DIFF_RESOURCE_URI} — ${stats.files} file(s), +${stats.added} -${stats.deleted}. All review tools are now ready.`;
+          const summary = `Diff cached: ${stats.files} files (+${stats.added}, -${stats.deleted})`;
 
           return createToolResponse(
             {

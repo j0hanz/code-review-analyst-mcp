@@ -36,8 +36,8 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
       `${result.breakingChanges.length} breaking change(s) found`,
     formatOutput: (result) =>
       result.hasBreakingChanges
-        ? `API Breaking Changes: ${result.breakingChanges.length} found.`
-        : 'No API breaking changes detected.',
+        ? `${result.breakingChanges.length} breaking changes found.`
+        : 'No breaking changes.',
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
       const languageLine = input.language
