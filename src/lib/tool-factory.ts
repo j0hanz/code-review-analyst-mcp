@@ -87,6 +87,13 @@ interface ProgressExtra {
   }) => Promise<void>;
 }
 
+export interface ToolAnnotations {
+  readOnlyHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  destructiveHint?: boolean;
+}
+
 export interface StructuredToolTaskConfig<
   TInput extends object = Record<string, unknown>,
   TResult extends object = Record<string, unknown>,
@@ -173,6 +180,9 @@ export interface StructuredToolTaskConfig<
 
   /** Optional short outcome suffix for the completion progress message (e.g., "3 findings"). */
   formatOutcome?: (result: TFinal) => string;
+
+  /** Optional MCP annotation overrides for this tool. */
+  annotations?: ToolAnnotations;
 
   /** Builds the system instruction and user prompt from parsed tool input. */
   buildPrompt: (input: TInput, ctx: ToolExecutionContext) => PromptParts;
@@ -658,6 +668,8 @@ export class ToolTaskRunner<
   TResult extends object,
   TFinal extends TResult,
 > {
+  private diffSlotSnapshot: DiffSlot | undefined;
+  private hasSnapshot = false;
   private readonly responseSchema: Record<string, unknown>;
   private readonly onLog: (level: string, data: unknown) => Promise<void>;
   private readonly reportProgress: (payload: ProgressPayload) => Promise<void>;
@@ -676,6 +688,11 @@ export class ToolTaskRunner<
     this.onLog = createGeminiLogger(server, task.taskId);
     this.reportProgress = createProgressReporter(extra);
     this.progressContext = DEFAULT_PROGRESS_CONTEXT;
+  }
+
+  setDiffSlotSnapshot(diffSlotSnapshot: DiffSlot | undefined): void {
+    this.diffSlotSnapshot = diffSlotSnapshot;
+    this.hasSnapshot = true;
   }
 
   private async updateStatusMessage(message: string): Promise<void> {
@@ -816,8 +833,11 @@ export class ToolTaskRunner<
         this.config.progressContext?.(inputRecord)
       );
 
-      // Snapshot the diff slot ONCE
-      const ctx: ToolExecutionContext = { diffSlot: getDiff() };
+      // Prefer createTask snapshot; fallback preserves backward compatibility
+      // for any direct constructor callers.
+      const ctx: ToolExecutionContext = {
+        diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
+      };
 
       await reportProgressStepUpdate(
         this.reportProgress,
@@ -922,9 +942,17 @@ export function registerStructuredToolTask<
       inputSchema: config.inputSchema,
       outputSchema: DefaultOutputSchema,
       annotations: {
-        readOnlyHint: true,
-        idempotentHint: true,
+        readOnlyHint: !config.annotations?.destructiveHint,
+        idempotentHint: !config.annotations?.destructiveHint,
         openWorldHint: true,
+        ...(() => {
+          if (!config.annotations) {
+            return {};
+          }
+          const annotationOverrides = { ...config.annotations };
+          delete annotationOverrides.destructiveHint;
+          return annotationOverrides;
+        })(),
       },
     },
     {
@@ -936,7 +964,12 @@ export function registerStructuredToolTask<
           ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
         });
 
+        const currentDiff = getDiff();
+        // Snapshot by reference: diff-store replaces slots on update, so this
+        // preserves task-level TOCTOU safety without deep-clone overhead.
+        const diffSlotSnapshot = currentDiff;
         const runner = new ToolTaskRunner(server, config, extra, task);
+        runner.setDiffSlotSnapshot(diffSlotSnapshot);
 
         setImmediate(() => {
           void runner.run(input).catch(async (error: unknown) => {

@@ -68,6 +68,7 @@ export function buildServerInstructions(): string {
 
 ## CORE
 - Domain: Gemini-powered diff review.
+- Capabilities: tools, resources (subscribe), prompts, logging, completions, tasks.
 - Tools: ${toolNames}
 
 ## PROMPTS
@@ -81,5 +82,6 @@ ${toolSections.join('\n\n')}
 
 ## CONSTRAINTS
 ${constraintLines.join('\n')}
+- Task terminal states: \`completed\` and \`failed\`; cancellations are surfaced as \`failed\` with \`error.kind=cancelled\`.
 `;
 }

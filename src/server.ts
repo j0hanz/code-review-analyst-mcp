@@ -23,6 +23,7 @@ const PackageJsonSchema = z.object({
 const SERVER_CAPABILITIES = {
   logging: {},
   completions: {},
+  prompts: {},
   resources: { subscribe: true },
   tools: {},
   tasks: {
