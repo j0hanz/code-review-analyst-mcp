@@ -12,8 +12,8 @@ import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 const SYSTEM_INSTRUCTION = `
 Code Remediation Expert.
 Generate minimal search/replace blocks for described issue.
-CRITICAL: 'search' must be verbatim (exact whitespace/indentation).
-No out-of-scope changes. Omit if imprecise.
+Constraint: 'search' must be verbatim (exact whitespace/indentation).
+Constraint: No context drift. Omit patch if exact match uncertain.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('suggest_search_replace');

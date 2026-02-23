@@ -29,13 +29,16 @@ const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
 const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
 
 const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
-  security: 'Focus: Injection, auth, crypto, OWASP.',
-  correctness: 'Focus: Logic, edge cases, algorithms, contracts.',
-  performance: 'Focus: Complexity, allocations, I/O, queries.',
-  regressions: 'Focus: Behavior changes, guards, types, breaks.',
-  tests: 'Focus: Coverage, edge cases, flakes, error paths.',
-  maintainability: 'Focus: Complexity, readability, structure, patterns.',
-  concurrency: 'Focus: Race conditions, deadlocks, shared state.',
+  security: 'Focus: Injection (SQL/XSS), auth, crypto, OWASP Top 10.',
+  correctness:
+    'Focus: Logic errors, edge cases, algorithm validity, type safety.',
+  performance:
+    'Focus: Big-O complexity, memory allocations, I/O latency, N+1 queries.',
+  regressions: 'Focus: Behavior changes, missing guards, breaking API changes.',
+  tests: 'Focus: Missing coverage, flaky tests, error paths.',
+  maintainability:
+    'Focus: Code complexity, readability, DRY violations, patterns.',
+  concurrency: 'Focus: Race conditions, deadlocks, lack of atomicity.',
 };
 
 function isFocusArea(value: string): value is FocusArea {

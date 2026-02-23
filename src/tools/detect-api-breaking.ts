@@ -11,8 +11,8 @@ import { DetectApiBreakingResultSchema } from '../schemas/outputs.js';
 const SYSTEM_INSTRUCTION = `
 API Compatibility Analyst.
 Detect breaking changes to public APIs/contracts/interfaces.
-Breaking = consumer update required.
-Classify: element, nature, impact, mitigation.
+Definition: Breaking change = requires consumer code modification.
+Output: element, nature, impact, mitigation.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('detect_api_breaking_changes');

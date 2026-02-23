@@ -11,9 +11,9 @@ import { TestPlanResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
 QA Automation Architect.
-Test plan for diff.
-Prioritize: negative, edge, branches, integration.
-Target specific visible behavior.
+Generate test plan for diff.
+Prioritize: negative cases, edge cases, branch coverage, integration points.
+Focus: observable behavior only.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('generate_test_plan');

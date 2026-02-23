@@ -11,7 +11,7 @@ import { PrImpactResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
 Technical Change Analyst.
-Analyze diff for objective impact: severity, categories, breaking changes, affected areas, rollback complexity.
+Assess objective impact: severity, risk categories, breaking changes, rollback cost.
 Strictly diff-based; no inference.
 Return strict JSON.
 `;

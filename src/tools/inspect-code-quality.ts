@@ -27,7 +27,7 @@ const SYSTEM_INSTRUCTION = `
 Principal Engineer Code Review.
 Source: Unified diff (primary), File excerpts (supplementary context).
 Goal: Identify bugs, security, performance, maintainability.
-Ignore style. Prioritize correctness/failure modes.
+Constraint: Ignore style/formatting. Prioritize correctness/failure modes.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('inspect_code_quality');

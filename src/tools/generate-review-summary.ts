@@ -20,7 +20,7 @@ const TOOL_CONTRACT = requireToolContract('generate_review_summary');
 const SYSTEM_INSTRUCTION = `
 Senior Code Reviewer.
 Summarize PR: risk, key changes, merge recommendation (merge/squash/block).
-Specific logic changes only.
+Focus: Logic/behavior changes. Ignore: formatting/style/typos.
 Return strict JSON.
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;

@@ -12,7 +12,7 @@ const SYSTEM_INSTRUCTION = `
 Algorithm Complexity Analyst.
 Analyze Big-O time/space complexity for changes.
 Detect performance degradation vs original.
-Identify bottlenecks (loops, recursion, aux structures).
+Identify bottlenecks: nested loops, unbounded recursion, heavy allocations.
 Return strict JSON.
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_time_space_complexity');
