@@ -1,9 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type { ParsedFile } from './diff-parser.js';
+import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse } from './tool-response.js';
 
 export const DIFF_RESOURCE_URI = 'diff://current';
+
+const diffCacheTtlMs = createCachedEnvInt(
+  'DIFF_CACHE_TTL_MS',
+  60 * 60 * 1_000 // 1 hour default
+);
 
 export interface DiffStats {
   files: number;
@@ -60,7 +66,18 @@ export function storeDiff(data: DiffSlot, key: string = process.cwd()): void {
 }
 
 export function getDiff(key: string = process.cwd()): DiffSlot | undefined {
-  return diffSlots.get(key);
+  const slot = diffSlots.get(key);
+  if (!slot) {
+    return undefined;
+  }
+
+  const age = Date.now() - new Date(slot.generatedAt).getTime();
+  if (age > diffCacheTtlMs.get()) {
+    diffSlots.delete(key);
+    return undefined;
+  }
+
+  return slot;
 }
 
 export function hasDiff(key: string = process.cwd()): boolean {

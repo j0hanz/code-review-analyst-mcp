@@ -564,7 +564,16 @@ function createGeminiLogger(
         },
       });
     } catch {
-      // Logging is best-effort; never fail the tool call.
+      try {
+        const timestamp = new Date().toISOString();
+        const payload = JSON.stringify(asObjectRecord(data));
+        console.error(
+          `[${timestamp}] [gemini:${level}] ${taskId} - ${payload}`
+        );
+      } catch {
+        // Safe fallback if JSON stringify fails
+        console.error(`[gemini:${level}] ${taskId} - (logging failed)`);
+      }
     }
   };
 }
