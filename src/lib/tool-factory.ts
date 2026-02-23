@@ -500,7 +500,6 @@ async function sendSingleStepProgress(
 ): Promise<void> {
   await sendTaskProgress(extra, {
     current,
-    total: 1,
     message:
       current === 0
         ? formatProgressStep(toolName, context, state)
@@ -517,7 +516,6 @@ async function reportProgressStepUpdate(
 ): Promise<void> {
   await reportProgress({
     current,
-    total: TASK_PROGRESS_TOTAL,
     message: formatProgressStep(toolName, context, metadata),
   });
 }
@@ -530,7 +528,6 @@ async function reportProgressCompletionUpdate(
 ): Promise<void> {
   await reportProgress({
     current: TASK_PROGRESS_TOTAL,
-    total: TASK_PROGRESS_TOTAL,
     message: formatProgressCompletion(toolName, context, outcome),
   });
 }
