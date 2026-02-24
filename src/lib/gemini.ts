@@ -52,6 +52,7 @@ const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off']);
 const SLEEP_UNREF_OPTIONS = { ref: false } as const;
 const JSON_CODE_BLOCK_PATTERN = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u;
+const NEVER_ABORT_SIGNAL = new AbortController().signal;
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
 const maxConcurrentBatchCallsConfig = createCachedEnvInt(
@@ -1082,12 +1083,13 @@ async function runInlineBatchWithPolling(
   let timedOut = false;
 
   try {
+    const createSignal = request.signal ?? NEVER_ABORT_SIGNAL;
     const createPayload: Record<string, unknown> = {
       model,
       src: [
         {
           contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
-          config: buildGenerationConfig(request, new AbortController().signal),
+          config: buildGenerationConfig(request, createSignal),
         },
       ],
     };

@@ -279,13 +279,25 @@ docker build -t code-review-analyst-mcp .
 
 ## Tools
 
+> [!IMPORTANT]
+> Call `generate_diff` first (`mode: "unstaged"` or `"staged"`). All review tools read the cached server-side diff (`diff://current`) and do not accept a direct `diff` parameter.
+
+### `generate_diff`
+
+Generate and cache the current branch diff for downstream review tools.
+
+| Parameter | Type     | Required | Description                                        |
+| --------- | -------- | -------- | -------------------------------------------------- |
+| `mode`    | `string` | Yes      | `unstaged` (working tree) or `staged` (git index). |
+
+**Returns:** `diffRef`, `stats` (files, added, deleted), `generatedAt`, `mode`, `message`.
+
 ### `analyze_pr_impact`
 
-Assess the impact and risk of a pull request diff using the Flash model.
+Assess the impact and risk of cached pull request changes using the Flash model.
 
 | Parameter    | Type     | Required | Description                              |
 | ------------ | -------- | -------- | ---------------------------------------- |
-| `diff`       | `string` | Yes      | Unified diff text.                       |
 | `repository` | `string` | Yes      | Repository identifier (e.g. `org/repo`). |
 | `language`   | `string` | No       | Primary language hint.                   |
 
@@ -297,7 +309,6 @@ Summarize a pull request diff and assess high-level risk using the Flash model.
 
 | Parameter    | Type     | Required | Description                              |
 | ------------ | -------- | -------- | ---------------------------------------- |
-| `diff`       | `string` | Yes      | Unified diff text.                       |
 | `repository` | `string` | Yes      | Repository identifier (e.g. `org/repo`). |
 | `language`   | `string` | No       | Primary language hint.                   |
 
@@ -309,7 +320,6 @@ Deep-dive code review using the Pro model with thinking (16K token budget).
 
 | Parameter     | Type       | Required | Description                                   |
 | ------------- | ---------- | -------- | --------------------------------------------- |
-| `diff`        | `string`   | Yes      | Unified diff text.                            |
 | `repository`  | `string`   | Yes      | Repository identifier (e.g. `org/repo`).      |
 | `language`    | `string`   | No       | Primary language hint.                        |
 | `focusAreas`  | `string[]` | No       | Areas to inspect: security, correctness, etc. |
@@ -326,7 +336,6 @@ Generate verbatim search-and-replace blocks to fix a specific finding using the 
 
 | Parameter        | Type     | Required | Description                              |
 | ---------------- | -------- | -------- | ---------------------------------------- |
-| `diff`           | `string` | Yes      | Unified diff that contains the issue.    |
 | `findingTitle`   | `string` | Yes      | Short title of the finding to fix.       |
 | `findingDetails` | `string` | Yes      | Detailed explanation of the bug or risk. |
 
@@ -338,7 +347,6 @@ Create a test plan covering the changes in the diff using the Flash model with t
 
 | Parameter       | Type     | Required | Description                                 |
 | --------------- | -------- | -------- | ------------------------------------------- |
-| `diff`          | `string` | Yes      | Unified diff to generate tests for.         |
 | `repository`    | `string` | Yes      | Repository identifier (e.g. `org/repo`).    |
 | `language`      | `string` | No       | Primary language hint.                      |
 | `testFramework` | `string` | No       | Test framework (e.g. jest, vitest, pytest). |

@@ -125,7 +125,7 @@ export const DIFF_RESOURCE_DESCRIPTION =
 function registerDiffResource(server: McpServer): void {
   server.registerResource(
     'diff-current',
-    new ResourceTemplate(DIFF_RESOURCE_URI, { list: undefined }),
+    DIFF_RESOURCE_URI,
     {
       title: 'Current Diff',
       description: DIFF_RESOURCE_DESCRIPTION,

@@ -40,10 +40,14 @@ test('resource internal://instructions is discoverable', async () => {
     const resource = result.resources.find(
       (r) => r.uri === 'internal://instructions'
     );
+    const diffResource = result.resources.find(
+      (r) => r.uri === 'diff://current'
+    );
 
     assert.ok(resource, 'internal://instructions resource should exist');
     assert.equal(resource.mimeType, 'text/markdown');
     assert.equal(resource.name, 'server-instructions');
+    assert.ok(diffResource, 'diff://current resource should exist');
   } finally {
     await close();
   }
@@ -67,6 +71,25 @@ test('resource internal://instructions returns markdown content', async () => {
     assert.ok(
       typeof content.text === 'string' && content.text.length > 0,
       'Resource text should be non-empty'
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('dynamic resource templates are discoverable', async () => {
+  const { client, connect, close } = createClientServerPair();
+  await connect();
+
+  try {
+    const result = await client.listResourceTemplates();
+
+    const toolInfoTemplate = result.resourceTemplates.find(
+      (template) => template.uriTemplate === 'internal://tool-info/{toolName}'
+    );
+    assert.ok(
+      toolInfoTemplate,
+      'internal://tool-info/{toolName} template should exist'
     );
   } finally {
     await close();
