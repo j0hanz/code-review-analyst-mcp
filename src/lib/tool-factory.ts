@@ -12,7 +12,12 @@ import type {
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
-import { createNoDiffError, type DiffSlot, getDiff } from './diff-store.js';
+import {
+  createNoDiffError,
+  type DiffSlot,
+  diffStaleWarningMs,
+  getDiff,
+} from './diff-store.js';
 import { validateDiffBudget } from './diff.js';
 import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
@@ -1001,9 +1006,18 @@ export class ToolTaskRunner<
           : parsed
       ) as TFinal;
 
-      const textContent = this.config.formatOutput
+      let textContent = this.config.formatOutput
         ? this.config.formatOutput(finalResult)
         : undefined;
+
+      if (ctx.diffSlot) {
+        const ageMs = Date.now() - new Date(ctx.diffSlot.generatedAt).getTime();
+        if (ageMs > diffStaleWarningMs.get()) {
+          const ageMinutes = Math.round(ageMs / 60_000);
+          const warning = `\n\n⚠️ Warning: The analyzed diff is over ${ageMinutes} minutes old. If you have made recent changes, please run generate_diff again.`;
+          textContent = textContent ? textContent + warning : warning;
+        }
+      }
 
       const outcome = this.config.formatOutcome?.(finalResult) ?? 'completed';
       await reportProgressCompletionUpdate(

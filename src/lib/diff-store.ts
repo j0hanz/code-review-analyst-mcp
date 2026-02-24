@@ -11,6 +11,11 @@ const diffCacheTtlMs = createCachedEnvInt(
   60 * 60 * 1_000 // 1 hour default
 );
 
+export const diffStaleWarningMs = createCachedEnvInt(
+  'DIFF_STALE_WARNING_MS',
+  5 * 60 * 1_000 // 5 minutes default
+);
+
 export interface DiffStats {
   files: number;
   added: number;
