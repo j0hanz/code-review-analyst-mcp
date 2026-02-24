@@ -28,16 +28,6 @@ const THINKING_LEVELS = {
   flashHigh: 'high',
 } as const;
 
-// Thinking budget in tokens for Flash tools. Note that these are not hard limits, but rather guidelines to encourage concise responses and manage latency/cost.
-const OUTPUT_TOKEN_BUDGET = {
-  flashApiBreaking: 4_096,
-  flashComplexity: 4_096,
-  flashTestPlan: 8_192,
-  flashTriage: 4_096,
-  flashPatch: 8_192,
-  flashReview: 12_288,
-} as const;
-
 /** Thinking level for Flash triage. */
 export const FLASH_TRIAGE_THINKING_LEVEL = THINKING_LEVELS.flashTriage;
 
@@ -47,26 +37,26 @@ export const FLASH_THINKING_LEVEL = THINKING_LEVELS.flash;
 /** Thinking level for Flash deep analysis. */
 export const FLASH_HIGH_THINKING_LEVEL = THINKING_LEVELS.flashHigh;
 
+// Output token caps for various tools. Set to a high default to avoid cutting off important information, but can be adjusted as needed.
+const DEFAULT_OUTPUT_CAP = 65_536;
+
 /** Output cap for Flash API breaking-change detection. */
-export const FLASH_API_BREAKING_MAX_OUTPUT_TOKENS =
-  OUTPUT_TOKEN_BUDGET.flashApiBreaking;
+export const FLASH_API_BREAKING_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 /** Output cap for Flash complexity analysis. */
-export const FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS =
-  OUTPUT_TOKEN_BUDGET.flashComplexity;
+export const FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 /** Output cap for Flash test-plan generation. */
-export const FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS =
-  OUTPUT_TOKEN_BUDGET.flashTestPlan;
+export const FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 /** Output cap for Flash triage tools. */
-export const FLASH_TRIAGE_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashTriage;
+export const FLASH_TRIAGE_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 /** Output cap for Flash patch generation. */
-export const FLASH_PATCH_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashPatch;
+export const FLASH_PATCH_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 /** Output cap for Flash deep review findings. */
-export const FLASH_REVIEW_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashReview;
+export const FLASH_REVIEW_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
 // ---------------------------------------------------------------------------
 // Temperatures
