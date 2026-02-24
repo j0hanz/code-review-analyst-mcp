@@ -39,7 +39,7 @@ ${parameterLines.join('\n')}
   }
 
   const modelInfo = [
-    contract.model.includes('flash') ? 'Flash' : 'Pro',
+    'Flash',
     contract.thinkingLevel ? `Thinking:${contract.thinkingLevel}` : '',
     `${Math.round(contract.timeoutMs / 1_000)}s`,
     `MaxTokens:${contract.maxOutputTokens}`,

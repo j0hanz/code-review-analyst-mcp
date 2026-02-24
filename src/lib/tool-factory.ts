@@ -189,9 +189,6 @@ export interface StructuredToolTaskConfig<
   /** Optional override for schema validation retries. Defaults to GEMINI_SCHEMA_RETRIES env var. */
   schemaRetries?: number;
 
-  /** Optional Gemini model to use (e.g. 'gemini-3-pro-preview'). */
-  model?: string;
-
   /** Optional thinking level. */
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
 
@@ -336,9 +333,6 @@ function createGenerationRequest<
     onLog,
   };
 
-  if (config.model !== undefined) {
-    request.model = config.model;
-  }
   if (config.thinkingLevel !== undefined) {
     request.thinkingLevel = config.thinkingLevel;
   }
@@ -510,14 +504,6 @@ function formatProgressStep(
   metadata: string
 ): string {
   return `${toolName}: ${context} [${metadata}]`;
-}
-
-function friendlyModelName(model: string | undefined): string {
-  if (!model) return 'calling model';
-  const normalized = model.toLowerCase();
-  if (normalized.includes('pro')) return 'calling Pro';
-  if (normalized.includes('flash')) return 'calling Flash';
-  return 'calling model';
 }
 
 function formatProgressCompletion(
@@ -979,15 +965,14 @@ export class ToolTaskRunner<
       const promptParts = this.config.buildPrompt(inputRecord, ctx);
       const { prompt, systemInstruction } = promptParts;
 
-      const modelLabel = friendlyModelName(this.config.model);
       await reportProgressStepUpdate(
         this.reportProgress,
         this.config.name,
         this.progressContext,
         STEP_CALLING_MODEL,
-        modelLabel
+        'calling model'
       );
-      await this.updateStatusMessage(modelLabel);
+      await this.updateStatusMessage('calling model');
 
       const parsed = await this.executeModelCall(systemInstruction, prompt);
 

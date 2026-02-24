@@ -31,7 +31,6 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
     errorCode: 'E_ANALYZE_IMPACT',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

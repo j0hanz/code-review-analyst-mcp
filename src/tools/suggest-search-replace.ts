@@ -32,7 +32,6 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

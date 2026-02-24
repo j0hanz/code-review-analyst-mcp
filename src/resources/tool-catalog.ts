@@ -27,8 +27,8 @@ generate_review_summary ──→ overallRisk ──────┤
 
 ## When to Use Each Tool
 
-- **Triage**: \`analyze_pr_impact\`, \`generate_review_summary\` (Flash).
-- **Inspection**: \`inspect_code_quality\` (Pro).
+- **Triage**: \`analyze_pr_impact\`, \`generate_review_summary\`.
+- **Inspection**: \`inspect_code_quality\`.
 - **Fixes**: \`suggest_search_replace\` (one finding/call).
 - **Tests**: \`generate_test_plan\`.
 - **Complexity**: \`analyze_time_space_complexity\`.

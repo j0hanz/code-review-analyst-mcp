@@ -1,19 +1,18 @@
 import {
   ANALYSIS_TEMPERATURE,
   CREATIVE_TEMPERATURE,
-  DEFAULT_TIMEOUT_PRO_MS,
+  DEFAULT_TIMEOUT_EXTENDED_MS,
   FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
   FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
+  FLASH_HIGH_THINKING_LEVEL,
   FLASH_MODEL,
+  FLASH_PATCH_MAX_OUTPUT_TOKENS,
+  FLASH_REVIEW_MAX_OUTPUT_TOKENS,
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
   FLASH_THINKING_LEVEL,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
   FLASH_TRIAGE_THINKING_LEVEL,
   PATCH_TEMPERATURE,
-  PRO_MODEL,
-  PRO_PATCH_MAX_OUTPUT_TOKENS,
-  PRO_REVIEW_MAX_OUTPUT_TOKENS,
-  PRO_THINKING_LEVEL,
   TRIAGE_TEMPERATURE,
 } from './model-config.js';
 
@@ -190,10 +189,10 @@ export const TOOL_CONTRACTS = [
     name: 'inspect_code_quality',
     purpose: 'Deep code review over the cached diff.',
 
-    model: PRO_MODEL,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
-    thinkingLevel: PRO_THINKING_LEVEL,
-    maxOutputTokens: PRO_REVIEW_MAX_OUTPUT_TOKENS,
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
+    thinkingLevel: FLASH_HIGH_THINKING_LEVEL,
+    maxOutputTokens: FLASH_REVIEW_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
     deterministicJson: true,
     params: [
@@ -241,10 +240,10 @@ export const TOOL_CONTRACTS = [
   {
     name: 'suggest_search_replace',
     purpose: 'Generate verbatim search/replace fix blocks for one finding.',
-    model: PRO_MODEL,
-    timeoutMs: DEFAULT_TIMEOUT_PRO_MS,
-    thinkingLevel: PRO_THINKING_LEVEL,
-    maxOutputTokens: PRO_PATCH_MAX_OUTPUT_TOKENS,
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
+    thinkingLevel: FLASH_HIGH_THINKING_LEVEL,
+    maxOutputTokens: FLASH_PATCH_MAX_OUTPUT_TOKENS,
     temperature: PATCH_TEMPERATURE,
     deterministicJson: true,
     params: [

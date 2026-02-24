@@ -1,20 +1,17 @@
 /** Fast, cost-effective model for summarization and light analysis. */
 export const FLASH_MODEL = 'gemini-3-flash-preview';
 
-/** High-capability model for deep reasoning, quality inspection, and reliable code generation. */
-export const PRO_MODEL = 'gemini-3-pro-preview';
-
 /** Default language hint. */
 export const DEFAULT_LANGUAGE = 'detect';
 
 /** Default test-framework hint. */
 export const DEFAULT_FRAMEWORK = 'detect';
 
-/** Extended timeout for Pro model calls (ms). */
-export const DEFAULT_TIMEOUT_PRO_MS = 120_000;
+/** Extended timeout for deep analysis calls (ms). */
+export const DEFAULT_TIMEOUT_EXTENDED_MS = 120_000;
 
 export const MODEL_TIMEOUT_MS = {
-  defaultPro: DEFAULT_TIMEOUT_PRO_MS,
+  extended: DEFAULT_TIMEOUT_EXTENDED_MS,
 } as const;
 Object.freeze(MODEL_TIMEOUT_MS);
 
@@ -28,17 +25,17 @@ const THINKING_LEVELS = {
   /** Medium thinking for analysis tasks. */
   flash: 'medium',
   /** High thinking for deep review and patches. */
-  pro: 'high',
+  flashHigh: 'high',
 } as const;
 
-// Thinking budget in tokens for Flash and Pro tools. Note that these are not hard limits, but rather guidelines to encourage concise responses and manage latency/cost.
+// Thinking budget in tokens for Flash tools. Note that these are not hard limits, but rather guidelines to encourage concise responses and manage latency/cost.
 const OUTPUT_TOKEN_BUDGET = {
   flashApiBreaking: 4_096,
   flashComplexity: 4_096,
   flashTestPlan: 8_192,
   flashTriage: 4_096,
-  proPatch: 8_192,
-  proReview: 12_288,
+  flashPatch: 8_192,
+  flashReview: 12_288,
 } as const;
 
 /** Thinking level for Flash triage. */
@@ -47,8 +44,8 @@ export const FLASH_TRIAGE_THINKING_LEVEL = THINKING_LEVELS.flashTriage;
 /** Thinking level for Flash analysis. */
 export const FLASH_THINKING_LEVEL = THINKING_LEVELS.flash;
 
-/** Thinking level for Pro deep analysis. */
-export const PRO_THINKING_LEVEL = THINKING_LEVELS.pro;
+/** Thinking level for Flash deep analysis. */
+export const FLASH_HIGH_THINKING_LEVEL = THINKING_LEVELS.flashHigh;
 
 /** Output cap for Flash API breaking-change detection. */
 export const FLASH_API_BREAKING_MAX_OUTPUT_TOKENS =
@@ -65,11 +62,11 @@ export const FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS =
 /** Output cap for Flash triage tools. */
 export const FLASH_TRIAGE_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashTriage;
 
-/** Output cap for Pro patch generation. */
-export const PRO_PATCH_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.proPatch;
+/** Output cap for Flash patch generation. */
+export const FLASH_PATCH_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashPatch;
 
-/** Output cap for Pro deep review findings. */
-export const PRO_REVIEW_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.proReview;
+/** Output cap for Flash deep review findings. */
+export const FLASH_REVIEW_MAX_OUTPUT_TOKENS = OUTPUT_TOKEN_BUDGET.flashReview;
 
 // ---------------------------------------------------------------------------
 // Temperatures

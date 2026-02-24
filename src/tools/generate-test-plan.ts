@@ -35,7 +35,6 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     fullInputSchema: GenerateTestPlanInputSchema,
     resultSchema: TestPlanResultSchema,
     errorCode: 'E_GENERATE_TEST_PLAN',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

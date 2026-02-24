@@ -27,7 +27,6 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     fullInputSchema: AnalyzeComplexityInputSchema,
     resultSchema: AnalyzeComplexityResultSchema,
     errorCode: 'E_ANALYZE_COMPLEXITY',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

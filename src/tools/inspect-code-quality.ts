@@ -45,7 +45,6 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     resultSchema: CodeQualityOutputSchema,
     geminiSchema: CodeQualityResultSchema,
     errorCode: 'E_INSPECT_QUALITY',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

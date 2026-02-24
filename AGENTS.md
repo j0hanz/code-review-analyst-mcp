@@ -63,7 +63,7 @@ npm run knip
 
 ### Ask first
 
-- Changing `FLASH_MODEL` or `PRO_MODEL` identifiers in `model-config.ts` (affects all Gemini calls).
+- Changing `FLASH_MODEL` identifier in `model-config.ts` (affects all Gemini calls).
 - Bumping `@modelcontextprotocol/sdk` major version (breaking MCP protocol changes).
 - Altering the diff budget constants in `src/lib/diff-budget.ts` or diff size cap in `src/lib/diff-store.ts`.
 - Running `npm run build` in CI or shared environments with a cold cache (slow).

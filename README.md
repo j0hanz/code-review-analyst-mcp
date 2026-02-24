@@ -12,13 +12,13 @@ Gemini-powered MCP server for pull request analysis with structured outputs for 
 
 ## Overview
 
-This server accepts unified diffs and returns structured JSON results — findings with severity, impact categories, merge risk, test plans, and verbatim search/replace fixes. It uses Gemini Thinking models (Flash for fast tools, Pro for deep analysis) and runs over **stdio transport**.
+This server accepts unified diffs and returns structured JSON results — findings with severity, impact categories, merge risk, test plans, and verbatim search/replace fixes. It uses Gemini Thinking models (Flash for fast tools, Flash for deep analysis) and runs over **stdio transport**.
 
 ## Key Features
 
 - **Impact Analysis** — Objective severity scoring, breaking change detection, and rollback complexity assessment.
 - **Review Summary** — Concise PR digest with merge recommendation and change statistics.
-- **Deep Code Inspection** — Pro model with high thinking level for context-aware analysis using full file contents.
+- **Deep Code Inspection** — Flash model with high thinking level for context-aware analysis using full file contents.
 - **Search & Replace Fixes** — Verbatim, copy-paste-ready code fixes tied to specific findings.
 - **Test Plan Generation** — Systematic test case generation with priority ranking and pseudocode.
 - **Async Task Support** — All tools support MCP task lifecycle with progress notifications.
@@ -316,7 +316,7 @@ Summarize a pull request diff and assess high-level risk using the Flash model.
 
 ### `inspect_code_quality`
 
-Deep-dive code review using the Pro model with thinking (16K token budget).
+Deep-dive code review using the Flash model with high thinking (16K token budget).
 
 | Parameter     | Type       | Required | Description                                   |
 | ------------- | ---------- | -------- | --------------------------------------------- |
@@ -332,7 +332,7 @@ Deep-dive code review using the Pro model with thinking (16K token budget).
 
 ### `suggest_search_replace`
 
-Generate verbatim search-and-replace blocks to fix a specific finding using the Pro model with thinking.
+Generate verbatim search-and-replace blocks to fix a specific finding using the Flash model with high thinking.
 
 | Parameter        | Type     | Required | Description                              |
 | ---------------- | -------- | -------- | ---------------------------------------- |
@@ -399,8 +399,8 @@ Create a test plan covering the changes in the diff using the Flash model with t
 | ------------------------- | ------------------------ | -------------- |
 | `analyze_pr_impact`       | `gemini-3-flash-preview` | `minimal`      |
 | `generate_review_summary` | `gemini-3-flash-preview` | `minimal`      |
-| `inspect_code_quality`    | `gemini-3-pro-preview`   | `high`         |
-| `suggest_search_replace`  | `gemini-3-pro-preview`   | `high`         |
+| `inspect_code_quality`    | `gemini-3-flash-preview` | `high`         |
+| `suggest_search_replace`  | `gemini-3-flash-preview` | `high`         |
 | `generate_test_plan`      | `gemini-3-flash-preview` | `medium`       |
 
 ## Workflows
@@ -464,7 +464,7 @@ The pipeline runs lint, type-check, test, and build, then publishes to three tar
 | ------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `Missing GEMINI_API_KEY or GOOGLE_API_KEY` | Set one of the API key env vars in your MCP client config.                           |
 | `E_INPUT_TOO_LARGE`                        | Diff exceeds budget. Split into smaller diffs.                                       |
-| `Gemini request timed out`                 | Pro model tasks may take 60-120s. Increase your client timeout.                      |
+| `Gemini request timed out`                 | Deep analysis tasks may take 60-120s. Increase your client timeout.                  |
 | `Too many concurrent Gemini calls`         | Reduce parallel tool calls or increase `MAX_CONCURRENT_CALLS`.                       |
 | No tool output visible                     | Ensure your MCP client is not swallowing `stderr` — the server uses stdio transport. |
 

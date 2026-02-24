@@ -27,7 +27,6 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     fullInputSchema: DetectApiBreakingInputSchema,
     resultSchema: DetectApiBreakingResultSchema,
     errorCode: 'E_DETECT_API_BREAKING',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),

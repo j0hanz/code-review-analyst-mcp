@@ -15,8 +15,8 @@ import { setDiffForTesting } from '../src/lib/diff-store.js';
 import { resetMaxDiffCharsCacheForTesting } from '../src/lib/diff.js';
 import { setClientForTesting } from '../src/lib/gemini.js';
 import {
+  FLASH_REVIEW_MAX_OUTPUT_TOKENS,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
-  PRO_REVIEW_MAX_OUTPUT_TOKENS,
 } from '../src/lib/model-config.js';
 import { createServer } from '../src/server.js';
 
@@ -450,6 +450,6 @@ test('tool-specific maxOutputTokens are passed to Gemini calls', async () => {
 
   assert.deepEqual(observedMaxOutputTokens, [
     FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
-    PRO_REVIEW_MAX_OUTPUT_TOKENS,
+    FLASH_REVIEW_MAX_OUTPUT_TOKENS,
   ]);
 });

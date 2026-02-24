@@ -57,7 +57,6 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
     errorCode: 'E_REVIEW_SUMMARY',
-    model: TOOL_CONTRACT.model,
     timeoutMs: TOOL_CONTRACT.timeoutMs,
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
