@@ -1,7 +1,3 @@
-import type {
-  CreateTaskRequestHandlerExtra,
-  TaskRequestHandlerExtra,
-} from '@modelcontextprotocol/sdk/experimental/tasks/interfaces.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
 import type {
@@ -22,7 +18,7 @@ import { validateDiffBudget } from './diff.js';
 import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, RETRYABLE_UPSTREAM_ERROR_PATTERN } from './errors.js';
 import { stripJsonSchemaConstraints } from './gemini-schema.js';
-import { generateStructuredJson, getCurrentRequestId } from './gemini.js';
+import { generateStructuredJson } from './gemini.js';
 import {
   createErrorToolResponse,
   createToolResponse,
@@ -45,8 +41,6 @@ export interface PromptParts {
 export interface ToolExecutionContext {
   readonly diffSlot: DiffSlot | undefined;
 }
-
-const DEFAULT_TASK_TTL_MS = 30 * 60 * 1_000;
 
 // Named progress step indices for 7-step progress (0–6).
 const STEP_STARTING = 0;
@@ -77,8 +71,6 @@ const DETERMINISTIC_JSON_RETRY_NOTE =
   'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
 
 const JSON_PARSE_ERROR_PATTERN = /model produced invalid json/i;
-const MODEL_IMMEDIATE_RESPONSE_META_KEY =
-  'io.modelcontextprotocol/model-immediate-response';
 const responseSchemaCache = new WeakMap<object, Record<string, unknown>>();
 
 type ProgressToken = string | number;
@@ -613,36 +605,6 @@ function asObjectRecord(value: unknown): Record<string, unknown> {
   return { payload: value };
 }
 
-function createGeminiLogger(
-  server: McpServer,
-  taskId: string
-): (level: string, data: unknown) => Promise<void> {
-  return async (level: string, data: unknown): Promise<void> => {
-    try {
-      await server.sendLoggingMessage({
-        level: toLoggingLevel(level),
-        logger: 'gemini',
-        data: {
-          requestId: getCurrentRequestId(),
-          taskId,
-          ...asObjectRecord(data),
-        },
-      });
-    } catch {
-      try {
-        const timestamp = new Date().toISOString();
-        const payload = JSON.stringify(asObjectRecord(data));
-        console.error(
-          `[${timestamp}] [gemini:${level}] ${taskId} - ${payload}`
-        );
-      } catch {
-        // Safe fallback if JSON stringify fails
-        console.error(`[gemini:${level}] ${taskId} - (logging failed)`);
-      }
-    }
-  };
-}
-
 export function wrapToolHandler<TInput, TResult extends CallToolResult>(
   options: {
     toolName: string;
@@ -733,11 +695,15 @@ async function validateRequest<
   return undefined;
 }
 
-interface TaskLike {
-  taskId: string;
+interface TaskStatusReporter {
+  updateStatus: (message: string) => Promise<void>;
+  storeResult?: (
+    status: 'completed' | 'failed',
+    result: CallToolResult
+  ) => Promise<void>;
 }
 
-export class ToolTaskRunner<
+export class ToolExecutionRunner<
   TInput extends object,
   TResult extends object,
   TFinal extends TResult,
@@ -747,18 +713,23 @@ export class ToolTaskRunner<
   private responseSchema: Record<string, unknown>;
   private readonly onLog: (level: string, data: unknown) => Promise<void>;
   private readonly reportProgress: (payload: ProgressPayload) => Promise<void>;
+  private readonly statusReporter: TaskStatusReporter;
   private progressContext: string;
   private lastStatusMessage: string | undefined;
 
   constructor(
-    private readonly server: McpServer,
     private readonly config: StructuredToolTaskConfig<TInput, TResult, TFinal>,
-    private readonly extra: CreateTaskRequestHandlerExtra,
-    private readonly task: TaskLike
+    dependencies: {
+      onLog: (level: string, data: unknown) => Promise<void>;
+      reportProgress: (payload: ProgressPayload) => Promise<void>;
+      statusReporter: TaskStatusReporter;
+    },
+    private readonly signal?: AbortSignal
   ) {
     this.responseSchema = getCachedGeminiResponseSchema(config);
-    this.onLog = createGeminiLogger(server, task.taskId);
-    this.reportProgress = createProgressReporter(extra);
+    this.onLog = dependencies.onLog;
+    this.reportProgress = dependencies.reportProgress;
+    this.statusReporter = dependencies.statusReporter;
     this.progressContext = DEFAULT_PROGRESS_CONTEXT;
   }
 
@@ -778,11 +749,7 @@ export class ToolTaskRunner<
     }
 
     try {
-      await this.extra.taskStore.updateTaskStatus(
-        this.task.taskId,
-        'working',
-        message
-      );
+      await this.statusReporter.updateStatus(message);
       this.lastStatusMessage = message;
     } catch {
       // Best-effort
@@ -793,12 +760,11 @@ export class ToolTaskRunner<
     status: 'completed' | 'failed',
     result: CallToolResult
   ): Promise<void> {
+    if (!this.statusReporter.storeResult) {
+      return;
+    }
     try {
-      await this.extra.taskStore.storeTaskResult(
-        this.task.taskId,
-        status,
-        result
-      );
+      await this.statusReporter.storeResult(status, result);
     } catch (storeErr: unknown) {
       await this.onLog('error', {
         event: 'store_result_failed',
@@ -810,7 +776,7 @@ export class ToolTaskRunner<
   private async executeValidation(
     inputRecord: TInput,
     ctx: ToolExecutionContext
-  ): Promise<boolean> {
+  ): Promise<ReturnType<typeof createErrorToolResponse> | undefined> {
     const validationError = await validateRequest(
       this.config,
       inputRecord,
@@ -838,9 +804,9 @@ export class ToolTaskRunner<
         'rejected'
       );
       await this.storeResultSafely('completed', validationError);
-      return false;
+      return validationError;
     }
-    return true;
+    return undefined;
   }
 
   private async executeModelCall(
@@ -860,7 +826,7 @@ export class ToolTaskRunner<
             { systemInstruction, prompt: retryPrompt },
             this.responseSchema,
             this.onLog,
-            this.extra.signal
+            this.signal
           )
         );
 
@@ -915,7 +881,7 @@ export class ToolTaskRunner<
     return parsed;
   }
 
-  async run(input: unknown): Promise<void> {
+  async run(input: unknown): Promise<CallToolResult> {
     try {
       const inputRecord = parseToolInput<TInput>(
         input,
@@ -925,8 +891,6 @@ export class ToolTaskRunner<
         this.config.progressContext?.(inputRecord)
       );
 
-      // Prefer createTask snapshot; fallback preserves backward compatibility
-      // for any direct constructor callers.
       const ctx: ToolExecutionContext = {
         diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
       };
@@ -949,8 +913,9 @@ export class ToolTaskRunner<
       );
       await this.updateStatusMessage('validating input');
 
-      if (!(await this.executeValidation(inputRecord, ctx))) {
-        return;
+      const validationError = await this.executeValidation(inputRecord, ctx);
+      if (validationError) {
+        return validationError;
       }
 
       await reportProgressStepUpdate(
@@ -1012,16 +977,16 @@ export class ToolTaskRunner<
         outcome
       );
       await this.updateStatusMessage(`completed: ${outcome}`);
-      await this.storeResultSafely(
-        'completed',
-        createToolResponse(
-          {
-            ok: true as const,
-            result: finalResult,
-          },
-          textContent
-        )
+
+      const successResponse = createToolResponse(
+        {
+          ok: true as const,
+          result: finalResult,
+        },
+        textContent
       );
+      await this.storeResultSafely('completed', successResponse);
+      return successResponse;
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);
       const errorMeta = classifyErrorMeta(error, errorMessage);
@@ -1029,21 +994,22 @@ export class ToolTaskRunner<
       await this.updateStatusMessage(
         createFailureStatusMessage(outcome, errorMessage)
       );
-      await this.storeResultSafely(
-        'failed',
-        createErrorToolResponse(
-          this.config.errorCode,
-          errorMessage,
-          undefined,
-          errorMeta
-        )
+
+      const errorResponse = createErrorToolResponse(
+        this.config.errorCode,
+        errorMessage,
+        undefined,
+        errorMeta
       );
+
+      await this.storeResultSafely('failed', errorResponse);
       await reportProgressCompletionUpdate(
         this.reportProgress,
         this.config.name,
         this.progressContext,
         outcome
       );
+      return errorResponse; // Return safe error response
     }
   }
 }
@@ -1061,7 +1027,7 @@ export function registerStructuredToolTask<
     resultSchema: config.resultSchema,
   });
 
-  server.experimental.tasks.registerToolTask(
+  server.registerTool(
     config.name,
     {
       title: config.title,
@@ -1070,57 +1036,29 @@ export function registerStructuredToolTask<
       outputSchema: DefaultOutputSchema,
       annotations: buildToolAnnotations(config.annotations),
     },
-    {
-      createTask: async (
-        input: unknown,
-        extra: CreateTaskRequestHandlerExtra
-      ) => {
-        const task = await extra.taskStore.createTask({
-          ttl: extra.taskRequestedTtl ?? DEFAULT_TASK_TTL_MS,
-        });
-
-        const currentDiff = getDiff();
-        // Snapshot by reference: diff-store replaces slots on update, so this
-        // preserves task-level TOCTOU safety without deep-clone overhead.
-        const diffSlotSnapshot = currentDiff;
-        const runner = new ToolTaskRunner(server, config, extra, task);
-        runner.setResponseSchemaOverride(responseSchema);
-        runner.setDiffSlotSnapshot(diffSlotSnapshot);
-
-        setImmediate(() => {
-          void runner.run(input).catch(async (error: unknown) => {
-            try {
-              await server.sendLoggingMessage({
-                level: 'error',
-                logger: 'task-runner',
-                data: { task: config.name, error: getErrorMessage(error) },
-              });
-            } catch {
-              console.error(
-                `[task-runner:${config.name}] ${getErrorMessage(error)}`
-              );
-            }
-          });
-        });
-
-        return {
-          task,
-          _meta: {
-            [MODEL_IMMEDIATE_RESPONSE_META_KEY]: `${config.name} accepted as task ${task.taskId}`,
+    async (input: unknown, extra: ProgressExtra) => {
+      const runner = new ToolExecutionRunner(config, {
+        onLog: async (level, data) => {
+          // Standard logging for tool calls
+          try {
+            await server.sendLoggingMessage({
+              level: toLoggingLevel(level),
+              logger: 'gemini',
+              data: asObjectRecord(data),
+            });
+          } catch {
+            // Fallback if logging fails
+          }
+        },
+        reportProgress: createProgressReporter(extra),
+        statusReporter: {
+          updateStatus: async () => {
+            // No-op for standard tool calls as they don't have a persistent task status
           },
-        };
-      },
-      getTask: async (_input: unknown, extra: TaskRequestHandlerExtra) => {
-        return await extra.taskStore.getTask(extra.taskId);
-      },
-      getTaskResult: async (
-        _input: unknown,
-        extra: TaskRequestHandlerExtra
-      ) => {
-        return (await extra.taskStore.getTaskResult(
-          extra.taskId
-        )) as CallToolResult;
-      },
+        },
+      });
+      runner.setResponseSchemaOverride(responseSchema);
+      return await runner.run(input);
     }
   );
 }
