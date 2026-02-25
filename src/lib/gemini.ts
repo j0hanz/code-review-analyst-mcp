@@ -287,13 +287,10 @@ function getSafetySettings(
     return cached;
   }
 
-  const settings = new Array<{
-    category: HarmCategory;
-    threshold: HarmBlockThreshold;
-  }>();
-  for (const category of SAFETY_CATEGORIES) {
-    settings.push({ category, threshold });
-  }
+  const settings = SAFETY_CATEGORIES.map((category) => ({
+    category,
+    threshold,
+  }));
   safetySettingsCache.set(threshold, settings);
   return settings;
 }

@@ -759,24 +759,10 @@ export class ToolExecutionRunner<
       const { attempt } = details;
       const msg = `Network error. Retrying (attempt ${String(attempt)})...`;
 
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        STEP_CALLING_MODEL,
-        msg
-      );
-      await this.updateStatusMessage(msg);
+      await this.reportAndStatus(STEP_CALLING_MODEL, msg);
     } else if (record.event === 'gemini_queue_acquired') {
       const msg = 'Model queue acquired, generating response...';
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        STEP_CALLING_MODEL,
-        msg
-      );
-      await this.updateStatusMessage(msg);
+      await this.reportAndStatus(STEP_CALLING_MODEL, msg);
     }
   }
 
@@ -878,11 +864,7 @@ export class ToolExecutionRunner<
         );
 
         if (attempt === 0) {
-          await this.updateStatusMessage('Verifying output structure...');
-          await reportProgressStepUpdate(
-            this.reportProgress,
-            this.config.name,
-            this.progressContext,
+          await this.reportAndStatus(
             STEP_VALIDATING_RESPONSE,
             'Verifying output structure...'
           );
@@ -928,6 +910,17 @@ export class ToolExecutionRunner<
     return parsed;
   }
 
+  private async reportAndStatus(step: number, message: string): Promise<void> {
+    await reportProgressStepUpdate(
+      this.reportProgress,
+      this.config.name,
+      this.progressContext,
+      step,
+      message
+    );
+    await this.updateStatusMessage(message);
+  }
+
   async run(input: unknown): Promise<CallToolResult> {
     try {
       const inputRecord = parseToolInput<TInput>(
@@ -942,60 +935,33 @@ export class ToolExecutionRunner<
         diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
       };
 
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        STEP_STARTING,
-        'Initializing...'
-      );
-      await this.updateStatusMessage('Initializing...');
-
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
+      await this.reportAndStatus(STEP_STARTING, 'Initializing...');
+      await this.reportAndStatus(
         STEP_VALIDATING,
         'Validating request parameters...'
       );
-      await this.updateStatusMessage('Validating request parameters...');
 
       const validationError = await this.executeValidation(inputRecord, ctx);
       if (validationError) {
         return validationError;
       }
 
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
+      await this.reportAndStatus(
         STEP_BUILDING_PROMPT,
         'Constructing analysis context...'
       );
-      await this.updateStatusMessage('Constructing analysis context...');
 
       const promptParts = this.config.buildPrompt(inputRecord, ctx);
       const { prompt, systemInstruction } = promptParts;
 
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
+      await this.reportAndStatus(
         STEP_CALLING_MODEL,
         'Querying Gemini model...'
       );
-      await this.updateStatusMessage('Querying Gemini model...');
 
       const parsed = await this.executeModelCall(systemInstruction, prompt);
 
-      await reportProgressStepUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        STEP_FINALIZING,
-        'Processing results...'
-      );
-      await this.updateStatusMessage('Processing results...');
+      await this.reportAndStatus(STEP_FINALIZING, 'Processing results...');
 
       const finalResult = (
         this.config.transformResult
