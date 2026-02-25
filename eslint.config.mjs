@@ -19,6 +19,7 @@ export default defineConfig(
       'tests/**',
       '**/*.test.ts',
       '**/*.spec.ts',
+      'coverage/**',
     ],
   },
   eslint.configs.recommended,
@@ -53,6 +54,8 @@ export default defineConfig(
           argsIgnorePattern: '^_',
         },
       ],
+
+      'no-console': ['error', { allow: ['warn', 'error'] }],
 
       '@typescript-eslint/consistent-type-assertions': [
         'error',

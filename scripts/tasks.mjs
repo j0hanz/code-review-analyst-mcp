@@ -19,7 +19,9 @@ const CONFIG = {
       '.tsbuildinfo',
       'tsconfig.tsbuildinfo',
       'tsconfig.build.tsbuildinfo',
+      'tsconfig.test.tsbuildinfo',
     ],
+    coverage: 'coverage',
     get distAssets() {
       return join(this.dist, 'assets');
     },
@@ -107,6 +109,7 @@ const BuildTasks = {
   async clean() {
     await System.remove(CONFIG.paths.dist);
     await System.remove(CONFIG.paths.tsBuildInfo);
+    await System.remove(CONFIG.paths.coverage);
   },
 
   async compile() {
@@ -125,7 +128,12 @@ const BuildTasks = {
   },
 
   async makeExecutable() {
-    await System.changeMode(CONFIG.paths.executable, '755');
+    if (process.platform === 'win32') return;
+    try {
+      await System.changeMode(CONFIG.paths.executable, '755');
+    } catch (error) {
+      Logger.error(`Failed to make executable: ${error.message}`);
+    }
   },
 };
 
