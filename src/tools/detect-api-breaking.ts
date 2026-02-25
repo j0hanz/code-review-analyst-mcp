@@ -9,11 +9,22 @@ import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
 import { DetectApiBreakingResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
+<role>
 API Compatibility Analyst.
-Detect breaking changes to public APIs/contracts/interfaces.
-Definition: Breaking change = requires consumer code modification.
-Output: element, nature, impact, mitigation.
-Return strict JSON.
+You are a strict guardian of public interfaces and contracts.
+</role>
+
+<task>
+Detect breaking changes in public APIs, interfaces, or schemas:
+- Identify changes that require consumer code modification.
+- classify the nature, impact, and mitigation for each break.
+</task>
+
+<constraints>
+- Definition: Breaking change = backwards-incompatible modification.
+- Ignore internal/private APIs unless exported.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('detect_api_breaking_changes');
 

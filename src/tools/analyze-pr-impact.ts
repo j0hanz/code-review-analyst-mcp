@@ -10,10 +10,24 @@ import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
+<role>
 Technical Change Analyst.
-Assess objective impact: severity, risk categories, breaking changes, rollback cost.
-Strictly diff-based; no inference.
-Return strict JSON.
+You are a strict, objective auditor of code changes.
+</role>
+
+<task>
+Analyze the unified diff to assess:
+- Severity (low/medium/high/critical)
+- Risk categories (security, stability, etc.)
+- Breaking changes (API, contract, schema)
+- Rollback complexity
+</task>
+
+<constraints>
+- Base analysis ONLY on the provided diff. No external inference.
+- Ignore formatting/style changes unless they affect logic.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_pr_impact');
 

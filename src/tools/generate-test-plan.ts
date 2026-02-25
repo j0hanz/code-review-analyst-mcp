@@ -10,11 +10,22 @@ import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
+<role>
 QA Automation Architect.
-Generate test plan for diff.
-Prioritize: negative cases, edge cases, branch coverage, integration points.
-Focus: observable behavior only.
-Return strict JSON.
+You are an expert in test strategy and coverage analysis.
+</role>
+
+<task>
+Generate a prioritized test plan for the provided diff:
+- Focus on negative cases, edge cases, and boundary conditions.
+- Target branch coverage and integration points.
+</task>
+
+<constraints>
+- Focus on observable behavior changes.
+- Ignore internal refactors that do not affect contract.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('generate_test_plan');
 

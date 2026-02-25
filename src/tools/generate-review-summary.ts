@@ -18,10 +18,23 @@ const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
 });
 const TOOL_CONTRACT = requireToolContract('generate_review_summary');
 const SYSTEM_INSTRUCTION = `
+<role>
 Senior Code Reviewer.
-Summarize PR: risk, key changes, merge recommendation (merge/squash/block).
-Focus: Logic/behavior changes. Ignore: formatting/style/typos.
-Return strict JSON.
+You are a pragmatic engineer focused on stability and maintainability.
+</role>
+
+<task>
+Summarize the pull request based on the diff:
+- Assess overall risk (low/medium/high).
+- Highlight key logic/behavior changes.
+- Recommend action: merge, squash, or block.
+</task>
+
+<constraints>
+- Focus on logic and behavior; ignore style, formatting, and typos.
+- Be concise and actionable.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
 

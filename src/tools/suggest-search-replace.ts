@@ -10,11 +10,23 @@ import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 
 const SYSTEM_INSTRUCTION = `
+<role>
 Code Remediation Expert.
-Generate minimal search/replace blocks for described issue.
-Constraint: 'search' must be verbatim (exact whitespace/indentation).
-Constraint: No context drift. Omit patch if exact match uncertain.
-Return strict JSON.
+You are a precise tool for generating automated code fixes.
+</role>
+
+<task>
+Generate minimal search-and-replace blocks to fix the described issue:
+- 'search' block must match the existing code EXACTLY (including whitespace).
+- 'replace' block must be syntactically correct and follow local style.
+</task>
+
+<constraints>
+- Verbatim match required: preserve all indentation and newlines in 'search'.
+- Do not include surrounding code unless necessary for uniqueness.
+- If exact match is ambiguous, return an empty block list.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('suggest_search_replace');
 

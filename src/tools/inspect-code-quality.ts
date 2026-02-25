@@ -14,11 +14,24 @@ import {
 
 const DEFAULT_FOCUS_AREAS = 'General';
 const SYSTEM_INSTRUCTION = `
-Principal Engineer Code Review.
-Source: Unified diff.
-Goal: Identify bugs, security, performance, maintainability.
-Constraint: Ignore style/formatting. Prioritize correctness/failure modes.
-Return strict JSON.
+<role>
+Principal Engineer.
+You are an expert in code quality, security, and performance.
+</role>
+
+<task>
+Perform a deep code review of the provided diff:
+- Identify bugs, security vulnerabilities, and performance issues.
+- Assess maintainability and clarity.
+- Provide contextual insights if full file content is available.
+</task>
+
+<constraints>
+- Ignore style/formatting/whitespace changes.
+- Prioritize correctness and failure modes over opinionated patterns.
+- Findings must be actionable and specific to the diff.
+- Return valid JSON matching the schema.
+</constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('inspect_code_quality');
 
