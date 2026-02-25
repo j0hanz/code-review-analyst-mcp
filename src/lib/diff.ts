@@ -79,11 +79,12 @@ const HAS_HUNK = /^@@/m;
 const HAS_OLD_MODE = /^old mode /m;
 
 function shouldKeepSection(section: string): boolean {
-  if (!section.trim()) return false;
-  if (BINARY_FILE_LINE.test(section)) return false;
-  if (GIT_BINARY_PATCH.test(section)) return false;
-  if (HAS_OLD_MODE.test(section) && !HAS_HUNK.test(section)) return false;
-  return true;
+  return (
+    Boolean(section.trim()) &&
+    !BINARY_FILE_LINE.test(section) &&
+    !GIT_BINARY_PATCH.test(section) &&
+    (!HAS_OLD_MODE.test(section) || HAS_HUNK.test(section))
+  );
 }
 
 function processSection(

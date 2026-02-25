@@ -1,16 +1,19 @@
+import { toBulletedList, toInlineCode } from '../lib/markdown.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
 import { PROMPT_DEFINITIONS } from '../prompts/index.js';
 import { DIFF_RESOURCE_DESCRIPTION, STATIC_RESOURCES } from './index.js';
 import { getSharedConstraints } from './tool-info.js';
 
 const PROMPT_LIST = PROMPT_DEFINITIONS.map(
-  (def) => `- \`${def.name}\`: ${def.description}`
+  (def) => `${toInlineCode(def.name)}: ${def.description}`
 );
 
 const RESOURCE_LIST = [
-  ...STATIC_RESOURCES.map((def) => `- \`${def.uri}\`: ${def.description}`),
-  '- `internal://tool-info/{toolName}`: Per-tool contract details.',
-  `- \`diff://current\`: ${DIFF_RESOURCE_DESCRIPTION}`,
+  ...STATIC_RESOURCES.map(
+    (def) => `${toInlineCode(def.uri)}: ${def.description}`
+  ),
+  `${toInlineCode('internal://tool-info/{toolName}')}: Per-tool contract details.`,
+  `${toInlineCode('diff://current')}: ${DIFF_RESOURCE_DESCRIPTION}`,
 ];
 
 function formatParameterLine(parameter: {
@@ -60,9 +63,7 @@ export function buildServerInstructions(): string {
     .map((contract) => `\`${contract.name}\``)
     .join(', ');
   const toolSections = contracts.map((contract) => formatToolSection(contract));
-  const constraintLines = getSharedConstraints().map(
-    (constraint) => `- ${constraint}`
-  );
+  const constraintLines = toBulletedList(getSharedConstraints());
 
   return `# CODE REVIEW ANALYST MCP
 
@@ -72,16 +73,16 @@ export function buildServerInstructions(): string {
 - Tools: ${toolNames}
 
 ## PROMPTS
-${PROMPT_LIST.join('\n')}
+${toBulletedList(PROMPT_LIST)}
 
 ## RESOURCES
-${RESOURCE_LIST.join('\n')}
+${toBulletedList(RESOURCE_LIST)}
 
 ## TOOLS
 ${toolSections.join('\n\n')}
 
 ## CONSTRAINTS
-${constraintLines.join('\n')}
+${constraintLines}
 
 ## TASK LIFECYCLE
 - Progress steps (0–6): starting → validating input → building prompt → calling model → validating response → finalizing → done.

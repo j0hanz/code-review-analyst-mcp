@@ -1,4 +1,5 @@
 import { createCachedEnvInt } from '../lib/env-config.js';
+import { toInlineCode } from '../lib/markdown.js';
 import { FLASH_MODEL } from '../lib/model-config.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
 
@@ -65,7 +66,7 @@ export function buildServerConfig(): string {
   const toolRows = getToolContracts()
     .filter((contract) => contract.model !== 'none')
     .map((contract) => {
-      return `| \`${contract.name}\` | \`${contract.model}\` | ${formatThinkingLevel(contract.thinkingLevel)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
+      return `| ${toInlineCode(contract.name)} | ${toInlineCode(contract.model)} | ${formatThinkingLevel(contract.thinkingLevel)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
     })
     .join('\n');
 
@@ -75,15 +76,15 @@ export function buildServerConfig(): string {
 
 | Limit | Value | Env |
 |-------|-------|-----|
-| Diff limit | ${formatNumber(maxDiffChars)} chars | \`MAX_DIFF_CHARS\` |
-| Concurrency limit | ${maxConcurrent} | \`MAX_CONCURRENT_CALLS\` |
-| Batch concurrency limit | ${maxConcurrentBatch} | \`MAX_CONCURRENT_BATCH_CALLS\` |
-| Wait timeout | ${formatNumber(concurrentWaitMs)}ms | \`MAX_CONCURRENT_CALLS_WAIT_MS\` |
-| Batch mode | ${batchMode} | \`GEMINI_BATCH_MODE\` |
+| Diff limit | ${formatNumber(maxDiffChars)} chars | ${toInlineCode('MAX_DIFF_CHARS')} |
+| Concurrency limit | ${maxConcurrent} | ${toInlineCode('MAX_CONCURRENT_CALLS')} |
+| Batch concurrency limit | ${maxConcurrentBatch} | ${toInlineCode('MAX_CONCURRENT_BATCH_CALLS')} |
+| Wait timeout | ${formatNumber(concurrentWaitMs)}ms | ${toInlineCode('MAX_CONCURRENT_CALLS_WAIT_MS')} |
+| Batch mode | ${batchMode} | ${toInlineCode('GEMINI_BATCH_MODE')} |
 
 ## Model Assignments
 
-Default model: \`${defaultModel}\` (override with \`GEMINI_MODEL\`)
+Default model: ${toInlineCode(defaultModel)} (override with ${toInlineCode('GEMINI_MODEL')})
 
 | Tool | Model | Thinking Level | Timeout | Max Output Tokens |
 |------|-------|----------------|---------|-------------------|
@@ -91,17 +92,17 @@ ${toolRows}
 
 ## Safety
 
-- Harm block threshold: \`${safetyThreshold}\`
-- Override with \`GEMINI_HARM_BLOCK_THRESHOLD\` (BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE, BLOCK_LOW_AND_ABOVE)
+- Harm block threshold: ${toInlineCode(safetyThreshold)}
+- Override with ${toInlineCode('GEMINI_HARM_BLOCK_THRESHOLD')} (BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE, BLOCK_LOW_AND_ABOVE)
 
 ## API Keys
 
-- Set \`GEMINI_API_KEY\` or \`GOOGLE_API_KEY\` environment variable (required)
+- Set ${toInlineCode('GEMINI_API_KEY')} or ${toInlineCode('GOOGLE_API_KEY')} environment variable (required)
 
 ## Batch Mode
 
-- \`GEMINI_BATCH_MODE\`: \`off\` (default) or \`inline\`
-- \`GEMINI_BATCH_POLL_INTERVAL_MS\`: poll cadence for batch status checks
-- \`GEMINI_BATCH_TIMEOUT_MS\`: max wait for batch completion
+- ${toInlineCode('GEMINI_BATCH_MODE')}: ${toInlineCode('off')} (default) or ${toInlineCode('inline')}
+- ${toInlineCode('GEMINI_BATCH_POLL_INTERVAL_MS')}: poll cadence for batch status checks
+- ${toInlineCode('GEMINI_BATCH_TIMEOUT_MS')}: max wait for batch completion
 `;
 }

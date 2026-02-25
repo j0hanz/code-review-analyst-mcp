@@ -51,6 +51,16 @@ function appendErrorMeta(error: ToolError, meta?: ErrorMeta): void {
   }
 }
 
+function createToolError(
+  code: string,
+  message: string,
+  meta?: ErrorMeta
+): ToolError {
+  const error: ToolError = { code, message };
+  appendErrorMeta(error, meta);
+  return error;
+}
+
 function toTextContent(
   structured: ToolStructuredContent,
   textContent?: string
@@ -65,11 +75,7 @@ function createErrorStructuredContent(
   result?: unknown,
   meta?: ErrorMeta
 ): ToolStructuredContent {
-  const error: ToolError = {
-    code,
-    message,
-  };
-  appendErrorMeta(error, meta);
+  const error = createToolError(code, message, meta);
 
   if (result === undefined) {
     return { ok: false, error };

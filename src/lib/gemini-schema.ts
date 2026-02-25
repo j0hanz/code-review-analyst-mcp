@@ -1,4 +1,4 @@
-const CONSTRAINT_KEYS = new Set([
+const CONSTRAINT_KEY_VALUES = [
   'minLength',
   'maxLength',
   'minimum',
@@ -10,7 +10,8 @@ const CONSTRAINT_KEYS = new Set([
   'multipleOf',
   'pattern',
   'format',
-]);
+] as const;
+const CONSTRAINT_KEYS = new Set<string>(CONSTRAINT_KEY_VALUES);
 const INTEGER_JSON_TYPE = 'integer';
 const NUMBER_JSON_TYPE = 'number';
 type JsonRecord = Record<string, unknown>;

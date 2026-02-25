@@ -10,10 +10,9 @@ export const DEFAULT_FRAMEWORK = 'detect';
 /** Extended timeout for deep analysis calls (ms). */
 export const DEFAULT_TIMEOUT_EXTENDED_MS = 120_000;
 
-export const MODEL_TIMEOUT_MS = {
+export const MODEL_TIMEOUT_MS = Object.freeze({
   extended: DEFAULT_TIMEOUT_EXTENDED_MS,
-} as const;
-Object.freeze(MODEL_TIMEOUT_MS);
+} as const);
 
 // ---------------------------------------------------------------------------
 // Budgets (Thinking & Output)

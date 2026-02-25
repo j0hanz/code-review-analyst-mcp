@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndPathsFromFiles } from '../lib/diff.js';
+import { formatOptionalLine } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -28,13 +29,6 @@ Generate a prioritized test plan for the provided diff:
 </constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('generate_test_plan');
-
-function formatOptionalLine(
-  label: string,
-  value: string | number | undefined
-): string {
-  return value === undefined ? '' : `\n${label}: ${value}`;
-}
 
 export function registerGenerateTestPlanTool(server: McpServer): void {
   registerStructuredToolTask(server, {

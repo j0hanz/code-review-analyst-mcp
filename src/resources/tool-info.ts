@@ -1,3 +1,4 @@
+import { toBulletedList, toInlineCode } from '../lib/markdown.js';
 import { getToolContract, getToolContracts } from '../lib/tool-contracts.js';
 
 interface ToolInfoEntry {
@@ -114,7 +115,7 @@ ${entry.crossToolFlow.map((f) => `- ${f}`).join('\n')}
 }
 
 function formatCompactToolRow(entry: ToolInfoEntry): string {
-  return `| \`${entry.name}\` | ${entry.model} | ${entry.timeout} | ${entry.maxOutputTokens} | ${entry.purpose} |`;
+  return `| ${toInlineCode(entry.name)} | ${entry.model} | ${entry.timeout} | ${entry.maxOutputTokens} | ${entry.purpose} |`;
 }
 
 export function buildCoreContextPack(): string {
@@ -136,9 +137,7 @@ export function buildCoreContextPack(): string {
 ${rows.join('\n')}
 
 ## Shared Constraints
-${getSharedConstraints()
-  .map((constraint) => `- ${constraint}`)
-  .join('\n')}
+${toBulletedList(getSharedConstraints())}
 `;
 }
 

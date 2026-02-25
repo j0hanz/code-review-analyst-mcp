@@ -30,10 +30,8 @@ const GOOGLE_API_KEY_ENV_VAR = 'GOOGLE_API_KEY';
 type GeminiOnLog = GeminiStructuredRequest['onLog'];
 
 function getDefaultModel(): string {
-  if (_defaultModel !== undefined) return _defaultModel;
-  const value = process.env[GEMINI_MODEL_ENV_VAR] ?? DEFAULT_MODEL;
-  _defaultModel = value;
-  return value;
+  _defaultModel ??= process.env[GEMINI_MODEL_ENV_VAR] ?? DEFAULT_MODEL;
+  return _defaultModel;
 }
 
 const DEFAULT_MAX_RETRIES = 3;

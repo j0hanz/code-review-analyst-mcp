@@ -30,9 +30,11 @@ const CLI_OPTIONS = {
 } as const;
 
 function setStringEnv(name: string, value: string | boolean | undefined): void {
-  if (typeof value === 'string') {
-    process.env[name] = value;
+  if (typeof value !== 'string') {
+    return;
   }
+
+  process.env[name] = value;
 }
 
 function applyCliEnvironmentOverrides(

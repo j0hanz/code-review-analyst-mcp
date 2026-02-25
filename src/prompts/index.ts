@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { z } from 'zod';
 
+import { toInlineCode } from '../lib/markdown.js';
 import {
   getToolContract,
   getToolContractNames,
@@ -52,7 +53,7 @@ function completeByPrefix<T extends string>(
 function getToolGuide(tool: string): string {
   const contract = getToolContract(tool);
   if (!contract) {
-    return `Use \`${tool}\` to analyze your code changes.`;
+    return `Use ${toInlineCode(tool)} to analyze your code changes.`;
   }
 
   const { thinkingLevel } = contract;
@@ -93,13 +94,16 @@ function registerHelpPrompt(server: McpServer, instructions: string): void {
 }
 
 function buildReviewGuideText(tool: string, focusArea: string): string {
+  const toolCode = toInlineCode(tool);
+  const suggestToolCode = toInlineCode('suggest_search_replace');
+
   return (
     `# Guide: ${tool} / ${focusArea}\n\n` +
-    `## Tool: \`${tool}\`\n${getToolGuide(tool)}\n\n` +
+    `## Tool: ${toolCode}\n${getToolGuide(tool)}\n\n` +
     `## Focus: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
     `## Example Fix\n` +
     `Finding: "Uncaught promise rejection"\n` +
-    `Call \`suggest_search_replace\`:\n` +
+    `Call ${suggestToolCode}:\n` +
     '```\n' +
     `search: "  } catch {\\n  }"\n` +
     `replace: "  } catch (err) {\\n    logger.error(err);\\n  }"\n` +

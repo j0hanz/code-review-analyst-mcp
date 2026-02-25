@@ -30,6 +30,7 @@ const OUTPUT_LIMITS = {
 
 const QUALITY_RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
 const MERGE_RISK_LEVELS = ['low', 'medium', 'high'] as const;
+const REVIEW_SUMMARY_LIMITS = OUTPUT_LIMITS.reviewDiffResult.summary;
 const ERROR_KINDS = [
   'validation',
   'budget',
@@ -64,8 +65,8 @@ function createBoundedStringArray(
 function createReviewSummarySchema(description: string): z.ZodString {
   return z
     .string()
-    .min(OUTPUT_LIMITS.reviewDiffResult.summary.min)
-    .max(OUTPUT_LIMITS.reviewDiffResult.summary.max)
+    .min(REVIEW_SUMMARY_LIMITS.min)
+    .max(REVIEW_SUMMARY_LIMITS.max)
     .describe(description);
 }
 

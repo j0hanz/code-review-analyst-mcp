@@ -124,12 +124,11 @@ function buildToolAnnotations(
     };
   }
 
-  const annotationOverrides = { ...annotations };
-  delete annotationOverrides.destructiveHint;
+  const { destructiveHint, ...annotationOverrides } = annotations;
 
   return {
-    readOnlyHint: !annotations.destructiveHint,
-    idempotentHint: !annotations.destructiveHint,
+    readOnlyHint: !destructiveHint,
+    idempotentHint: !destructiveHint,
     openWorldHint: true,
     ...annotationOverrides,
   };

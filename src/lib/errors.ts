@@ -13,8 +13,7 @@ function getStringProperty(value: unknown, key: string): string | undefined {
     return undefined;
   }
 
-  const record = value;
-  const property = record[key];
+  const property = value[key];
   return typeof property === 'string' ? property : undefined;
 }
 

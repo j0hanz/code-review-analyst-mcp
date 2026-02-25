@@ -72,17 +72,17 @@ export function buildStructuredToolRuntimeOptions(
     'thinkingLevel' | 'temperature' | 'deterministicJson'
   >
 ): StructuredToolRuntimeOptions {
-  const options: StructuredToolRuntimeOptions = {};
-  if (contract.thinkingLevel !== undefined) {
-    options.thinkingLevel = contract.thinkingLevel;
-  }
-  if (contract.temperature !== undefined) {
-    options.temperature = contract.temperature;
-  }
-  if (contract.deterministicJson !== undefined) {
-    options.deterministicJson = contract.deterministicJson;
-  }
-  return options;
+  return {
+    ...(contract.thinkingLevel !== undefined
+      ? { thinkingLevel: contract.thinkingLevel }
+      : {}),
+    ...(contract.temperature !== undefined
+      ? { temperature: contract.temperature }
+      : {}),
+    ...(contract.deterministicJson !== undefined
+      ? { deterministicJson: contract.deterministicJson }
+      : {}),
+  };
 }
 
 export const TOOL_CONTRACTS = [

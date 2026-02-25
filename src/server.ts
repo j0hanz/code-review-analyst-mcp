@@ -20,6 +20,12 @@ const PackageJsonSchema = z.object({
   version: z.string().min(1),
 });
 
+const TASK_TOOL_CALL_CAPABILITY = {
+  tools: {
+    call: {},
+  },
+} as const;
+
 const SERVER_CAPABILITIES = {
   logging: {},
   completions: {},
@@ -29,11 +35,7 @@ const SERVER_CAPABILITIES = {
   tasks: {
     list: {},
     cancel: {},
-    requests: {
-      tools: {
-        call: {},
-      },
-    },
+    requests: TASK_TOOL_CALL_CAPABILITY,
   },
 } as const;
 

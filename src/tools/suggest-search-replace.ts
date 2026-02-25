@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { extractChangedPathsFromFiles } from '../lib/diff.js';
+import { formatCountLabel } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -31,7 +32,7 @@ Generate minimal search-and-replace blocks to fix the described issue:
 const TOOL_CONTRACT = requireToolContract('suggest_search_replace');
 
 function formatPatchCount(count: number): string {
-  return `${count} ${count === 1 ? 'patch' : 'patches'}`;
+  return formatCountLabel(count, 'patch', 'patches');
 }
 
 export function registerSuggestSearchReplaceTool(server: McpServer): void {

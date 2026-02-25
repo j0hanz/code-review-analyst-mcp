@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
+import { formatLanguageSegment } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -30,10 +31,6 @@ Analyze the unified diff to assess:
 </constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('analyze_pr_impact');
-
-function formatLanguageSegment(language: string | undefined): string {
-  return language ? `\nLanguage: ${language}` : '';
-}
 
 export function registerAnalyzePrImpactTool(server: McpServer): void {
   registerStructuredToolTask(server, {

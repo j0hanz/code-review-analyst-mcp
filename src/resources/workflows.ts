@@ -1,3 +1,4 @@
+import { toBulletedList } from '../lib/markdown.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
 import { getSharedConstraints } from './tool-info.js';
 
@@ -52,9 +53,7 @@ export function buildWorkflowGuide(): string {
 > Use for algorithm or API changes. Diff-only input.
 
 ## Shared Constraints
-${getSharedConstraints()
-  .map((constraint) => `- ${constraint}`)
-  .join('\n')}
+${toBulletedList(getSharedConstraints())}
 
 ## Tool Reference
 

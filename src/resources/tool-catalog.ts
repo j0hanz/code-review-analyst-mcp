@@ -1,14 +1,15 @@
+import { toInlineCode } from '../lib/markdown.js';
 import { buildCoreContextPack } from './tool-info.js';
 
 const TOOL_CATALOG_CONTENT = `# Tool Catalog Details
 
 ## Optional Parameters
 
-- \`language\`: Primary language hint (auto-detects). All tools except \`suggest_search_replace\`.
-- \`focusAreas\`: Focus tags (security, performance, etc.). \`inspect_code_quality\` only.
-- \`maxFindings\`: Output cap (1–25). \`inspect_code_quality\` only.
-- \`testFramework\`: Framework hint. \`generate_test_plan\` only.
-- \`maxTestCases\`: Output cap (1–30). \`generate_test_plan\` only.
+- ${toInlineCode('language')}: Primary language hint (auto-detects). All tools except ${toInlineCode('suggest_search_replace')}.
+- ${toInlineCode('focusAreas')}: Focus tags (security, performance, etc.). ${toInlineCode('inspect_code_quality')} only.
+- ${toInlineCode('maxFindings')}: Output cap (1–25). ${toInlineCode('inspect_code_quality')} only.
+- ${toInlineCode('testFramework')}: Framework hint. ${toInlineCode('generate_test_plan')} only.
+- ${toInlineCode('maxTestCases')}: Output cap (1–30). ${toInlineCode('generate_test_plan')} only.
 
 ## Cross-Tool Data Flow
 
@@ -27,12 +28,12 @@ generate_review_summary ──→ overallRisk ──────┤
 
 ## When to Use Each Tool
 
-- **Triage**: \`analyze_pr_impact\`, \`generate_review_summary\`.
-- **Inspection**: \`inspect_code_quality\`.
-- **Fixes**: \`suggest_search_replace\` (one finding/call).
-- **Tests**: \`generate_test_plan\`.
-- **Complexity**: \`analyze_time_space_complexity\`.
-- **Breaking API**: \`detect_api_breaking_changes\`.
+- **Triage**: ${toInlineCode('analyze_pr_impact')}, ${toInlineCode('generate_review_summary')}.
+- **Inspection**: ${toInlineCode('inspect_code_quality')}.
+- **Fixes**: ${toInlineCode('suggest_search_replace')} (one finding/call).
+- **Tests**: ${toInlineCode('generate_test_plan')}.
+- **Complexity**: ${toInlineCode('analyze_time_space_complexity')}.
+- **Breaking API**: ${toInlineCode('detect_api_breaking_changes')}.
 `;
 
 export function buildToolCatalog(): string {

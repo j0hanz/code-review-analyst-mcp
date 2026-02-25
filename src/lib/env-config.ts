@@ -10,11 +10,7 @@ function parsePositiveInteger(value: string): number | undefined {
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function resolveEnvInt(envVar: string, defaultValue: number): number {

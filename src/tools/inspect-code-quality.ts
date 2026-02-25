@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
+import { formatOptionalLine } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -34,13 +35,6 @@ Perform a deep code review of the provided diff:
 </constraints>
 `;
 const TOOL_CONTRACT = requireToolContract('inspect_code_quality');
-
-function formatOptionalLine(
-  label: string,
-  value: string | number | undefined
-): string {
-  return value === undefined ? '' : `\n${label}: ${value}`;
-}
 
 function capFindings<T>(findings: readonly T[], maxFindings?: number): T[] {
   return findings.slice(0, maxFindings ?? findings.length);

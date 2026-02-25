@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import type { z } from 'zod';
 
+import { formatLanguageSegment } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -37,10 +38,6 @@ Summarize the pull request based on the diff:
 </constraints>
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
-
-function formatLanguageSegment(language: string | undefined): string {
-  return language ? `\nLanguage: ${language}` : '';
-}
 
 function getDiffStats(ctx: ToolExecutionContext): {
   diff: string;

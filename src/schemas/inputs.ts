@@ -56,19 +56,22 @@ function createOptionalBoundedInteger(
   return z.number().int().min(min).max(max).optional().describe(description);
 }
 
+const RepositorySchema = createRepositorySchema();
+const LanguageSchema = createLanguageSchema();
+
 export const AnalyzePrImpactInputSchema = z.strictObject({
-  repository: createRepositorySchema(),
-  language: createLanguageSchema(),
+  repository: RepositorySchema,
+  language: LanguageSchema,
 });
 
 export const GenerateReviewSummaryInputSchema = z.strictObject({
-  repository: createRepositorySchema(),
-  language: createLanguageSchema(),
+  repository: RepositorySchema,
+  language: LanguageSchema,
 });
 
 export const InspectCodeQualityInputSchema = z.strictObject({
-  repository: createRepositorySchema(),
-  language: createLanguageSchema(),
+  repository: RepositorySchema,
+  language: LanguageSchema,
   focusAreas: z
     .array(
       createBoundedString(
@@ -104,8 +107,8 @@ export const SuggestSearchReplaceInputSchema = z.strictObject({
 });
 
 export const GenerateTestPlanInputSchema = z.strictObject({
-  repository: createRepositorySchema(),
-  language: createLanguageSchema(),
+  repository: RepositorySchema,
+  language: LanguageSchema,
   testFramework: createOptionalBoundedString(
     INPUT_LIMITS.testFramework.min,
     INPUT_LIMITS.testFramework.max,
@@ -119,9 +122,9 @@ export const GenerateTestPlanInputSchema = z.strictObject({
 });
 
 export const AnalyzeComplexityInputSchema = z.strictObject({
-  language: createLanguageSchema(),
+  language: LanguageSchema,
 });
 
 export const DetectApiBreakingInputSchema = z.strictObject({
-  language: createLanguageSchema(),
+  language: LanguageSchema,
 });

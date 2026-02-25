@@ -24,6 +24,19 @@ function createMarkdownContent(
   return { uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text };
 }
 
+function formatUnknownToolMessage(name: string): string {
+  return `Unknown tool: ${name}`;
+}
+
+function formatDiffResourceText(): string {
+  const slot = getDiff();
+  if (!slot) {
+    return '# No diff cached. Call generate_diff first.';
+  }
+
+  return `# Diff — ${slot.mode} — ${slot.generatedAt}\n# ${slot.stats.files} file(s), +${slot.stats.added} -${slot.stats.deleted}\n\n${slot.diff}`;
+}
+
 export interface StaticResourceDef {
   id: string;
   uri: string;
@@ -113,7 +126,7 @@ function registerToolInfoResources(server: McpServer): void {
     (uri, { toolName }) => {
       const name = typeof toolName === 'string' ? toolName : '';
       const info = getToolInfo(name);
-      const text = info ?? `Unknown tool: ${name}`;
+      const text = info ?? formatUnknownToolMessage(name);
       return { contents: [createMarkdownContent(uri, text)] };
     }
   );
@@ -135,13 +148,15 @@ function registerDiffResource(server: McpServer): void {
         priority: 1.0,
       },
     },
-    (uri) => {
-      const slot = getDiff();
-      const text = slot
-        ? `# Diff — ${slot.mode} — ${slot.generatedAt}\n# ${slot.stats.files} file(s), +${slot.stats.added} -${slot.stats.deleted}\n\n${slot.diff}`
-        : '# No diff cached. Call generate_diff first.';
-      return { contents: [{ uri: uri.href, mimeType: PATCH_MIME_TYPE, text }] };
-    }
+    (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: PATCH_MIME_TYPE,
+          text: formatDiffResourceText(),
+        },
+      ],
+    })
   );
 }
 

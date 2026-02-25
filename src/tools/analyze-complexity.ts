@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { formatLanguageSegment } from '../lib/format.js';
 import {
   buildStructuredToolRuntimeOptions,
   requireToolContract,
@@ -52,9 +53,7 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
       `Time=${result.timeComplexity}, Space=${result.spaceComplexity}. ${result.explanation}`,
     buildPrompt: (input, ctx) => {
       const diff = ctx.diffSlot?.diff ?? '';
-      const languageLine = input.language
-        ? `\nLanguage: ${input.language}`
-        : '';
+      const languageLine = formatLanguageSegment(input.language);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,

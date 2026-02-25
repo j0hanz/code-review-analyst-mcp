@@ -38,9 +38,9 @@ let sendResourceUpdated: SendResourceUpdated | undefined;
 function setDiffSlot(key: string, data: DiffSlot | undefined): void {
   if (data) {
     diffSlots.set(key, data);
-    return;
+  } else {
+    diffSlots.delete(key);
   }
-  diffSlots.delete(key);
 }
 
 function notifyDiffUpdated(): void {

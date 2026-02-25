@@ -1,12 +1,13 @@
 export type JsonObject = Record<string, unknown>;
 export type GeminiLogHandler = (level: string, data: unknown) => Promise<void>;
+export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export interface GeminiRequestExecutionOptions {
   maxRetries?: number;
   timeoutMs?: number;
   temperature?: number;
   maxOutputTokens?: number;
-  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  thinkingLevel?: GeminiThinkingLevel;
   includeThoughts?: boolean;
   signal?: AbortSignal;
   onLog?: GeminiLogHandler;

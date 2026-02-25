@@ -67,6 +67,17 @@ function describeModeHint(mode: DiffMode): string {
     : 'modified but not yet staged (git add)';
 }
 
+function formatGitFailureMessage(
+  err: Error & { code?: number | string; stderr?: string }
+): string {
+  if (typeof err.code === 'number') {
+    const stderr = err.stderr?.trim() ?? 'unknown error';
+    return `git exited with code ${String(err.code)}: ${stderr}. Ensure the working directory is a git repository.`;
+  }
+
+  return `Failed to run git: ${err.message}. Ensure git is installed and the working directory is a git repository.`;
+}
+
 export function registerGenerateDiffTool(server: McpServer): void {
   server.registerTool(
     'generate_diff',
@@ -145,19 +156,9 @@ export function registerGenerateDiffTool(server: McpServer): void {
             stderr?: string;
           };
 
-          if (err.code && typeof err.code === 'number') {
-            const stderr = err.stderr ? err.stderr.trim() : '';
-            return createErrorToolResponse(
-              'E_GENERATE_DIFF',
-              `git exited with code ${String(err.code)}: ${stderr || 'unknown error'}. Ensure the working directory is a git repository.`,
-              undefined,
-              { retryable: false, kind: 'internal' }
-            );
-          }
-
           return createErrorToolResponse(
             'E_GENERATE_DIFF',
-            `Failed to run git: ${err.message}. Ensure git is installed and the working directory is a git repository.`,
+            formatGitFailureMessage(err),
             undefined,
             { retryable: false, kind: 'internal' }
           );

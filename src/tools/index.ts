@@ -23,7 +23,7 @@ const TOOL_REGISTRARS = [
 ] as const satisfies readonly ToolRegistrar[];
 
 export function registerAllTools(server: McpServer): void {
-  for (const registrar of TOOL_REGISTRARS) {
+  TOOL_REGISTRARS.forEach((registrar) => {
     registrar(server);
-  }
+  });
 }
