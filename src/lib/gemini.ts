@@ -748,12 +748,31 @@ async function runWithRetries(
 ): Promise<unknown> {
   let lastError: unknown;
   let attempt = 0;
+  let currentModel = model;
 
   for (; attempt <= maxRetries; attempt += 1) {
     try {
-      return await executeAttempt(request, model, timeoutMs, attempt, onLog);
+      return await executeAttempt(request, currentModel, timeoutMs, attempt, onLog);
     } catch (error: unknown) {
       lastError = error;
+
+      if (
+        getNumericErrorCode(error) === 404 &&
+        currentModel === 'gemini-3-flash-preview'
+      ) {
+        currentModel = 'gemini-2.5-flash';
+        delete request.thinkingLevel;
+        await emitGeminiLog(onLog, 'warning', {
+          event: 'gemini_model_fallback',
+          details: {
+            from: 'gemini-3-flash-preview',
+            to: 'gemini-2.5-flash',
+            reason: 'Model not found (404)',
+          },
+        });
+        continue;
+      }
+
       if (!canRetryAttempt(attempt, maxRetries, error)) {
         attempt += 1; // Count this attempt before breaking
         break;
@@ -1065,6 +1084,51 @@ async function cancelBatchIfNeeded(
   }
 }
 
+async function createBatchJobWithFallback(
+  request: GeminiStructuredRequest,
+  batches: NonNullable<BatchApiClient['batches']>,
+  model: string,
+  onLog: GeminiOnLog
+): Promise<unknown> {
+  let currentModel = model;
+  const createSignal = request.signal ?? NEVER_ABORT_SIGNAL;
+
+  for (let attempt = 0; attempt <= 1; attempt += 1) {
+    try {
+      const createPayload: Record<string, unknown> = {
+        model: currentModel,
+        src: [
+          {
+            contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
+            config: buildGenerationConfig(request, createSignal),
+          },
+        ],
+      };
+      return await batches.create(createPayload);
+    } catch (error: unknown) {
+      if (
+        attempt === 0 &&
+        getNumericErrorCode(error) === 404 &&
+        currentModel === 'gemini-3-flash-preview'
+      ) {
+        currentModel = 'gemini-2.5-flash';
+        delete request.thinkingLevel;
+        await emitGeminiLog(onLog, 'warning', {
+          event: 'gemini_model_fallback',
+          details: {
+            from: 'gemini-3-flash-preview',
+            to: 'gemini-2.5-flash',
+            reason: 'Model not found (404) during batch create',
+          },
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('Unexpected state: batch creation loop exited without returning or throwing.');
+}
+
 async function runInlineBatchWithPolling(
   request: GeminiStructuredRequest,
   model: string,
@@ -1083,17 +1147,8 @@ async function runInlineBatchWithPolling(
   let timedOut = false;
 
   try {
-    const createSignal = request.signal ?? NEVER_ABORT_SIGNAL;
-    const createPayload: Record<string, unknown> = {
-      model,
-      src: [
-        {
-          contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
-          config: buildGenerationConfig(request, createSignal),
-        },
-      ],
-    };
-    const createdJob = await batches.create(createPayload);
+    const createdJob = await createBatchJobWithFallback(request, batches, model, onLog);
+
     const createdRecord = toRecord(createdJob);
     batchName =
       typeof createdRecord?.name === 'string' ? createdRecord.name : undefined;

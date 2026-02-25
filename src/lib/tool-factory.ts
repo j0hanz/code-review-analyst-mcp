@@ -756,6 +756,16 @@ export class ToolExecutionRunner<
         msg
       );
       await this.updateStatusMessage(msg);
+    } else if (record.event === 'gemini_queue_acquired') {
+      const msg = 'Model queue acquired, generating response...';
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        STEP_CALLING_MODEL,
+        msg
+      );
+      await this.updateStatusMessage(msg);
     }
   }
 
