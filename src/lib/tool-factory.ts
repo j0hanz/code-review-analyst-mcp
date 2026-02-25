@@ -1,5 +1,10 @@
+import type {
+  CreateTaskRequestHandlerExtra,
+  TaskRequestHandlerExtra,
+} from '@modelcontextprotocol/sdk/experimental/tasks/interfaces.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ZodRawShapeCompat } from '@modelcontextprotocol/sdk/server/zod-compat.js';
+import type { RequestTaskStore } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type {
   CallToolResult,
   LoggingLevel,
@@ -418,7 +423,7 @@ function createProgressReporter(
   }
 
   const progressToken = rawToken;
-  let lastCurrent = 0;
+  let lastCurrent = -1;
   let didSendTerminal = false;
 
   return async (payload): Promise<void> => {
@@ -426,7 +431,12 @@ function createProgressReporter(
       return;
     }
 
-    const current = Math.max(payload.current, lastCurrent);
+    let { current } = payload;
+    if (current <= lastCurrent && current < (payload.total ?? Infinity)) {
+      current = lastCurrent + 0.01;
+    }
+    current = Math.max(current, lastCurrent);
+
     const total =
       payload.total !== undefined
         ? Math.max(payload.total, current)
@@ -545,6 +555,7 @@ async function reportProgressStepUpdate(
 ): Promise<void> {
   await reportProgress({
     current,
+    total: TASK_PROGRESS_TOTAL,
     message: formatProgressStep(toolName, context, metadata),
   });
 }
@@ -557,6 +568,7 @@ async function reportProgressCompletionUpdate(
 ): Promise<void> {
   await reportProgress({
     current: TASK_PROGRESS_TOTAL,
+    total: TASK_PROGRESS_TOTAL,
     message: formatProgressCompletion(toolName, context, outcome),
   });
 }
@@ -573,7 +585,7 @@ async function reportSchemaRetryProgressBestEffort(
       reportProgress,
       toolName,
       context,
-      STEP_VALIDATING_RESPONSE,
+      STEP_VALIDATING_RESPONSE + retryCount / (maxRetries + 1),
       `Schema repair in progress (attempt ${retryCount}/${maxRetries})...`
     );
   } catch {
@@ -1050,6 +1062,14 @@ export class ToolExecutionRunner<
   }
 }
 
+interface ExtendedRequestTaskStore extends RequestTaskStore {
+  updateTaskStatus(
+    taskId: string,
+    status: 'working' | 'input_required' | 'completed' | 'failed' | 'cancelled',
+    statusMessage?: string
+  ): Promise<void>;
+}
+
 export function registerStructuredToolTask<
   TInput extends object,
   TResult extends object = Record<string, unknown>,
@@ -1063,7 +1083,7 @@ export function registerStructuredToolTask<
     resultSchema: config.resultSchema,
   });
 
-  server.registerTool(
+  server.experimental.tasks.registerToolTask(
     config.name,
     {
       title: config.title,
@@ -1071,30 +1091,72 @@ export function registerStructuredToolTask<
       inputSchema: config.inputSchema,
       outputSchema: DefaultOutputSchema,
       annotations: buildToolAnnotations(config.annotations),
+      execution: {
+        taskSupport: 'optional',
+      },
     },
-    async (input: unknown, extra: ProgressExtra) => {
-      const runner = new ToolExecutionRunner(config, {
-        onLog: async (level, data) => {
-          // Standard logging for tool calls
-          try {
-            await server.sendLoggingMessage({
-              level: toLoggingLevel(level),
-              logger: 'gemini',
-              data: asObjectRecord(data),
-            });
-          } catch {
-            // Fallback if logging fails
-          }
-        },
-        reportProgress: createProgressReporter(extra),
-        statusReporter: {
-          updateStatus: async () => {
-            // No-op for standard tool calls as they don't have a persistent task status
+    {
+      createTask: async (
+        input: unknown,
+        extra: CreateTaskRequestHandlerExtra
+      ) => {
+        const task = await extra.taskStore.createTask({ ttl: 300000 });
+        const extendedStore =
+          extra.taskStore as unknown as ExtendedRequestTaskStore;
+
+        const runner = new ToolExecutionRunner(config, {
+          onLog: async (level, data) => {
+            try {
+              await server.sendLoggingMessage({
+                level: toLoggingLevel(level),
+                logger: 'gemini',
+                data: asObjectRecord(data),
+              });
+            } catch {
+              // Fallback if logging fails
+            }
           },
-        },
-      });
-      runner.setResponseSchemaOverride(responseSchema);
-      return await runner.run(input);
+          reportProgress: createProgressReporter(
+            extra as unknown as ProgressExtra
+          ),
+          statusReporter: {
+            updateStatus: async (message) => {
+              await extendedStore.updateTaskStatus(
+                task.taskId,
+                'working',
+                message
+              );
+            },
+            storeResult: async (status, result) => {
+              await extra.taskStore.storeTaskResult(
+                task.taskId,
+                status,
+                result
+              );
+            },
+          },
+        });
+        runner.setResponseSchemaOverride(responseSchema);
+
+        // Run in background
+        runner.run(input).catch(async (error: unknown) => {
+          await extendedStore.updateTaskStatus(
+            task.taskId,
+            'failed',
+            getErrorMessage(error)
+          );
+        });
+
+        return { task };
+      },
+      getTask: async (input: unknown, extra: TaskRequestHandlerExtra) => {
+        return await extra.taskStore.getTask(extra.taskId);
+      },
+      getTaskResult: async (input: unknown, extra: TaskRequestHandlerExtra) => {
+        return (await extra.taskStore.getTaskResult(
+          extra.taskId
+        )) as CallToolResult;
+      },
     }
   );
 }
