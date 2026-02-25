@@ -752,7 +752,13 @@ async function runWithRetries(
 
   for (; attempt <= maxRetries; attempt += 1) {
     try {
-      return await executeAttempt(request, currentModel, timeoutMs, attempt, onLog);
+      return await executeAttempt(
+        request,
+        currentModel,
+        timeoutMs,
+        attempt,
+        onLog
+      );
     } catch (error: unknown) {
       lastError = error;
 
@@ -1126,7 +1132,9 @@ async function createBatchJobWithFallback(
       throw error;
     }
   }
-  throw new Error('Unexpected state: batch creation loop exited without returning or throwing.');
+  throw new Error(
+    'Unexpected state: batch creation loop exited without returning or throwing.'
+  );
 }
 
 async function runInlineBatchWithPolling(
@@ -1147,7 +1155,12 @@ async function runInlineBatchWithPolling(
   let timedOut = false;
 
   try {
-    const createdJob = await createBatchJobWithFallback(request, batches, model, onLog);
+    const createdJob = await createBatchJobWithFallback(
+      request,
+      batches,
+      model,
+      onLog
+    );
 
     const createdRecord = toRecord(createdJob);
     batchName =
