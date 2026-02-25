@@ -22,6 +22,7 @@ import { DefaultOutputSchema } from '../schemas/outputs.js';
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 10 * 1024 * 1024; // 10 MB
+const MAX_GIT_ROOT_CACHE_SIZE = 50;
 
 const execFileAsync = promisify(execFile);
 const gitRootByCwd = new Map<string, string>();
@@ -43,6 +44,9 @@ async function findGitRoot(cwd: string = process.cwd()): Promise<string> {
     }
   );
   const gitRoot = stdout.trim();
+  if (gitRootByCwd.size >= MAX_GIT_ROOT_CACHE_SIZE) {
+    gitRootByCwd.clear();
+  }
   gitRootByCwd.set(cwd, gitRoot);
   return gitRoot;
 }
@@ -65,6 +69,34 @@ function describeModeHint(mode: DiffMode): string {
   return mode === 'staged'
     ? 'staged with git add'
     : 'modified but not yet staged (git add)';
+}
+
+type GitError = Error & {
+  code?: number | string;
+  stderr?: string;
+  killed?: boolean;
+};
+
+function classifyGitError(err: GitError): {
+  retryable: boolean;
+  kind: 'validation' | 'timeout' | 'internal';
+} {
+  if (err.code === 'ENOENT') {
+    return { retryable: false, kind: 'validation' };
+  }
+  if (err.killed === true) {
+    return { retryable: false, kind: 'timeout' };
+  }
+  if (typeof err.code === 'number') {
+    const stderr = err.stderr?.toLowerCase() ?? '';
+    if (
+      stderr.includes('not a git repository') ||
+      stderr.includes('not a git repo')
+    ) {
+      return { retryable: false, kind: 'validation' };
+    }
+  }
+  return { retryable: false, kind: 'internal' };
 }
 
 function formatGitFailureMessage(
@@ -151,16 +183,12 @@ export function registerGenerateDiffTool(server: McpServer): void {
             summary
           );
         } catch (error: unknown) {
-          const err = error as Error & {
-            code?: number | string;
-            stderr?: string;
-          };
-
+          const err = error as GitError;
           return createErrorToolResponse(
             'E_GENERATE_DIFF',
             formatGitFailureMessage(err),
             undefined,
-            { retryable: false, kind: 'internal' }
+            classifyGitError(err)
           );
         }
       }

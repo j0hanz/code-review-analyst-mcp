@@ -34,6 +34,7 @@ type SendResourceUpdated = (params: { uri: string }) => Promise<void>;
 
 const diffSlots = new Map<string, DiffSlot>();
 let sendResourceUpdated: SendResourceUpdated | undefined;
+let diffStoreInitialized = false;
 
 function setDiffSlot(key: string, data: DiffSlot | undefined): void {
   if (data) {
@@ -51,6 +52,10 @@ function notifyDiffUpdated(): void {
 
 /** Call once during server setup so the store can emit resource-updated notifications. */
 export function initDiffStore(server: McpServer): void {
+  if (diffStoreInitialized) {
+    return;
+  }
+  diffStoreInitialized = true;
   const inner = (
     server as unknown as {
       server?: { sendResourceUpdated?: SendResourceUpdated };
@@ -87,7 +92,7 @@ export function getDiff(key: string = process.cwd()): DiffSlot | undefined {
 }
 
 export function hasDiff(key: string = process.cwd()): boolean {
-  return diffSlots.has(key);
+  return getDiff(key) !== undefined;
 }
 
 /** Test-only: directly set or clear the diff slot without emitting resource-updated. */

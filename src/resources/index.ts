@@ -43,7 +43,7 @@ export interface StaticResourceDef {
   title: string;
   description: string;
   priority: number;
-  content: () => string;
+  content?: () => string;
 }
 
 export const STATIC_RESOURCES: readonly StaticResourceDef[] = [
@@ -53,7 +53,6 @@ export const STATIC_RESOURCES: readonly StaticResourceDef[] = [
     title: 'Server Instructions',
     description: 'Complete server usage instructions.',
     priority: 0.8,
-    content: () => '', // placeholder — resolved at registration time
   },
   {
     id: 'tool-catalog',
@@ -86,7 +85,7 @@ function registerStaticResource(
   def: StaticResourceDef,
   contentOverride?: string
 ): void {
-  const content = contentOverride ?? def.content();
+  const content = contentOverride ?? def.content?.() ?? '';
   server.registerResource(
     def.id,
     def.uri,

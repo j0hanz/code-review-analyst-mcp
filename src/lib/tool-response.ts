@@ -4,7 +4,8 @@ export type ErrorKind =
   | 'upstream'
   | 'timeout'
   | 'cancelled'
-  | 'internal';
+  | 'internal'
+  | 'busy';
 
 export interface ErrorMeta {
   retryable?: boolean;

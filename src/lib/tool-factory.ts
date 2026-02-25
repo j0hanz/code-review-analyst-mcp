@@ -72,6 +72,8 @@ const schemaRetryErrorCharsConfig = createCachedEnvInt(
   'MAX_SCHEMA_RETRY_ERROR_CHARS',
   DEFAULT_SCHEMA_RETRY_ERROR_CHARS
 );
+const DEFAULT_TASK_TTL_MS = 300_000;
+const taskTtlMsConfig = createCachedEnvInt('TASK_TTL_MS', DEFAULT_TASK_TTL_MS);
 const DETERMINISTIC_JSON_RETRY_NOTE =
   'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
 
@@ -174,10 +176,7 @@ export interface StructuredToolTaskConfig<
   validateInput?: (
     input: TInput,
     ctx: ToolExecutionContext
-  ) =>
-    | Promise<ReturnType<typeof createErrorToolResponse> | undefined>
-    | ReturnType<typeof createErrorToolResponse>
-    | undefined;
+  ) => Promise<ReturnType<typeof createErrorToolResponse> | undefined>;
 
   /** Optional flag to enforce diff presence and budget check before tool execution. */
   requiresDiff?: boolean;
@@ -391,6 +390,13 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
     };
   }
 
+  if (BUSY_ERROR_PATTERN.test(message)) {
+    return {
+      kind: 'busy',
+      retryable: true,
+    };
+  }
+
   if (isRetryableUpstreamMessage(message)) {
     return {
       kind: 'upstream',
@@ -405,10 +411,7 @@ function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
 }
 
 function isRetryableUpstreamMessage(message: string): boolean {
-  return (
-    RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message) ||
-    BUSY_ERROR_PATTERN.test(message)
-  );
+  return RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message);
 }
 
 function createProgressReporter(
@@ -504,7 +507,7 @@ function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  return `${toolName}: ${context} • ${metadata}`;
+  return `${toolName}: ${context} [${metadata}]`;
 }
 
 function formatProgressCompletion(
@@ -512,7 +515,7 @@ function formatProgressCompletion(
   context: string,
   outcome: string
 ): string {
-  return `🗒 ${toolName}: ${context} • ${outcome}`;
+  return `${toolName}: ${context} [${outcome}]`;
 }
 
 function createFailureStatusMessage(
@@ -923,6 +926,8 @@ export class ToolExecutionRunner<
 
   async run(input: unknown): Promise<CallToolResult> {
     try {
+      await this.reportAndStatus(STEP_STARTING, 'Initializing...');
+
       const inputRecord = parseToolInput<TInput>(
         input,
         this.config.fullInputSchema
@@ -935,7 +940,6 @@ export class ToolExecutionRunner<
         diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
       };
 
-      await this.reportAndStatus(STEP_STARTING, 'Initializing...');
       await this.reportAndStatus(
         STEP_VALIDATING,
         'Validating request parameters...'
@@ -1047,6 +1051,7 @@ export function registerStructuredToolTask<
     geminiSchema: config.geminiSchema,
     resultSchema: config.resultSchema,
   });
+  responseSchemaCache.set(config, responseSchema);
 
   server.experimental.tasks.registerToolTask(
     config.name,
@@ -1065,7 +1070,9 @@ export function registerStructuredToolTask<
         input: unknown,
         extra: CreateTaskRequestHandlerExtra
       ) => {
-        const task = await extra.taskStore.createTask({ ttl: 300000 });
+        const task = await extra.taskStore.createTask({
+          ttl: taskTtlMsConfig.get(),
+        });
         const extendedStore =
           extra.taskStore as unknown as ExtendedRequestTaskStore;
 
@@ -1081,7 +1088,7 @@ export function registerStructuredToolTask<
               // Fallback if logging fails
             }
           },
-          reportProgress: createProgressReporter(
+          reportProgress: getOrCreateProgressReporter(
             extra as unknown as ProgressExtra
           ),
           statusReporter: {
@@ -1101,7 +1108,6 @@ export function registerStructuredToolTask<
             },
           },
         });
-        runner.setResponseSchemaOverride(responseSchema);
 
         // Run in background
         runner.run(input).catch(async (error: unknown) => {

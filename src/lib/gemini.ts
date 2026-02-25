@@ -83,43 +83,25 @@ const RETRYABLE_TRANSIENT_CODES = new Set([
 ]);
 
 type Waiter = () => void;
-type WaiterCollection = Set<Waiter> | Waiter[];
 
-function getWaiterCount(waiters: WaiterCollection): number {
-  return waiters instanceof Set ? waiters.size : waiters.length;
+function getWaiterCount(waiters: Set<Waiter>): number {
+  return waiters.size;
 }
 
-function addWaiter(waiters: WaiterCollection, waiter: Waiter): void {
-  if (waiters instanceof Set) {
-    waiters.add(waiter);
-    return;
-  }
-
-  waiters.push(waiter);
+function addWaiter(waiters: Set<Waiter>, waiter: Waiter): void {
+  waiters.add(waiter);
 }
 
-function removeWaiter(waiters: WaiterCollection, waiter: Waiter): void {
-  if (waiters instanceof Set) {
-    waiters.delete(waiter);
-    return;
-  }
-
-  const index = waiters.indexOf(waiter);
-  if (index !== -1) {
-    waiters.splice(index, 1);
-  }
+function removeWaiter(waiters: Set<Waiter>, waiter: Waiter): void {
+  waiters.delete(waiter);
 }
 
-function popNextWaiter(waiters: WaiterCollection): Waiter | undefined {
-  if (waiters instanceof Set) {
-    const next = waiters.values().next().value;
-    if (next !== undefined) {
-      waiters.delete(next);
-    }
-    return next;
+function popNextWaiter(waiters: Set<Waiter>): Waiter | undefined {
+  const next = waiters.values().next().value;
+  if (next !== undefined) {
+    waiters.delete(next);
   }
-
-  return waiters.shift();
+  return next;
 }
 
 const SAFETY_CATEGORIES = [
@@ -744,11 +726,12 @@ async function runWithRetries(
   let lastError: unknown;
   let attempt = 0;
   let currentModel = model;
+  let effectiveRequest: GeminiStructuredRequest = request;
 
   for (; attempt <= maxRetries; attempt += 1) {
     try {
       return await executeAttempt(
-        request,
+        effectiveRequest,
         currentModel,
         timeoutMs,
         attempt,
@@ -762,7 +745,7 @@ async function runWithRetries(
         currentModel === 'gemini-3-flash-preview'
       ) {
         currentModel = 'gemini-2.5-flash';
-        delete request.thinkingLevel;
+        effectiveRequest = omitThinkingLevel(request);
         await emitGeminiLog(onLog, 'warning', {
           event: 'gemini_model_fallback',
           details: {
@@ -801,11 +784,24 @@ function tryWakeNextWaiter(): void {
   }
 }
 
+/**
+ * Returns a shallow copy of the request with `thinkingLevel` removed.
+ * Uses Reflect.deleteProperty to satisfy `exactOptionalPropertyTypes` —
+ * the property must be absent, not explicitly set to `undefined`.
+ */
+function omitThinkingLevel(
+  request: GeminiStructuredRequest
+): GeminiStructuredRequest {
+  const copy = { ...request };
+  Reflect.deleteProperty(copy, 'thinkingLevel');
+  return copy;
+}
+
 async function waitForSlot(
   limit: number,
   getActiveCount: () => number,
   acquireSlot: () => void,
-  waiters: WaiterCollection,
+  waiters: Set<Waiter>,
   requestSignal?: AbortSignal
 ): Promise<void> {
   if (getWaiterCount(waiters) === 0 && getActiveCount() < limit) {
@@ -1092,6 +1088,7 @@ async function createBatchJobWithFallback(
   onLog: GeminiOnLog
 ): Promise<unknown> {
   let currentModel = model;
+  let effectiveRequest: GeminiStructuredRequest = request;
   const createSignal = request.signal ?? NEVER_ABORT_SIGNAL;
 
   for (let attempt = 0; attempt <= 1; attempt += 1) {
@@ -1100,8 +1097,10 @@ async function createBatchJobWithFallback(
         model: currentModel,
         src: [
           {
-            contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
-            config: buildGenerationConfig(request, createSignal),
+            contents: [
+              { role: 'user', parts: [{ text: effectiveRequest.prompt }] },
+            ],
+            config: buildGenerationConfig(effectiveRequest, createSignal),
           },
         ],
       };
@@ -1113,7 +1112,7 @@ async function createBatchJobWithFallback(
         currentModel === 'gemini-3-flash-preview'
       ) {
         currentModel = 'gemini-2.5-flash';
-        delete request.thinkingLevel;
+        effectiveRequest = omitThinkingLevel(request);
         await emitGeminiLog(onLog, 'warning', {
           event: 'gemini_model_fallback',
           details: {
