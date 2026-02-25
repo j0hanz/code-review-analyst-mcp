@@ -49,6 +49,12 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => {
+      const focus = input.focusAreas
+        ? `[${input.focusAreas.join(',')}]`
+        : 'general';
+      return `${input.repository} ${focus}`;
+    },
     formatOutcome: (result) =>
       `${result.findings.length} findings, risk: ${result.overallRisk}`,
     formatOutput: (result) => {

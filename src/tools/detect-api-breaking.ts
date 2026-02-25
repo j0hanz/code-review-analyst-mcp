@@ -31,6 +31,7 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.language ?? 'auto-detect',
     formatOutcome: (result) =>
       `${result.breakingChanges.length} breaking change(s) found`,
     formatOutput: (result) =>

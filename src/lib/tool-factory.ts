@@ -495,7 +495,7 @@ function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  return `${toolName}: ${context} [${metadata}]`;
+  return `${toolName}: ${context} • ${metadata}`;
 }
 
 function formatProgressCompletion(
@@ -574,7 +574,7 @@ async function reportSchemaRetryProgressBestEffort(
       toolName,
       context,
       STEP_VALIDATING_RESPONSE,
-      `schema repair ${retryCount}/${maxRetries}`
+      `Schema repair in progress (attempt ${retryCount}/${maxRetries})...`
     );
   } catch {
     // Progress updates are best-effort and must not interrupt retries.
@@ -727,10 +727,36 @@ export class ToolExecutionRunner<
     private readonly signal?: AbortSignal
   ) {
     this.responseSchema = getCachedGeminiResponseSchema(config);
-    this.onLog = dependencies.onLog;
     this.reportProgress = dependencies.reportProgress;
     this.statusReporter = dependencies.statusReporter;
     this.progressContext = DEFAULT_PROGRESS_CONTEXT;
+
+    this.onLog = async (level: string, data: unknown): Promise<void> => {
+      try {
+        await dependencies.onLog(level, data);
+      } catch {
+        // Ignore logging failures
+      }
+      await this.handleInternalLog(data);
+    };
+  }
+
+  private async handleInternalLog(data: unknown): Promise<void> {
+    const record = asObjectRecord(data);
+    if (record.event === 'gemini_retry') {
+      const details = asObjectRecord(record.details);
+      const { attempt } = details;
+      const msg = `Network error. Retrying (attempt ${String(attempt)})...`;
+
+      await reportProgressStepUpdate(
+        this.reportProgress,
+        this.config.name,
+        this.progressContext,
+        STEP_CALLING_MODEL,
+        msg
+      );
+      await this.updateStatusMessage(msg);
+    }
   }
 
   setResponseSchemaOverride(responseSchema: Record<string, unknown>): void {
@@ -831,13 +857,13 @@ export class ToolExecutionRunner<
         );
 
         if (attempt === 0) {
-          await this.updateStatusMessage('validating response');
+          await this.updateStatusMessage('Verifying output structure...');
           await reportProgressStepUpdate(
             this.reportProgress,
             this.config.name,
             this.progressContext,
             STEP_VALIDATING_RESPONSE,
-            'validating response'
+            'Verifying output structure...'
           );
         }
 
@@ -900,18 +926,18 @@ export class ToolExecutionRunner<
         this.config.name,
         this.progressContext,
         STEP_STARTING,
-        'starting'
+        'Initializing...'
       );
-      await this.updateStatusMessage('starting');
+      await this.updateStatusMessage('Initializing...');
 
       await reportProgressStepUpdate(
         this.reportProgress,
         this.config.name,
         this.progressContext,
         STEP_VALIDATING,
-        'validating input'
+        'Validating request parameters...'
       );
-      await this.updateStatusMessage('validating input');
+      await this.updateStatusMessage('Validating request parameters...');
 
       const validationError = await this.executeValidation(inputRecord, ctx);
       if (validationError) {
@@ -923,9 +949,9 @@ export class ToolExecutionRunner<
         this.config.name,
         this.progressContext,
         STEP_BUILDING_PROMPT,
-        'building prompt'
+        'Constructing analysis context...'
       );
-      await this.updateStatusMessage('building prompt');
+      await this.updateStatusMessage('Constructing analysis context...');
 
       const promptParts = this.config.buildPrompt(inputRecord, ctx);
       const { prompt, systemInstruction } = promptParts;
@@ -935,9 +961,9 @@ export class ToolExecutionRunner<
         this.config.name,
         this.progressContext,
         STEP_CALLING_MODEL,
-        'calling model'
+        'Querying Gemini model...'
       );
-      await this.updateStatusMessage('calling model');
+      await this.updateStatusMessage('Querying Gemini model...');
 
       const parsed = await this.executeModelCall(systemInstruction, prompt);
 
@@ -946,9 +972,9 @@ export class ToolExecutionRunner<
         this.config.name,
         this.progressContext,
         STEP_FINALIZING,
-        'finalizing'
+        'Processing results...'
       );
-      await this.updateStatusMessage('finalizing');
+      await this.updateStatusMessage('Processing results...');
 
       const finalResult = (
         this.config.transformResult
@@ -964,7 +990,7 @@ export class ToolExecutionRunner<
         const ageMs = Date.now() - new Date(ctx.diffSlot.generatedAt).getTime();
         if (ageMs > diffStaleWarningMs.get()) {
           const ageMinutes = Math.round(ageMs / 60_000);
-          const warning = `\n\n⚠️ Warning: The analyzed diff is over ${ageMinutes} minutes old. If you have made recent changes, please run generate_diff again.`;
+          const warning = `\n\nWarning: The analyzed diff is over ${ageMinutes} minutes old. If you have made recent changes, please run generate_diff again.`;
           textContent = textContent ? textContent + warning : warning;
         }
       }

@@ -31,6 +31,7 @@ export function registerAnalyzeComplexityTool(server: McpServer): void {
     maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
     ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
     requiresDiff: true,
+    progressContext: (input) => input.language ?? 'auto-detect',
     formatOutcome: (result) =>
       result.isDegradation
         ? 'Performance degradation detected'
