@@ -71,7 +71,24 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          node --input-type=module -e "import fs from 'node:fs'; const path = 'server.json'; const data = JSON.parse(fs.readFileSync(path, 'utf8')); data.version = process.env.VERSION; if (Array.isArray(data.packages)) { for (const pkg of data.packages) { if (pkg && typeof pkg === 'object') pkg.version = process.env.VERSION; } } fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const path = 'server.json';
+          const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+          data.version = process.env.VERSION;
+
+          if (Array.isArray(data.packages)) {
+            for (const pkg of data.packages) {
+              if (pkg && typeof pkg === 'object') {
+                pkg.version = process.env.VERSION;
+              }
+            }
+          }
+
+          fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          NODE
           npm install --package-lock-only --ignore-scripts
 
       - name: Install & validate
