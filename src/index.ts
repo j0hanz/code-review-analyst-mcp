@@ -74,7 +74,10 @@ async function shutdown(server: ServerInstance): Promise<void> {
 function registerShutdownHandlers(server: ServerInstance): void {
   for (const signal of SHUTDOWN_SIGNALS) {
     process.once(signal, () => {
-      void shutdown(server);
+      shutdown(server).catch((error: unknown) => {
+        console.error(`[fatal] ${getErrorMessage(error)}`);
+        process.exit(1);
+      });
     });
   }
 }

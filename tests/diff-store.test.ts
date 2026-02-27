@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   createNoDiffError,
+  DIFF_RESOURCE_URI,
   getDiff,
   hasDiff,
   initDiffStore,
@@ -50,6 +51,39 @@ describe('diff-store', () => {
     initDiffStore({} as never);
     initDiffStore({} as never);
     assert.ok(true);
+  });
+
+  it('rebinds diff update notifications when initialized with a new server', () => {
+    const key = `${process.cwd()}:diff-store-test:rebind`;
+    const calls: string[] = [];
+    const slot = createSlot(new Date().toISOString());
+
+    const firstServer = {
+      server: {
+        sendResourceUpdated: async ({ uri }: { uri: string }) => {
+          calls.push(`first:${uri}`);
+        },
+      },
+    };
+    const secondServer = {
+      server: {
+        sendResourceUpdated: async ({ uri }: { uri: string }) => {
+          calls.push(`second:${uri}`);
+        },
+      },
+    };
+
+    setDiffForTesting(undefined, key);
+    initDiffStore(firstServer as never);
+    storeDiff(slot, key);
+
+    initDiffStore(secondServer as never);
+    storeDiff(slot, key);
+
+    assert.equal(calls[0], `first:${DIFF_RESOURCE_URI}`);
+    assert.equal(calls[1], `second:${DIFF_RESOURCE_URI}`);
+
+    setDiffForTesting(undefined, key);
   });
 
   it('creates a no-diff validation error payload', () => {

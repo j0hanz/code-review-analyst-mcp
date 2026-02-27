@@ -34,7 +34,6 @@ type SendResourceUpdated = (params: { uri: string }) => Promise<void>;
 
 const diffSlots = new Map<string, DiffSlot>();
 let sendResourceUpdated: SendResourceUpdated | undefined;
-let diffStoreInitialized = false;
 
 function setDiffSlot(key: string, data: DiffSlot | undefined): void {
   if (data) {
@@ -50,12 +49,8 @@ function notifyDiffUpdated(): void {
   });
 }
 
-/** Call once during server setup so the store can emit resource-updated notifications. */
+/** Binds diff resource notifications to the currently active server instance. */
 export function initDiffStore(server: McpServer): void {
-  if (diffStoreInitialized) {
-    return;
-  }
-  diffStoreInitialized = true;
   const inner = (
     server as unknown as {
       server?: { sendResourceUpdated?: SendResourceUpdated };
@@ -64,6 +59,7 @@ export function initDiffStore(server: McpServer): void {
   if (typeof inner?.sendResourceUpdated === 'function') {
     sendResourceUpdated = inner.sendResourceUpdated.bind(inner);
   } else {
+    sendResourceUpdated = undefined;
     console.error(
       '[diff-store] sendResourceUpdated not available — diff resource notifications disabled.'
     );
