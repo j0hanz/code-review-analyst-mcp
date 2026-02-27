@@ -305,7 +305,7 @@ function createSchemaRetryPrompt(
 
   return {
     summarizedError,
-    prompt: `${prompt}\n\nCRITICAL: The previous response failed schema validation. Error: ${summarizedError}${deterministicNote}`,
+    prompt: `CRITICAL: The previous response failed schema validation. Error: ${summarizedError}${deterministicNote}\n\n${prompt}`,
   };
 }
 
@@ -755,6 +755,87 @@ interface TaskStatusReporter {
   ) => Promise<void>;
 }
 
+class RunReporter {
+  private lastStatusMessage: string | undefined;
+
+  constructor(
+    private readonly toolName: string,
+    private readonly reportProgress: (
+      payload: ProgressPayload
+    ) => Promise<void>,
+    private readonly statusReporter: TaskStatusReporter,
+    private progressContext: string
+  ) {}
+
+  async updateStatus(message: string): Promise<void> {
+    if (this.lastStatusMessage === message) {
+      return;
+    }
+
+    try {
+      await this.statusReporter.updateStatus(message);
+      this.lastStatusMessage = message;
+    } catch {
+      // Best-effort
+    }
+  }
+
+  async storeResultSafely(
+    status: 'completed' | 'failed',
+    result: CallToolResult,
+    onLog: (level: string, data: unknown) => Promise<void>
+  ): Promise<void> {
+    if (!this.statusReporter.storeResult) {
+      return;
+    }
+    try {
+      await this.statusReporter.storeResult(status, result);
+    } catch (storeErr: unknown) {
+      await onLog('error', {
+        event: 'store_result_failed',
+        error: getErrorMessage(storeErr),
+      });
+    }
+  }
+
+  async reportStep(step: number, message: string): Promise<void> {
+    await reportProgressStepUpdate(
+      this.reportProgress,
+      this.toolName,
+      this.progressContext,
+      step,
+      message
+    );
+    await this.updateStatus(message);
+  }
+
+  async reportCompletion(outcome: string): Promise<void> {
+    await reportProgressCompletionUpdate(
+      this.reportProgress,
+      this.toolName,
+      this.progressContext,
+      outcome
+    );
+  }
+
+  async reportSchemaRetry(
+    retryCount: number,
+    maxRetries: number
+  ): Promise<void> {
+    await reportSchemaRetryProgressBestEffort(
+      this.reportProgress,
+      this.toolName,
+      this.progressContext,
+      retryCount,
+      maxRetries
+    );
+  }
+
+  updateContext(newContext: string): void {
+    this.progressContext = newContext;
+  }
+}
+
 export class ToolExecutionRunner<
   TInput extends object,
   TResult extends object,
@@ -764,10 +845,7 @@ export class ToolExecutionRunner<
   private hasSnapshot = false;
   private responseSchema: Record<string, unknown>;
   private readonly onLog: (level: string, data: unknown) => Promise<void>;
-  private readonly reportProgress: (payload: ProgressPayload) => Promise<void>;
-  private readonly statusReporter: TaskStatusReporter;
-  private progressContext: string;
-  private lastStatusMessage: string | undefined;
+  private reporter: RunReporter;
 
   constructor(
     private readonly config: StructuredToolTaskConfig<TInput, TResult, TFinal>,
@@ -779,9 +857,13 @@ export class ToolExecutionRunner<
     private readonly signal?: AbortSignal
   ) {
     this.responseSchema = getCachedGeminiResponseSchema(config);
-    this.reportProgress = dependencies.reportProgress;
-    this.statusReporter = dependencies.statusReporter;
-    this.progressContext = DEFAULT_PROGRESS_CONTEXT;
+    // Initialize reporter with placeholder context; updated in run()
+    this.reporter = new RunReporter(
+      config.name,
+      dependencies.reportProgress,
+      dependencies.statusReporter,
+      DEFAULT_PROGRESS_CONTEXT
+    );
 
     this.onLog = async (level: string, data: unknown): Promise<void> => {
       try {
@@ -800,10 +882,10 @@ export class ToolExecutionRunner<
       const { attempt } = details;
       const msg = `Network error. Retrying (attempt ${String(attempt)})...`;
 
-      await this.reportAndStatus(STEP_CALLING_MODEL, msg);
+      await this.reporter.reportStep(STEP_CALLING_MODEL, msg);
     } else if (record.event === 'gemini_queue_acquired') {
       const msg = 'Model queue acquired, generating response...';
-      await this.reportAndStatus(STEP_CALLING_MODEL, msg);
+      await this.reporter.reportStep(STEP_CALLING_MODEL, msg);
     }
   }
 
@@ -815,36 +897,6 @@ export class ToolExecutionRunner<
   setDiffSlotSnapshot(diffSlotSnapshot: DiffSlot | undefined): void {
     this.diffSlotSnapshot = diffSlotSnapshot;
     this.hasSnapshot = true;
-  }
-
-  private async updateStatusMessage(message: string): Promise<void> {
-    if (this.lastStatusMessage === message) {
-      return;
-    }
-
-    try {
-      await this.statusReporter.updateStatus(message);
-      this.lastStatusMessage = message;
-    } catch {
-      // Best-effort
-    }
-  }
-
-  private async storeResultSafely(
-    status: 'completed' | 'failed',
-    result: CallToolResult
-  ): Promise<void> {
-    if (!this.statusReporter.storeResult) {
-      return;
-    }
-    try {
-      await this.statusReporter.storeResult(status, result);
-    } catch (storeErr: unknown) {
-      await this.onLog('error', {
-        event: 'store_result_failed',
-        error: getErrorMessage(storeErr),
-      });
-    }
   }
 
   private async executeValidation(
@@ -859,14 +911,13 @@ export class ToolExecutionRunner<
 
     if (validationError) {
       const validationMessage = extractValidationMessage(validationError);
-      await this.updateStatusMessage(validationMessage);
-      await reportProgressCompletionUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        'rejected'
+      await this.reporter.updateStatus(validationMessage);
+      await this.reporter.reportCompletion('rejected');
+      await this.reporter.storeResultSafely(
+        'completed',
+        validationError,
+        this.onLog
       );
-      await this.storeResultSafely('completed', validationError);
       return validationError;
     }
     return undefined;
@@ -894,7 +945,7 @@ export class ToolExecutionRunner<
         );
 
         if (attempt === 0) {
-          await this.reportAndStatus(
+          await this.reporter.reportStep(
             STEP_VALIDATING_RESPONSE,
             'Verifying output structure...'
           );
@@ -922,13 +973,7 @@ export class ToolExecutionRunner<
           },
         });
 
-        await reportSchemaRetryProgressBestEffort(
-          this.reportProgress,
-          this.config.name,
-          this.progressContext,
-          attempt + 1,
-          maxRetries
-        );
+        await this.reporter.reportSchemaRetry(attempt + 1, maxRetries);
 
         retryPrompt = schemaRetryPrompt.prompt;
       }
@@ -938,17 +983,6 @@ export class ToolExecutionRunner<
       throw new Error('Unexpected state: parsed result is undefined');
     }
     return parsed;
-  }
-
-  private async reportAndStatus(step: number, message: string): Promise<void> {
-    await reportProgressStepUpdate(
-      this.reportProgress,
-      this.config.name,
-      this.progressContext,
-      step,
-      message
-    );
-    await this.updateStatusMessage(message);
   }
 
   private createExecutionContext(): ToolExecutionContext {
@@ -984,13 +1018,8 @@ export class ToolExecutionRunner<
     textContent: string | undefined
   ): Promise<CallToolResult> {
     const outcome = this.config.formatOutcome?.(finalResult) ?? 'completed';
-    await reportProgressCompletionUpdate(
-      this.reportProgress,
-      this.config.name,
-      this.progressContext,
-      outcome
-    );
-    await this.updateStatusMessage(`${COMPLETED_STATUS_PREFIX}${outcome}`);
+    await this.reporter.reportCompletion(outcome);
+    await this.reporter.updateStatus(`${COMPLETED_STATUS_PREFIX}${outcome}`);
 
     const successResponse = createToolResponse(
       {
@@ -999,7 +1028,11 @@ export class ToolExecutionRunner<
       },
       textContent
     );
-    await this.storeResultSafely('completed', successResponse);
+    await this.reporter.storeResultSafely(
+      'completed',
+      successResponse,
+      this.onLog
+    );
     return successResponse;
   }
 
@@ -1007,7 +1040,7 @@ export class ToolExecutionRunner<
     const errorMessage = getErrorMessage(error);
     const errorMeta = classifyErrorMeta(error, errorMessage);
     const outcome = errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
-    await this.updateStatusMessage(
+    await this.reporter.updateStatus(
       createFailureStatusMessage(outcome, errorMessage)
     );
 
@@ -1018,31 +1051,28 @@ export class ToolExecutionRunner<
       errorMeta
     );
 
-    await this.storeResultSafely('failed', errorResponse);
-    await reportProgressCompletionUpdate(
-      this.reportProgress,
-      this.config.name,
-      this.progressContext,
-      outcome
-    );
+    await this.reporter.storeResultSafely('failed', errorResponse, this.onLog);
+    await this.reporter.reportCompletion(outcome);
     return errorResponse;
   }
 
   async run(input: unknown): Promise<CallToolResult> {
     try {
-      await this.reportAndStatus(STEP_STARTING, 'Initializing...');
+      await this.reporter.reportStep(STEP_STARTING, 'Initializing...');
 
       const inputRecord = parseToolInput<TInput>(
         input,
         this.config.fullInputSchema
       );
-      this.progressContext = normalizeProgressContext(
+
+      const newContext = normalizeProgressContext(
         this.config.progressContext?.(inputRecord)
       );
+      this.reporter.updateContext(newContext);
 
       const ctx = this.createExecutionContext();
 
-      await this.reportAndStatus(
+      await this.reporter.reportStep(
         STEP_VALIDATING,
         'Validating request parameters...'
       );
@@ -1052,7 +1082,7 @@ export class ToolExecutionRunner<
         return validationError;
       }
 
-      await this.reportAndStatus(
+      await this.reporter.reportStep(
         STEP_BUILDING_PROMPT,
         'Constructing analysis context...'
       );
@@ -1060,14 +1090,14 @@ export class ToolExecutionRunner<
       const promptParts = this.config.buildPrompt(inputRecord, ctx);
       const { prompt, systemInstruction } = promptParts;
 
-      await this.reportAndStatus(
+      await this.reporter.reportStep(
         STEP_CALLING_MODEL,
         'Querying Gemini model...'
       );
 
       const parsed = await this.executeModelCall(systemInstruction, prompt);
 
-      await this.reportAndStatus(STEP_FINALIZING, 'Processing results...');
+      await this.reporter.reportStep(STEP_FINALIZING, 'Processing results...');
 
       const finalResult = this.applyResultTransform(inputRecord, parsed, ctx);
       const textContent = this.formatResultText(finalResult, ctx);

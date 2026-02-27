@@ -142,20 +142,24 @@ function registerReviewGuidePrompt(server: McpServer): void {
       title: def.title,
       description: def.description,
       argsSchema: {
-        tool: completable(z.string().describe(TOOL_DESCRIPTION_TEXT), (value) =>
-          completeByPrefix(TOOLS, value)
+        tool: completable(
+          z.string().optional().describe(TOOL_DESCRIPTION_TEXT),
+          (value) => completeByPrefix(TOOLS, value ?? '')
         ),
         focusArea: completable(
-          z.string().describe(FOCUS_DESCRIPTION_TEXT),
-          (value) => completeByPrefix(INSPECTION_FOCUS_AREAS, value)
+          z.string().optional().describe(FOCUS_DESCRIPTION_TEXT),
+          (value) => completeByPrefix(INSPECTION_FOCUS_AREAS, value ?? '')
         ),
       },
     },
-    ({ tool, focusArea }) =>
-      createPromptResponse(
-        `Code review guide: ${tool} / ${focusArea}`,
-        buildReviewGuideText(tool, focusArea)
-      )
+    (args) => {
+      const selectedTool = args.tool ?? TOOLS[0] ?? 'analyze_pr_impact';
+      const selectedFocus = args.focusArea ?? INSPECTION_FOCUS_AREAS[0];
+      return createPromptResponse(
+        `Code review guide: ${selectedTool} / ${selectedFocus}`,
+        buildReviewGuideText(selectedTool, selectedFocus)
+      );
+    }
   );
 }
 
