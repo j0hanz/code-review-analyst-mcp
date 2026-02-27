@@ -66,6 +66,11 @@ interface StructuredToolRuntimeOptions {
   deterministicJson?: NonNullable<ToolContract['deterministicJson']>;
 }
 
+interface StructuredToolExecutionOptions extends StructuredToolRuntimeOptions {
+  timeoutMs: ToolContract['timeoutMs'];
+  maxOutputTokens: ToolContract['maxOutputTokens'];
+}
+
 export function buildStructuredToolRuntimeOptions(
   contract: Pick<
     ToolContract,
@@ -85,6 +90,111 @@ export function buildStructuredToolRuntimeOptions(
   };
 }
 
+export function buildStructuredToolExecutionOptions(
+  contract: Pick<
+    ToolContract,
+    | 'timeoutMs'
+    | 'maxOutputTokens'
+    | 'thinkingLevel'
+    | 'temperature'
+    | 'deterministicJson'
+  >
+): StructuredToolExecutionOptions {
+  return {
+    timeoutMs: contract.timeoutMs,
+    maxOutputTokens: contract.maxOutputTokens,
+    ...buildStructuredToolRuntimeOptions(contract),
+  };
+}
+
+function createParam(
+  name: string,
+  type: string,
+  required: boolean,
+  constraints: string,
+  description: string
+): ToolParameterContract {
+  return { name, type, required, constraints, description };
+}
+
+function cloneParams(
+  ...params: readonly ToolParameterContract[]
+): ToolParameterContract[] {
+  return params.map((param) => ({ ...param }));
+}
+
+const MODE_PARAM = createParam(
+  'mode',
+  'string',
+  true,
+  "'unstaged' | 'staged'",
+  "'unstaged': working tree changes not yet staged. 'staged': changes added to the index (git add)."
+);
+
+const REPOSITORY_PARAM = createParam(
+  'repository',
+  'string',
+  true,
+  '1-200 chars',
+  'Repository identifier (org/repo).'
+);
+
+const LANGUAGE_PARAM = createParam(
+  'language',
+  'string',
+  false,
+  '2-32 chars',
+  'Primary language hint.'
+);
+
+const FOCUS_AREAS_PARAM = createParam(
+  'focusAreas',
+  'string[]',
+  false,
+  '1-12 items, 2-80 chars each',
+  `Focused inspection categories (e.g. ${INSPECTION_FOCUS_AREAS.join(', ')}).`
+);
+
+const MAX_FINDINGS_PARAM = createParam(
+  'maxFindings',
+  'number',
+  false,
+  '1-25',
+  'Post-generation cap applied to findings.'
+);
+
+const FINDING_TITLE_PARAM = createParam(
+  'findingTitle',
+  'string',
+  true,
+  '3-160 chars',
+  'Short finding title.'
+);
+
+const FINDING_DETAILS_PARAM = createParam(
+  'findingDetails',
+  'string',
+  true,
+  '10-3000 chars',
+  'Detailed finding context.'
+);
+
+const TEST_FRAMEWORK_PARAM = createParam(
+  'testFramework',
+  'string',
+  false,
+  '1-50 chars',
+  'Framework hint (jest, vitest, pytest, node:test).'
+);
+
+const MAX_TEST_CASES_PARAM = createParam(
+  'maxTestCases',
+  'number',
+  false,
+  '1-30',
+  'Post-generation cap applied to test cases.'
+);
+
 export const TOOL_CONTRACTS = [
   {
     name: 'generate_diff',
@@ -93,16 +203,7 @@ export const TOOL_CONTRACTS = [
     model: 'none',
     timeoutMs: 0,
     maxOutputTokens: 0,
-    params: [
-      {
-        name: 'mode',
-        type: 'string',
-        required: true,
-        constraints: "'unstaged' | 'staged'",
-        description:
-          "'unstaged': working tree changes not yet staged. 'staged': changes added to the index (git add).",
-      },
-    ],
+    params: cloneParams(MODE_PARAM),
     outputShape:
       '{ok, result: {diffRef, stats{files, added, deleted}, generatedAt, mode, message}}',
     gotchas: [
@@ -124,22 +225,7 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'repository',
-        type: 'string',
-        required: true,
-        constraints: '1-200 chars',
-        description: 'Repository identifier (org/repo).',
-      },
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-    ],
+    params: cloneParams(REPOSITORY_PARAM, LANGUAGE_PARAM),
     outputShape:
       '{severity, categories[], summary, breakingChanges[], affectedAreas[], rollbackComplexity}',
     gotchas: [
@@ -159,22 +245,7 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'repository',
-        type: 'string',
-        required: true,
-        constraints: '1-200 chars',
-        description: 'Repository identifier (org/repo).',
-      },
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-    ],
+    params: cloneParams(REPOSITORY_PARAM, LANGUAGE_PARAM),
     outputShape:
       '{summary, overallRisk, keyChanges[], recommendation, stats{filesChanged, linesAdded, linesRemoved}}',
     gotchas: [
@@ -188,43 +259,18 @@ export const TOOL_CONTRACTS = [
   {
     name: 'inspect_code_quality',
     purpose: 'Deep code review over the cached diff.',
-
     model: FLASH_MODEL,
     timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
     thinkingLevel: FLASH_HIGH_THINKING_LEVEL,
     maxOutputTokens: FLASH_REVIEW_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'repository',
-        type: 'string',
-        required: true,
-        constraints: '1-200 chars',
-        description: 'Repository identifier (org/repo).',
-      },
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-      {
-        name: 'focusAreas',
-        type: 'string[]',
-        required: false,
-        constraints: '1-12 items, 2-80 chars each',
-        description: `Focused inspection categories (e.g. ${INSPECTION_FOCUS_AREAS.join(', ')}).`,
-      },
-      {
-        name: 'maxFindings',
-        type: 'number',
-        required: false,
-        constraints: '1-25',
-        description: 'Post-generation cap applied to findings.',
-      },
-    ],
+    params: cloneParams(
+      REPOSITORY_PARAM,
+      LANGUAGE_PARAM,
+      FOCUS_AREAS_PARAM,
+      MAX_FINDINGS_PARAM
+    ),
     outputShape:
       '{summary, overallRisk, findings[], testsNeeded[], contextualInsights[], totalFindings}',
     gotchas: [
@@ -246,22 +292,7 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_PATCH_MAX_OUTPUT_TOKENS,
     temperature: PATCH_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'findingTitle',
-        type: 'string',
-        required: true,
-        constraints: '3-160 chars',
-        description: 'Short finding title.',
-      },
-      {
-        name: 'findingDetails',
-        type: 'string',
-        required: true,
-        constraints: '10-3000 chars',
-        description: 'Detailed finding context.',
-      },
-    ],
+    params: cloneParams(FINDING_TITLE_PARAM, FINDING_DETAILS_PARAM),
     outputShape: '{summary, blocks[], validationChecklist[]}',
     gotchas: [
       'Requires generate_diff to be called first.',
@@ -282,36 +313,12 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
     temperature: CREATIVE_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'repository',
-        type: 'string',
-        required: true,
-        constraints: '1-200 chars',
-        description: 'Repository identifier (org/repo).',
-      },
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-      {
-        name: 'testFramework',
-        type: 'string',
-        required: false,
-        constraints: '1-50 chars',
-        description: 'Framework hint (jest, vitest, pytest, node:test).',
-      },
-      {
-        name: 'maxTestCases',
-        type: 'number',
-        required: false,
-        constraints: '1-30',
-        description: 'Post-generation cap applied to test cases.',
-      },
-    ],
+    params: cloneParams(
+      REPOSITORY_PARAM,
+      LANGUAGE_PARAM,
+      TEST_FRAMEWORK_PARAM,
+      MAX_TEST_CASES_PARAM
+    ),
     outputShape: '{summary, testCases[], coverageSummary}',
     gotchas: [
       'Requires generate_diff to be called first.',
@@ -331,15 +338,7 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
     temperature: ANALYSIS_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-    ],
+    params: cloneParams(LANGUAGE_PARAM),
     outputShape:
       '{timeComplexity, spaceComplexity, explanation, potentialBottlenecks[], isDegradation}',
     gotchas: [
@@ -357,15 +356,7 @@ export const TOOL_CONTRACTS = [
     maxOutputTokens: FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
     temperature: TRIAGE_TEMPERATURE,
     deterministicJson: true,
-    params: [
-      {
-        name: 'language',
-        type: 'string',
-        required: false,
-        constraints: '2-32 chars',
-        description: 'Primary language hint.',
-      },
-    ],
+    params: cloneParams(LANGUAGE_PARAM),
     outputShape: '{hasBreakingChanges, breakingChanges[]}',
     gotchas: [
       'Requires generate_diff to be called first.',

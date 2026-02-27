@@ -21,6 +21,7 @@ import type { GeminiStructuredRequest } from './types.js';
 // Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
 let _defaultModel: string | undefined;
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
+const MODEL_FALLBACK_TARGET = 'gemini-2.5-flash';
 const GEMINI_MODEL_ENV_VAR = 'GEMINI_MODEL';
 const GEMINI_HARM_BLOCK_THRESHOLD_ENV_VAR = 'GEMINI_HARM_BLOCK_THRESHOLD';
 const GEMINI_INCLUDE_THOUGHTS_ENV_VAR = 'GEMINI_INCLUDE_THOUGHTS';
@@ -51,6 +52,7 @@ const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off']);
 const SLEEP_UNREF_OPTIONS = { ref: false } as const;
 const JSON_CODE_BLOCK_PATTERN = /```(?:json)?\n?([\s\S]*?)(?=\n?```)/u;
 const NEVER_ABORT_SIGNAL = new AbortController().signal;
+const CANCELLED_REQUEST_MESSAGE = 'Gemini request was cancelled.';
 
 const maxConcurrentCallsConfig = createCachedEnvInt('MAX_CONCURRENT_CALLS', 10);
 const maxConcurrentBatchCallsConfig = createCachedEnvInt(
@@ -546,6 +548,16 @@ function combineSignals(
   return requestSignal ? AbortSignal.any([signal, requestSignal]) : signal;
 }
 
+function throwIfRequestCancelled(requestSignal?: AbortSignal): void {
+  if (requestSignal?.aborted) {
+    throw new Error(CANCELLED_REQUEST_MESSAGE);
+  }
+}
+
+function getSleepOptions(signal?: AbortSignal): Parameters<typeof sleep>[2] {
+  return signal ? { ...SLEEP_UNREF_OPTIONS, signal } : SLEEP_UNREF_OPTIONS;
+}
+
 function parseStructuredResponse(responseText: string | undefined): unknown {
   if (!responseText) {
     throw new Error('Gemini returned an empty response body.');
@@ -598,9 +610,7 @@ async function generateContentWithTimeout(
       config: buildGenerationConfig(request, signal),
     });
   } catch (error: unknown) {
-    if (request.signal?.aborted === true) {
-      throw new Error('Gemini request was cancelled.');
-    }
+    throwIfRequestCancelled(request.signal);
 
     if (controller.signal.aborted) {
       throw new Error(formatTimeoutErrorMessage(timeoutMs), { cause: error });
@@ -610,6 +620,26 @@ async function generateContentWithTimeout(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function extractThoughtsFromParts(parts: unknown): string | undefined {
+  if (!Array.isArray(parts)) {
+    return undefined;
+  }
+
+  const thoughtParts = parts.filter(
+    (part) =>
+      typeof part === 'object' &&
+      part !== null &&
+      (part as { thought?: unknown }).thought === true &&
+      typeof (part as { text?: unknown }).text === 'string'
+  ) as { text: string }[];
+
+  if (thoughtParts.length === 0) {
+    return undefined;
+  }
+
+  return thoughtParts.map((part) => part.text).join('\n\n');
 }
 
 async function executeAttempt(
@@ -623,17 +653,9 @@ async function executeAttempt(
   const response = await generateContentWithTimeout(request, model, timeoutMs);
   const latencyMs = Math.round(performance.now() - startedAt);
   const finishReason = response.candidates?.[0]?.finishReason;
-
-  let thoughts: string | undefined;
-  const parts = response.candidates?.[0]?.content?.parts;
-  if (Array.isArray(parts)) {
-    const thoughtParts = parts.filter(
-      (p) => p.thought === true && typeof p.text === 'string'
-    );
-    if (thoughtParts.length > 0) {
-      thoughts = thoughtParts.map((p) => p.text).join('\n\n');
-    }
-  }
+  const thoughts = extractThoughtsFromParts(
+    response.candidates?.[0]?.content?.parts
+  );
 
   await emitGeminiLog(onLog, 'info', {
     event: 'gemini_call',
@@ -674,22 +696,12 @@ async function waitBeforeRetry(
     },
   });
 
-  if (requestSignal?.aborted) {
-    throw new Error('Gemini request was cancelled.');
-  }
+  throwIfRequestCancelled(requestSignal);
 
   try {
-    await sleep(
-      delayMs,
-      undefined,
-      requestSignal
-        ? { ...SLEEP_UNREF_OPTIONS, signal: requestSignal }
-        : SLEEP_UNREF_OPTIONS
-    );
+    await sleep(delayMs, undefined, getSleepOptions(requestSignal));
   } catch (sleepError: unknown) {
-    if (requestSignal?.aborted) {
-      throw new Error('Gemini request was cancelled.');
-    }
+    throwIfRequestCancelled(requestSignal);
 
     throw sleepError;
   }
@@ -716,6 +728,30 @@ async function throwGeminiFailure(
   );
 }
 
+function shouldUseModelFallback(error: unknown, model: string): boolean {
+  return getNumericErrorCode(error) === 404 && model === DEFAULT_MODEL;
+}
+
+async function applyModelFallback(
+  request: GeminiStructuredRequest,
+  onLog: GeminiOnLog,
+  reason: string
+): Promise<{ model: string; request: GeminiStructuredRequest }> {
+  await emitGeminiLog(onLog, 'warning', {
+    event: 'gemini_model_fallback',
+    details: {
+      from: DEFAULT_MODEL,
+      to: MODEL_FALLBACK_TARGET,
+      reason,
+    },
+  });
+
+  return {
+    model: MODEL_FALLBACK_TARGET,
+    request: omitThinkingLevel(request),
+  };
+}
+
 async function runWithRetries(
   request: GeminiStructuredRequest,
   model: string,
@@ -740,20 +776,14 @@ async function runWithRetries(
     } catch (error: unknown) {
       lastError = error;
 
-      if (
-        getNumericErrorCode(error) === 404 &&
-        currentModel === 'gemini-3-flash-preview'
-      ) {
-        currentModel = 'gemini-2.5-flash';
-        effectiveRequest = omitThinkingLevel(request);
-        await emitGeminiLog(onLog, 'warning', {
-          event: 'gemini_model_fallback',
-          details: {
-            from: 'gemini-3-flash-preview',
-            to: 'gemini-2.5-flash',
-            reason: 'Model not found (404)',
-          },
-        });
+      if (shouldUseModelFallback(error, currentModel)) {
+        const fallback = await applyModelFallback(
+          request,
+          onLog,
+          'Model not found (404)'
+        );
+        currentModel = fallback.model;
+        effectiveRequest = fallback.request;
         continue;
       }
 
@@ -809,9 +839,7 @@ async function waitForSlot(
     return;
   }
 
-  if (requestSignal?.aborted) {
-    throw new Error('Gemini request was cancelled.');
-  }
+  throwIfRequestCancelled(requestSignal);
 
   const waitLimitMs = concurrencyWaitMsConfig.get();
 
@@ -853,7 +881,7 @@ async function waitForSlot(
       settled = true;
       removeCurrentWaiter();
       clearTimeout(deadlineTimer);
-      reject(new Error('Gemini request was cancelled.'));
+      reject(new Error(CANCELLED_REQUEST_MESSAGE));
     };
 
     if (requestSignal) {
@@ -897,6 +925,46 @@ async function waitForBatchConcurrencySlot(
     batchSlotWaiters,
     requestSignal
   );
+}
+
+type ExecutionMode = 'off' | 'inline';
+
+function isInlineBatchMode(mode: ExecutionMode): mode is 'inline' {
+  return mode === 'inline';
+}
+
+async function acquireQueueSlot(
+  mode: ExecutionMode,
+  requestSignal?: AbortSignal
+): Promise<{ queueWaitMs: number; waitingCalls: number }> {
+  const limit = isInlineBatchMode(mode)
+    ? maxConcurrentBatchCallsConfig.get()
+    : maxConcurrentCallsConfig.get();
+  const queueWaitStartedAt = performance.now();
+
+  if (isInlineBatchMode(mode)) {
+    await waitForBatchConcurrencySlot(limit, requestSignal);
+  } else {
+    await waitForConcurrencySlot(limit, requestSignal);
+  }
+
+  return {
+    queueWaitMs: Math.round(performance.now() - queueWaitStartedAt),
+    waitingCalls: isInlineBatchMode(mode)
+      ? batchSlotWaiters.size
+      : slotWaiters.size,
+  };
+}
+
+function releaseQueueSlot(mode: ExecutionMode): void {
+  if (isInlineBatchMode(mode)) {
+    activeBatchCalls -= 1;
+    tryWakeNextBatchWaiter();
+    return;
+  }
+
+  activeCalls -= 1;
+  tryWakeNextWaiter();
 }
 
 interface BatchApiClient {
@@ -1106,21 +1174,14 @@ async function createBatchJobWithFallback(
       };
       return await batches.create(createPayload);
     } catch (error: unknown) {
-      if (
-        attempt === 0 &&
-        getNumericErrorCode(error) === 404 &&
-        currentModel === 'gemini-3-flash-preview'
-      ) {
-        currentModel = 'gemini-2.5-flash';
-        effectiveRequest = omitThinkingLevel(request);
-        await emitGeminiLog(onLog, 'warning', {
-          event: 'gemini_model_fallback',
-          details: {
-            from: 'gemini-3-flash-preview',
-            to: 'gemini-2.5-flash',
-            reason: 'Model not found (404) during batch create',
-          },
-        });
+      if (attempt === 0 && shouldUseModelFallback(error, currentModel)) {
+        const fallback = await applyModelFallback(
+          request,
+          onLog,
+          'Model not found (404) during batch create'
+        );
+        currentModel = fallback.model;
+        effectiveRequest = fallback.request;
         continue;
       }
       throw error;
@@ -1173,9 +1234,7 @@ async function runInlineBatchWithPolling(
     });
 
     for (;;) {
-      if (request.signal?.aborted === true) {
-        throw new Error('Gemini request was cancelled.');
-      }
+      throwIfRequestCancelled(request.signal);
 
       const elapsedMs = Math.round(performance.now() - pollStart);
       if (elapsedMs > timeoutMs) {
@@ -1201,13 +1260,7 @@ async function runInlineBatchWithPolling(
 
       BatchHelper.handleTerminalState(state, polled);
 
-      await sleep(
-        pollIntervalMs,
-        undefined,
-        request.signal
-          ? { ...SLEEP_UNREF_OPTIONS, signal: request.signal }
-          : SLEEP_UNREF_OPTIONS
-      );
+      await sleep(pollIntervalMs, undefined, getSleepOptions(request.signal));
     }
   } finally {
     await cancelBatchIfNeeded(
@@ -1239,24 +1292,15 @@ export async function generateStructuredJson(
   const maxRetries = request.maxRetries ?? DEFAULT_MAX_RETRIES;
   const batchMode = request.batchMode ?? getDefaultBatchMode();
   const { onLog } = request;
-
-  const limit =
-    batchMode === 'inline'
-      ? maxConcurrentBatchCallsConfig.get()
-      : maxConcurrentCallsConfig.get();
-  const queueWaitStartedAt = performance.now();
-  if (batchMode === 'inline') {
-    await waitForBatchConcurrencySlot(limit, request.signal);
-  } else {
-    await waitForConcurrencySlot(limit, request.signal);
-  }
-  const queueWaitMs = Math.round(performance.now() - queueWaitStartedAt);
+  const { queueWaitMs, waitingCalls } = await acquireQueueSlot(
+    batchMode,
+    request.signal
+  );
 
   await safeCallOnLog(onLog, 'info', {
     event: 'gemini_queue_acquired',
     queueWaitMs,
-    waitingCalls:
-      batchMode === 'inline' ? batchSlotWaiters.size : slotWaiters.size,
+    waitingCalls,
     activeCalls,
     activeBatchCalls,
     mode: batchMode,
@@ -1266,7 +1310,7 @@ export async function generateStructuredJson(
     return await geminiContext.run(
       { requestId: nextRequestId(), model },
       () => {
-        if (batchMode === 'inline') {
+        if (isInlineBatchMode(batchMode)) {
           return runInlineBatchWithPolling(request, model, onLog);
         }
 
@@ -1274,12 +1318,6 @@ export async function generateStructuredJson(
       }
     );
   } finally {
-    if (batchMode === 'inline') {
-      activeBatchCalls -= 1;
-      tryWakeNextBatchWaiter();
-    } else {
-      activeCalls -= 1;
-      tryWakeNextWaiter();
-    }
+    releaseQueueSlot(batchMode);
   }
 }

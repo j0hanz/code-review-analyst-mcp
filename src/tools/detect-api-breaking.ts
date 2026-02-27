@@ -1,8 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { formatLanguageSegment } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -39,9 +40,7 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
     fullInputSchema: DetectApiBreakingInputSchema,
     resultSchema: DetectApiBreakingResultSchema,
     errorCode: 'E_DETECT_API_BREAKING',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => input.language ?? 'auto-detect',
     formatOutcome: (result) =>
@@ -51,7 +50,7 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
         ? `${result.breakingChanges.length} breaking changes found.`
         : 'No breaking changes.',
     buildPrompt: (input, ctx) => {
-      const diff = ctx.diffSlot?.diff ?? '';
+      const { diff } = getDiffContextSnapshot(ctx);
       const languageLine = formatLanguageSegment(input.language);
 
       return {

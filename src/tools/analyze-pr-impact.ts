@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
 import { formatLanguageSegment } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -42,18 +43,15 @@ export function registerAnalyzePrImpactTool(server: McpServer): void {
     fullInputSchema: AnalyzePrImpactInputSchema,
     resultSchema: PrImpactResultSchema,
     errorCode: 'E_ANALYZE_IMPACT',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => input.repository,
     formatOutcome: (result) => `severity: ${result.severity}`,
     formatOutput: (result) => `[${result.severity}] ${result.summary}`,
     buildPrompt: (input, ctx) => {
-      const diff = ctx.diffSlot?.diff ?? '';
-      const files = ctx.diffSlot?.parsedFiles ?? [];
+      const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
       const { stats, summary: fileSummary } =
-        computeDiffStatsAndSummaryFromFiles(files);
+        computeDiffStatsAndSummaryFromFiles(parsedFiles);
       const languageSegment = formatLanguageSegment(input.language);
 
       return {

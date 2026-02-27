@@ -76,6 +76,10 @@ const DEFAULT_TASK_TTL_MS = 300_000;
 const taskTtlMsConfig = createCachedEnvInt('TASK_TTL_MS', DEFAULT_TASK_TTL_MS);
 const DETERMINISTIC_JSON_RETRY_NOTE =
   'Deterministic JSON mode: keep key names exactly as schema-defined and preserve stable field ordering.';
+const COMPLETED_STATUS_PREFIX = 'completed: ';
+const STALE_DIFF_WARNING_PREFIX = '\n\nWarning: The analyzed diff is over ';
+const STALE_DIFF_WARNING_SUFFIX =
+  ' minutes old. If you have made recent changes, please run generate_diff again.';
 
 const JSON_PARSE_ERROR_PATTERN = /model produced invalid json/i;
 const responseSchemaCache = new WeakMap<object, Record<string, unknown>>();
@@ -529,6 +533,40 @@ function createFailureStatusMessage(
   return errorMessage;
 }
 
+function extractValidationMessage(
+  validationError: ReturnType<typeof createErrorToolResponse>
+): string {
+  const text = validationError.content[0]?.text;
+  if (!text) {
+    return INPUT_VALIDATION_FAILED;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: string } };
+    return parsed.error?.message ?? INPUT_VALIDATION_FAILED;
+  } catch {
+    return INPUT_VALIDATION_FAILED;
+  }
+}
+
+function appendStaleDiffWarning(
+  textContent: string | undefined,
+  diffSlot: DiffSlot | undefined
+): string | undefined {
+  if (!diffSlot) {
+    return textContent;
+  }
+
+  const ageMs = Date.now() - new Date(diffSlot.generatedAt).getTime();
+  if (ageMs <= diffStaleWarningMs.get()) {
+    return textContent;
+  }
+
+  const ageMinutes = Math.round(ageMs / 60_000);
+  const warning = `${STALE_DIFF_WARNING_PREFIX}${ageMinutes}${STALE_DIFF_WARNING_SUFFIX}`;
+  return textContent ? textContent + warning : warning;
+}
+
 async function sendSingleStepProgress(
   extra: ProgressExtra,
   toolName: string,
@@ -820,18 +858,7 @@ export class ToolExecutionRunner<
     );
 
     if (validationError) {
-      let validationMessage = INPUT_VALIDATION_FAILED;
-      try {
-        const text = validationError.content[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text) as { error?: { message?: string } };
-          if (parsed.error?.message) {
-            validationMessage = parsed.error.message;
-          }
-        }
-      } catch {
-        // fallback to default
-      }
+      const validationMessage = extractValidationMessage(validationError);
       await this.updateStatusMessage(validationMessage);
       await reportProgressCompletionUpdate(
         this.reportProgress,
@@ -924,6 +951,83 @@ export class ToolExecutionRunner<
     await this.updateStatusMessage(message);
   }
 
+  private createExecutionContext(): ToolExecutionContext {
+    return {
+      diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
+    };
+  }
+
+  private applyResultTransform(
+    inputRecord: TInput,
+    parsed: TResult,
+    ctx: ToolExecutionContext
+  ): TFinal {
+    return (
+      this.config.transformResult
+        ? this.config.transformResult(inputRecord, parsed, ctx)
+        : parsed
+    ) as TFinal;
+  }
+
+  private formatResultText(
+    finalResult: TFinal,
+    ctx: ToolExecutionContext
+  ): string | undefined {
+    const textContent = this.config.formatOutput
+      ? this.config.formatOutput(finalResult)
+      : undefined;
+    return appendStaleDiffWarning(textContent, ctx.diffSlot);
+  }
+
+  private async finalizeSuccessfulRun(
+    finalResult: TFinal,
+    textContent: string | undefined
+  ): Promise<CallToolResult> {
+    const outcome = this.config.formatOutcome?.(finalResult) ?? 'completed';
+    await reportProgressCompletionUpdate(
+      this.reportProgress,
+      this.config.name,
+      this.progressContext,
+      outcome
+    );
+    await this.updateStatusMessage(`${COMPLETED_STATUS_PREFIX}${outcome}`);
+
+    const successResponse = createToolResponse(
+      {
+        ok: true as const,
+        result: finalResult,
+      },
+      textContent
+    );
+    await this.storeResultSafely('completed', successResponse);
+    return successResponse;
+  }
+
+  private async handleRunFailure(error: unknown): Promise<CallToolResult> {
+    const errorMessage = getErrorMessage(error);
+    const errorMeta = classifyErrorMeta(error, errorMessage);
+    const outcome = errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
+    await this.updateStatusMessage(
+      createFailureStatusMessage(outcome, errorMessage)
+    );
+
+    const errorResponse = createErrorToolResponse(
+      this.config.errorCode,
+      errorMessage,
+      undefined,
+      errorMeta
+    );
+
+    await this.storeResultSafely('failed', errorResponse);
+    await reportProgressCompletionUpdate(
+      this.reportProgress,
+      this.config.name,
+      this.progressContext,
+      outcome
+    );
+    return errorResponse;
+  }
+
   async run(input: unknown): Promise<CallToolResult> {
     try {
       await this.reportAndStatus(STEP_STARTING, 'Initializing...');
@@ -936,9 +1040,7 @@ export class ToolExecutionRunner<
         this.config.progressContext?.(inputRecord)
       );
 
-      const ctx: ToolExecutionContext = {
-        diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
-      };
+      const ctx = this.createExecutionContext();
 
       await this.reportAndStatus(
         STEP_VALIDATING,
@@ -967,66 +1069,11 @@ export class ToolExecutionRunner<
 
       await this.reportAndStatus(STEP_FINALIZING, 'Processing results...');
 
-      const finalResult = (
-        this.config.transformResult
-          ? this.config.transformResult(inputRecord, parsed, ctx)
-          : parsed
-      ) as TFinal;
-
-      let textContent = this.config.formatOutput
-        ? this.config.formatOutput(finalResult)
-        : undefined;
-
-      if (ctx.diffSlot) {
-        const ageMs = Date.now() - new Date(ctx.diffSlot.generatedAt).getTime();
-        if (ageMs > diffStaleWarningMs.get()) {
-          const ageMinutes = Math.round(ageMs / 60_000);
-          const warning = `\n\nWarning: The analyzed diff is over ${ageMinutes} minutes old. If you have made recent changes, please run generate_diff again.`;
-          textContent = textContent ? textContent + warning : warning;
-        }
-      }
-
-      const outcome = this.config.formatOutcome?.(finalResult) ?? 'completed';
-      await reportProgressCompletionUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        outcome
-      );
-      await this.updateStatusMessage(`completed: ${outcome}`);
-
-      const successResponse = createToolResponse(
-        {
-          ok: true as const,
-          result: finalResult,
-        },
-        textContent
-      );
-      await this.storeResultSafely('completed', successResponse);
-      return successResponse;
+      const finalResult = this.applyResultTransform(inputRecord, parsed, ctx);
+      const textContent = this.formatResultText(finalResult, ctx);
+      return await this.finalizeSuccessfulRun(finalResult, textContent);
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      const errorMeta = classifyErrorMeta(error, errorMessage);
-      const outcome = errorMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
-      await this.updateStatusMessage(
-        createFailureStatusMessage(outcome, errorMessage)
-      );
-
-      const errorResponse = createErrorToolResponse(
-        this.config.errorCode,
-        errorMessage,
-        undefined,
-        errorMeta
-      );
-
-      await this.storeResultSafely('failed', errorResponse);
-      await reportProgressCompletionUpdate(
-        this.reportProgress,
-        this.config.name,
-        this.progressContext,
-        outcome
-      );
-      return errorResponse; // Return safe error response
+      return await this.handleRunFailure(error);
     }
   }
 }
@@ -1037,6 +1084,56 @@ interface ExtendedRequestTaskStore extends RequestTaskStore {
     status: 'working' | 'input_required' | 'completed' | 'failed' | 'cancelled',
     statusMessage?: string
   ): Promise<void>;
+}
+
+function createGeminiLogger(
+  server: McpServer
+): (level: string, data: unknown) => Promise<void> {
+  return async (level, data) => {
+    try {
+      await server.sendLoggingMessage({
+        level: toLoggingLevel(level),
+        logger: 'gemini',
+        data: asObjectRecord(data),
+      });
+    } catch {
+      // Fallback if logging fails
+    }
+  };
+}
+
+function createTaskStatusReporter(
+  taskId: string,
+  extra: CreateTaskRequestHandlerExtra,
+  extendedStore: ExtendedRequestTaskStore
+): TaskStatusReporter {
+  return {
+    updateStatus: async (message) => {
+      await extendedStore.updateTaskStatus(taskId, 'working', message);
+    },
+    storeResult: async (status, result) => {
+      await extra.taskStore.storeTaskResult(taskId, status, result);
+    },
+  };
+}
+
+function runToolTaskInBackground<
+  TInput extends object,
+  TResult extends object,
+  TFinal extends TResult,
+>(
+  runner: ToolExecutionRunner<TInput, TResult, TFinal>,
+  input: unknown,
+  taskId: string,
+  extendedStore: ExtendedRequestTaskStore
+): void {
+  runner.run(input).catch(async (error: unknown) => {
+    await extendedStore.updateTaskStatus(
+      taskId,
+      'failed',
+      getErrorMessage(error)
+    );
+  });
 }
 
 export function registerStructuredToolTask<
@@ -1077,46 +1174,18 @@ export function registerStructuredToolTask<
           extra.taskStore as unknown as ExtendedRequestTaskStore;
 
         const runner = new ToolExecutionRunner(config, {
-          onLog: async (level, data) => {
-            try {
-              await server.sendLoggingMessage({
-                level: toLoggingLevel(level),
-                logger: 'gemini',
-                data: asObjectRecord(data),
-              });
-            } catch {
-              // Fallback if logging fails
-            }
-          },
+          onLog: createGeminiLogger(server),
           reportProgress: getOrCreateProgressReporter(
             extra as unknown as ProgressExtra
           ),
-          statusReporter: {
-            updateStatus: async (message) => {
-              await extendedStore.updateTaskStatus(
-                task.taskId,
-                'working',
-                message
-              );
-            },
-            storeResult: async (status, result) => {
-              await extra.taskStore.storeTaskResult(
-                task.taskId,
-                status,
-                result
-              );
-            },
-          },
+          statusReporter: createTaskStatusReporter(
+            task.taskId,
+            extra,
+            extendedStore
+          ),
         });
 
-        // Run in background
-        runner.run(input).catch(async (error: unknown) => {
-          await extendedStore.updateTaskStatus(
-            task.taskId,
-            'failed',
-            getErrorMessage(error)
-          );
-        });
+        runToolTaskInBackground(runner, input, task.taskId, extendedStore);
 
         return { task };
       },

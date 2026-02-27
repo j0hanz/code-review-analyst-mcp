@@ -110,6 +110,55 @@ function formatGitFailureMessage(
   return `Failed to run git: ${err.message}. Ensure git is installed and the working directory is a git repository.`;
 }
 
+async function runGitDiff(mode: DiffMode): Promise<string> {
+  const gitRoot = await findGitRoot();
+  const args = buildGitArgs(mode);
+  const { stdout } = await execFileAsync('git', args, {
+    cwd: gitRoot,
+    encoding: 'utf8',
+    maxBuffer: GIT_MAX_BUFFER,
+    timeout: GIT_TIMEOUT_MS,
+  });
+  return cleanDiff(stdout);
+}
+
+function createNoChangesResponse(
+  mode: DiffMode
+): ReturnType<typeof createErrorToolResponse> {
+  return createErrorToolResponse(
+    'E_NO_CHANGES',
+    `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
+    undefined,
+    { retryable: false, kind: 'validation' }
+  );
+}
+
+function createSuccessResponse(
+  diff: string,
+  mode: DiffMode
+): ReturnType<typeof createToolResponse> {
+  const parsedFiles = parseDiffFiles(diff);
+  const stats = computeDiffStatsFromFiles(parsedFiles);
+  const generatedAt = new Date().toISOString();
+
+  storeDiff({ diff, parsedFiles, stats, generatedAt, mode });
+
+  const summary = `Diff cached: ${stats.files} files (+${stats.added}, -${stats.deleted})`;
+  return createToolResponse(
+    {
+      ok: true as const,
+      result: {
+        diffRef: DIFF_RESOURCE_URI,
+        stats,
+        generatedAt,
+        mode,
+        message: summary,
+      },
+    },
+    summary
+  );
+}
+
 export function registerGenerateDiffTool(server: McpServer): void {
   server.registerTool(
     'generate_diff',
@@ -139,49 +188,13 @@ export function registerGenerateDiffTool(server: McpServer): void {
       },
       async (input) => {
         const { mode } = input;
-        const args = buildGitArgs(mode);
 
         try {
-          const gitRoot = await findGitRoot();
-          const { stdout } = await execFileAsync('git', args, {
-            cwd: gitRoot,
-            encoding: 'utf8',
-            maxBuffer: GIT_MAX_BUFFER,
-            timeout: GIT_TIMEOUT_MS,
-          });
-
-          const cleaned = cleanDiff(stdout);
-
-          if (isEmptyDiff(cleaned)) {
-            return createErrorToolResponse(
-              'E_NO_CHANGES',
-              `No ${mode} changes found in the current branch. Make sure you have changes that are ${describeModeHint(mode)}.`,
-              undefined,
-              { retryable: false, kind: 'validation' }
-            );
+          const diff = await runGitDiff(mode);
+          if (isEmptyDiff(diff)) {
+            return createNoChangesResponse(mode);
           }
-
-          const parsedFiles = parseDiffFiles(cleaned);
-          const stats = computeDiffStatsFromFiles(parsedFiles);
-          const generatedAt = new Date().toISOString();
-
-          storeDiff({ diff: cleaned, parsedFiles, stats, generatedAt, mode });
-
-          const summary = `Diff cached: ${stats.files} files (+${stats.added}, -${stats.deleted})`;
-
-          return createToolResponse(
-            {
-              ok: true as const,
-              result: {
-                diffRef: DIFF_RESOURCE_URI,
-                stats,
-                generatedAt,
-                mode,
-                message: summary,
-              },
-            },
-            summary
-          );
+          return createSuccessResponse(diff, mode);
         } catch (error: unknown) {
           const err = error as GitError;
           return createErrorToolResponse(

@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndPathsFromFiles } from '../lib/diff.js';
 import { formatOptionalLine } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -40,9 +41,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     fullInputSchema: GenerateTestPlanInputSchema,
     resultSchema: TestPlanResultSchema,
     errorCode: 'E_GENERATE_TEST_PLAN',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => input.repository,
     formatOutcome: (result) => `${result.testCases.length} test cases`,
@@ -56,8 +55,7 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
       return { ...result, testCases: cappedTestCases };
     },
     buildPrompt: (input, ctx) => {
-      const diff = ctx.diffSlot?.diff ?? '';
-      const parsedFiles = ctx.diffSlot?.parsedFiles ?? [];
+      const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
       const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
       const languageLine = formatOptionalLine('Language', input.language);
       const frameworkLine = formatOptionalLine(

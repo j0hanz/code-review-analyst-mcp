@@ -28,6 +28,9 @@ const TOOLS = getToolContractNames();
 type FocusArea = (typeof INSPECTION_FOCUS_AREAS)[number];
 const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
 const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
+const EXAMPLE_FINDING = 'Uncaught promise rejection';
+const EXAMPLE_SEARCH = '  } catch {\\n  }';
+const EXAMPLE_REPLACE = '  } catch (err) {\\n    logger.error(err);\\n  }';
 
 const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   security: 'Focus: Injection, Auth, Crypto, OWASP.',
@@ -56,12 +59,42 @@ function getToolGuide(tool: string): string {
     return `Use ${toInlineCode(tool)} to analyze your code changes.`;
   }
 
-  const { thinkingLevel } = contract;
-  const modelLine =
-    thinkingLevel !== undefined
-      ? `Model: ${contract.model} (thinking level ${thinkingLevel}, output cap ${contract.maxOutputTokens}).`
-      : `Model: ${contract.model} (output cap ${contract.maxOutputTokens}).`;
+  const modelLine = buildToolModelLine(contract);
   return `Tool: ${contract.name}\n${modelLine}\nOutput: ${contract.outputShape}\nUse: ${contract.purpose}`;
+}
+
+function buildToolModelLine(contract: {
+  model: string;
+  thinkingLevel?: string;
+  maxOutputTokens: number;
+}): string {
+  if (contract.thinkingLevel !== undefined) {
+    return `Model: ${contract.model} (thinking level ${contract.thinkingLevel}, output cap ${contract.maxOutputTokens}).`;
+  }
+
+  return `Model: ${contract.model} (output cap ${contract.maxOutputTokens}).`;
+}
+
+function createPromptResponse(
+  description: string,
+  text: string
+): {
+  [x: string]: unknown;
+  description: string;
+  messages: {
+    role: 'user';
+    content: { type: 'text'; text: string };
+  }[];
+} {
+  return {
+    description,
+    messages: [
+      {
+        role: 'user' as const,
+        content: { type: 'text' as const, text },
+      },
+    ],
+  };
 }
 
 function getFocusAreaGuide(focusArea: string): string {
@@ -78,18 +111,7 @@ function registerHelpPrompt(server: McpServer, instructions: string): void {
       title: def.title,
       description: def.description,
     },
-    () => ({
-      description: def.description,
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: instructions,
-          },
-        },
-      ],
-    })
+    () => createPromptResponse(def.description, instructions)
   );
 }
 
@@ -102,11 +124,11 @@ function buildReviewGuideText(tool: string, focusArea: string): string {
     `## Tool: ${toolCode}\n${getToolGuide(tool)}\n\n` +
     `## Focus: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
     `## Example Fix\n` +
-    `Finding: "Uncaught promise rejection"\n` +
+    `Finding: "${EXAMPLE_FINDING}"\n` +
     `Call ${suggestToolCode}:\n` +
     '```\n' +
-    `search: "  } catch {\\n  }"\n` +
-    `replace: "  } catch (err) {\\n    logger.error(err);\\n  }"\n` +
+    `search: "${EXAMPLE_SEARCH}"\n` +
+    `replace: "${EXAMPLE_REPLACE}"\n` +
     '```\n' +
     `Validate verbatim match.`
   );
@@ -129,18 +151,11 @@ function registerReviewGuidePrompt(server: McpServer): void {
         ),
       },
     },
-    ({ tool, focusArea }) => ({
-      description: `Code review guide: ${tool} / ${focusArea}`,
-      messages: [
-        {
-          role: 'user',
-          content: {
-            type: 'text',
-            text: buildReviewGuideText(tool, focusArea),
-          },
-        },
-      ],
-    })
+    ({ tool, focusArea }) =>
+      createPromptResponse(
+        `Code review guide: ${tool} / ${focusArea}`,
+        buildReviewGuideText(tool, focusArea)
+      )
   );
 }
 

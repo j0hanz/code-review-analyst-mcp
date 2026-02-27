@@ -1,3 +1,8 @@
+import {
+  formatThinkingLevel,
+  formatTimeoutSeconds,
+  formatUsNumber,
+} from '../lib/contract-format.js';
 import { createCachedEnvInt } from '../lib/env-config.js';
 import { toInlineCode } from '../lib/markdown.js';
 import { FLASH_MODEL } from '../lib/model-config.js';
@@ -43,18 +48,6 @@ function getSafetyThreshold(): string {
   );
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US').format(value);
-}
-
-function formatTimeout(ms: number): string {
-  return `${Math.round(ms / 1_000)}s`;
-}
-
-function formatThinkingLevel(level: string | undefined): string {
-  return level ?? '—';
-}
-
 export function buildServerConfig(): string {
   const maxDiffChars = diffCharsConfig.get();
   const maxConcurrent = concurrentCallsConfig.get();
@@ -66,7 +59,7 @@ export function buildServerConfig(): string {
   const toolRows = getToolContracts()
     .filter((contract) => contract.model !== 'none')
     .map((contract) => {
-      return `| ${toInlineCode(contract.name)} | ${toInlineCode(contract.model)} | ${formatThinkingLevel(contract.thinkingLevel)} | ${formatTimeout(contract.timeoutMs)} | ${formatNumber(contract.maxOutputTokens)} |`;
+      return `| ${toInlineCode(contract.name)} | ${toInlineCode(contract.model)} | ${formatThinkingLevel(contract.thinkingLevel, '—')} | ${formatTimeoutSeconds(contract.timeoutMs)} | ${formatUsNumber(contract.maxOutputTokens)} |`;
     })
     .join('\n');
 
@@ -76,10 +69,10 @@ export function buildServerConfig(): string {
 
 | Limit | Value | Env |
 |-------|-------|-----|
-| Diff limit | ${formatNumber(maxDiffChars)} chars | ${toInlineCode('MAX_DIFF_CHARS')} |
+| Diff limit | ${formatUsNumber(maxDiffChars)} chars | ${toInlineCode('MAX_DIFF_CHARS')} |
 | Concurrency limit | ${maxConcurrent} | ${toInlineCode('MAX_CONCURRENT_CALLS')} |
 | Batch concurrency limit | ${maxConcurrentBatch} | ${toInlineCode('MAX_CONCURRENT_BATCH_CALLS')} |
-| Wait timeout | ${formatNumber(concurrentWaitMs)}ms | ${toInlineCode('MAX_CONCURRENT_CALLS_WAIT_MS')} |
+| Wait timeout | ${formatUsNumber(concurrentWaitMs)}ms | ${toInlineCode('MAX_CONCURRENT_CALLS_WAIT_MS')} |
 | Batch mode | ${batchMode} | ${toInlineCode('GEMINI_BATCH_MODE')} |
 
 ## Model Assignments

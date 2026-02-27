@@ -11,7 +11,8 @@ import { buildWorkflowGuide } from './workflows.js';
 
 const RESOURCE_MIME_TYPE = 'text/markdown';
 const PATCH_MIME_TYPE = 'text/x-patch';
-const RESOURCE_AUDIENCE = ['assistant' as const];
+const RESOURCE_AUDIENCE: 'assistant'[] = ['assistant'];
+const TOOL_INFO_RESOURCE_URI = 'internal://tool-info/{toolName}';
 
 function completeByPrefix(values: readonly string[], prefix: string): string[] {
   return values.filter((value) => value.startsWith(prefix));
@@ -22,6 +23,20 @@ function createMarkdownContent(
   text: string
 ): { uri: string; mimeType: string; text: string } {
   return { uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text };
+}
+
+function createPatchContent(
+  uri: URL,
+  text: string
+): { uri: string; mimeType: string; text: string } {
+  return { uri: uri.href, mimeType: PATCH_MIME_TYPE, text };
+}
+
+function createResourceAnnotations(priority: number): {
+  audience: 'assistant'[];
+  priority: number;
+} {
+  return { audience: [...RESOURCE_AUDIENCE], priority };
 }
 
 function formatUnknownToolMessage(name: string): string {
@@ -80,6 +95,13 @@ export const STATIC_RESOURCES: readonly StaticResourceDef[] = [
   },
 ] as const;
 
+function resolveStaticResourceContentOverride(
+  resourceId: string,
+  instructions: string
+): string | undefined {
+  return resourceId === 'server-instructions' ? instructions : undefined;
+}
+
 function registerStaticResource(
   server: McpServer,
   def: StaticResourceDef,
@@ -93,12 +115,9 @@ function registerStaticResource(
       title: def.title,
       description: def.description,
       mimeType: RESOURCE_MIME_TYPE,
-      annotations: {
-        audience: RESOURCE_AUDIENCE,
-        priority: def.priority,
-      },
+      annotations: createResourceAnnotations(def.priority),
     },
-    (uri) => ({ contents: [createMarkdownContent(uri, content)] })
+    (uri: URL) => ({ contents: [createMarkdownContent(uri, content)] })
   );
 }
 
@@ -107,7 +126,7 @@ function registerToolInfoResources(server: McpServer): void {
 
   server.registerResource(
     'tool-info',
-    new ResourceTemplate('internal://tool-info/{toolName}', {
+    new ResourceTemplate(TOOL_INFO_RESOURCE_URI, {
       list: undefined,
       complete: {
         toolName: (value) => completeByPrefix(toolNames, value),
@@ -117,12 +136,9 @@ function registerToolInfoResources(server: McpServer): void {
       title: 'Tool Info',
       description: 'Per-tool reference: model, params, output, gotchas.',
       mimeType: RESOURCE_MIME_TYPE,
-      annotations: {
-        audience: RESOURCE_AUDIENCE,
-        priority: 0.6,
-      },
+      annotations: createResourceAnnotations(0.6),
     },
-    (uri, { toolName }) => {
+    (uri: URL, { toolName }: { toolName?: string }) => {
       const name = typeof toolName === 'string' ? toolName : '';
       const info = getToolInfo(name);
       const text = info ?? formatUnknownToolMessage(name);
@@ -142,19 +158,10 @@ function registerDiffResource(server: McpServer): void {
       title: 'Current Diff',
       description: DIFF_RESOURCE_DESCRIPTION,
       mimeType: PATCH_MIME_TYPE,
-      annotations: {
-        audience: RESOURCE_AUDIENCE,
-        priority: 1.0,
-      },
+      annotations: createResourceAnnotations(1.0),
     },
-    (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: PATCH_MIME_TYPE,
-          text: formatDiffResourceText(),
-        },
-      ],
+    (uri: URL) => ({
+      contents: [createPatchContent(uri, formatDiffResourceText())],
     })
   );
 }
@@ -164,8 +171,7 @@ export function registerAllResources(
   instructions: string
 ): void {
   for (const def of STATIC_RESOURCES) {
-    const override =
-      def.id === 'server-instructions' ? instructions : undefined;
+    const override = resolveStaticResourceContentOverride(def.id, instructions);
     registerStaticResource(server, def, override);
   }
 

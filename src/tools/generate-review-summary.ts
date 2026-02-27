@@ -3,14 +3,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { z } from 'zod';
 
 import { formatLanguageSegment } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
-import {
-  registerStructuredToolTask,
-  type ToolExecutionContext,
-} from '../lib/tool-factory.js';
+import { registerStructuredToolTask } from '../lib/tool-factory.js';
 import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
 
@@ -39,24 +37,6 @@ Summarize the pull request based on the diff:
 `;
 type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
 
-function getDiffStats(ctx: ToolExecutionContext): {
-  diff: string;
-  files: number;
-  added: number;
-  deleted: number;
-} {
-  const slot = ctx.diffSlot;
-  if (!slot) {
-    return { diff: '', files: 0, added: 0, deleted: 0 };
-  }
-  return {
-    diff: slot.diff,
-    files: slot.stats.files,
-    added: slot.stats.added,
-    deleted: slot.stats.deleted,
-  };
-}
-
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_review_summary',
@@ -67,34 +47,32 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     fullInputSchema: GenerateReviewSummaryInputSchema,
     resultSchema: ReviewSummaryModelSchema,
     errorCode: 'E_REVIEW_SUMMARY',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => input.repository,
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
     transformResult: (_input: ReviewSummaryInput, result, ctx) => {
-      const { files, added, deleted } = getDiffStats(ctx);
+      const { stats } = getDiffContextSnapshot(ctx);
       return {
         ...result,
         stats: {
-          filesChanged: files,
-          linesAdded: added,
-          linesRemoved: deleted,
+          filesChanged: stats.files,
+          linesAdded: stats.added,
+          linesRemoved: stats.deleted,
         },
       };
     },
     formatOutput: (result) =>
       `${result.summary}\nRecommendation: ${result.recommendation}`,
     buildPrompt: (input: ReviewSummaryInput, ctx) => {
-      const { diff, files, added, deleted } = getDiffStats(ctx);
+      const { diff, stats } = getDiffContextSnapshot(ctx);
       const languageSegment = formatLanguageSegment(input.language);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt: `
 Repository: ${input.repository}${languageSegment}
-Stats: ${files} files, +${added}, -${deleted}
+Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
 
 Diff:
 ${diff}

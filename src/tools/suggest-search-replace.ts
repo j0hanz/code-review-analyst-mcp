@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { extractChangedPathsFromFiles } from '../lib/diff.js';
 import { formatCountLabel } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -45,9 +46,7 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
     fullInputSchema: SuggestSearchReplaceInputSchema,
     resultSchema: SearchReplaceResultSchema,
     errorCode: 'E_SUGGEST_SEARCH_REPLACE',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => input.findingTitle,
     formatOutcome: (result) => formatPatchCount(result.blocks.length),
@@ -57,9 +56,8 @@ export function registerSuggestSearchReplaceTool(server: McpServer): void {
       return `${result.summary}\n${patches} • ${result.validationChecklist.join(' | ')}`;
     },
     buildPrompt: (input, ctx) => {
-      const diff = ctx.diffSlot?.diff ?? '';
-      const files = ctx.diffSlot?.parsedFiles ?? [];
-      const paths = extractChangedPathsFromFiles(files);
+      const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
+      const paths = extractChangedPathsFromFiles(parsedFiles);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,

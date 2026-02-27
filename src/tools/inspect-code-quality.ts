@@ -2,8 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
 import { formatOptionalLine } from '../lib/format.js';
+import { getDiffContextSnapshot } from '../lib/tool-context.js';
 import {
-  buildStructuredToolRuntimeOptions,
+  buildStructuredToolExecutionOptions,
   requireToolContract,
 } from '../lib/tool-contracts.js';
 import { registerStructuredToolTask } from '../lib/tool-factory.js';
@@ -52,9 +53,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
     resultSchema: CodeQualityOutputSchema,
     geminiSchema: CodeQualityResultSchema,
     errorCode: 'E_INSPECT_QUALITY',
-    timeoutMs: TOOL_CONTRACT.timeoutMs,
-    maxOutputTokens: TOOL_CONTRACT.maxOutputTokens,
-    ...buildStructuredToolRuntimeOptions(TOOL_CONTRACT),
+    ...buildStructuredToolExecutionOptions(TOOL_CONTRACT),
     requiresDiff: true,
     progressContext: (input) => {
       const focus = input.focusAreas
@@ -77,8 +76,7 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       return { ...result, findings: cappedFindings, totalFindings };
     },
     buildPrompt: (input, ctx) => {
-      const diff = ctx.diffSlot?.diff ?? '';
-      const parsedFiles = ctx.diffSlot?.parsedFiles ?? [];
+      const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(parsedFiles);
       const languageLine = formatOptionalLine('Language', input.language);
