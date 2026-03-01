@@ -1,5 +1,5 @@
 services:
-  code-review-analyst-mcp:
+  code-assistant-mcp:
     build: .
     stdin_open: true
     volumes:

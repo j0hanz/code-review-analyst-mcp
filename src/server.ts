@@ -13,7 +13,7 @@ import { registerAllResources } from './resources/index.js';
 import { buildServerInstructions } from './resources/instructions.js';
 import { registerAllTools } from './tools/index.js';
 
-const SERVER_NAME = 'code-review-analyst';
+const SERVER_NAME = 'code-assistant';
 const UTF8_ENCODING = 'utf8';
 
 const PackageJsonSchema = z.object({

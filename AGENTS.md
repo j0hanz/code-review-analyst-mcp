@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Gemini-powered MCP server for pull request analysis with structured outputs for findings, release risk, and focused patch suggestions.
+Gemini-powered MCP server for code analysis with structured outputs for findings, risk assessment, and focused patch suggestions.
 
 ## Tooling
 

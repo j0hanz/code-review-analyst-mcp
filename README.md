@@ -1,14 +1,14 @@
-# Code Review Analyst MCP Server
+# Code Assistant MCP Server
 
-<!-- mcp-name: io.github.j0hanz/code-review-analyst -->
+<!-- mcp-name: io.github.j0hanz/code-assistant -->
 
-[![npm](https://img.shields.io/npm/v/%40j0hanz%2Fcode-review-analyst-mcp?style=flat-square&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@j0hanz/code-review-analyst-mcp) [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9%2B-3178C6?style=flat-square&logo=typescript&logoColor=white)](package.json) [![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.26%2B-6f42c1?style=flat-square)](package.json) [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](package.json)
+[![npm](https://img.shields.io/npm/v/%40j0hanz%2Fcode-assistant-mcp?style=flat-square&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@j0hanz/code-assistant-mcp) [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9%2B-3178C6?style=flat-square&logo=typescript&logoColor=white)](package.json) [![MCP SDK](https://img.shields.io/badge/MCP_SDK-1.26%2B-6f42c1?style=flat-square)](package.json) [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](package.json)
 
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D&quality=insiders) [![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-review-analyst%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Assistant&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Assistant&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D&quality=insiders) [![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-assistant%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D)
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-review-analyst&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1yZXZpZXctYW5hbHlzdC1tY3BAbGF0ZXN0Il19)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-assistant&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1hc3Npc3RhbnQtbWNwQGxhdGVzdCJdfQ==)
 
-Gemini-powered MCP server for pull request analysis with structured outputs for findings, release risk, and focused patch suggestions.
+Gemini-powered MCP server for code analysis with structured outputs for findings, risk assessment, and focused patch suggestions.
 
 ## Overview
 
@@ -34,9 +34,9 @@ This server accepts unified diffs and returns structured JSON results — findin
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -50,16 +50,16 @@ This server accepts unified diffs and returns structured JSON results — findin
 <details>
 <summary><b>VS Code / VS Code Insiders</b></summary>
 
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Review+Analyst&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D&quality=insiders)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Assistant&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D) [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=Code+Assistant&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D&quality=insiders)
 
 Add to `.vscode/mcp.json`:
 
 ```json
 {
   "servers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -71,7 +71,7 @@ Add to `.vscode/mcp.json`:
 Or via CLI:
 
 ```bash
-code --add-mcp '{"name":"code-review-analyst","command":"npx","args":["-y","@j0hanz/code-review-analyst-mcp@latest"]}'
+code --add-mcp '{"name":"code-assistant","command":"npx","args":["-y","@j0hanz/code-assistant-mcp@latest"]}'
 ```
 
 </details>
@@ -79,16 +79,16 @@ code --add-mcp '{"name":"code-review-analyst","command":"npx","args":["-y","@j0h
 <details>
 <summary><b>Cursor</b></summary>
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-review-analyst&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1yZXZpZXctYW5hbHlzdC1tY3BAbGF0ZXN0Il19)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=code-assistant&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBqMGhhbnovY29kZS1hc3Npc3RhbnQtbWNwQGxhdGVzdCJdfQ==)
 
 Add to `~/.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -102,7 +102,7 @@ Add to `~/.cursor/mcp.json`:
 <details>
 <summary><b>Visual Studio</b></summary>
 
-[![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-review-analyst%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-review-analyst-mcp%40latest%22%5D%7D)
+[![Install in Visual Studio](https://img.shields.io/badge/Visual_Studio-Install_Server-C16FDE?logo=visualstudio&logoColor=white)](https://vs-open.link/mcp-install?%7B%22name%22%3A%22code-assistant%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40j0hanz%2Fcode-assistant-mcp%40latest%22%5D%7D)
 
 For more info, see [Visual Studio MCP docs](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers).
 
@@ -116,9 +116,9 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -135,7 +135,7 @@ For more info, see [Claude Desktop MCP docs](https://modelcontextprotocol.io/qui
 <summary><b>Claude Code</b></summary>
 
 ```bash
-claude mcp add code-review-analyst -- npx -y @j0hanz/code-review-analyst-mcp@latest
+claude mcp add code-assistant -- npx -y @j0hanz/code-assistant-mcp@latest
 ```
 
 For more info, see [Claude Code MCP docs](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/tutorials#set-up-model-context-protocol-mcp).
@@ -150,9 +150,9 @@ Add to MCP config:
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -169,7 +169,7 @@ For more info, see [Windsurf MCP docs](https://docs.windsurf.com/windsurf/mcp).
 <summary><b>Amp</b></summary>
 
 ```bash
-amp mcp add code-review-analyst -- npx -y @j0hanz/code-review-analyst-mcp@latest
+amp mcp add code-assistant -- npx -y @j0hanz/code-assistant-mcp@latest
 ```
 
 For more info, see [Amp MCP docs](https://docs.amp.dev/mcp).
@@ -184,9 +184,9 @@ Add to `cline_mcp_settings.json`:
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "npx",
-      "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+      "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
       "env": {
         "GEMINI_API_KEY": "YOUR_API_KEY"
       }
@@ -207,10 +207,10 @@ Add to Zed `settings.json`:
 ```json
 {
   "context_servers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": {
         "path": "npx",
-        "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+        "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
         "env": {
           "GEMINI_API_KEY": "YOUR_API_KEY"
         }
@@ -234,9 +234,9 @@ Add to `settings.json`:
   "augment.advanced": {
     "mcpServers": [
       {
-        "name": "code-review-analyst",
+        "name": "code-assistant",
         "command": "npx",
-        "args": ["-y", "@j0hanz/code-review-analyst-mcp@latest"],
+        "args": ["-y", "@j0hanz/code-assistant-mcp@latest"],
         "env": {
           "GEMINI_API_KEY": "YOUR_API_KEY"
         }
@@ -254,7 +254,7 @@ Add to `settings.json`:
 ```json
 {
   "mcpServers": {
-    "code-review-analyst": {
+    "code-assistant": {
       "command": "docker",
       "args": [
         "run",
@@ -262,7 +262,7 @@ Add to `settings.json`:
         "--rm",
         "-e",
         "GEMINI_API_KEY=YOUR_API_KEY",
-        "ghcr.io/j0hanz/code-review-analyst-mcp:latest"
+        "ghcr.io/j0hanz/code-assistant-mcp:latest"
       ]
     }
   }
@@ -272,7 +272,7 @@ Add to `settings.json`:
 Or build locally:
 
 ```bash
-docker build -t code-review-analyst-mcp .
+docker build -t code-assistant-mcp .
 ```
 
 </details>
@@ -418,9 +418,9 @@ Releases are triggered via GitHub Actions `workflow_dispatch` with version bump 
 
 The pipeline runs lint, type-check, test, and build, then publishes to three targets in parallel:
 
-- **npm** — `@j0hanz/code-review-analyst-mcp` with OIDC trusted publishing and provenance
-- **Docker** — `ghcr.io/j0hanz/code-review-analyst-mcp` (linux/amd64, linux/arm64)
-- **MCP Registry** — `io.github.j0hanz/code-review-analyst`
+- **npm** — `@j0hanz/code-assistant-mcp` with OIDC trusted publishing and provenance
+- **Docker** — `ghcr.io/j0hanz/code-assistant-mcp` (linux/amd64, linux/arm64)
+- **MCP Registry** — `io.github.j0hanz/code-assistant`
 
 ## Troubleshooting
 

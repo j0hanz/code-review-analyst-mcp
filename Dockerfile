@@ -26,11 +26,11 @@ FROM node:24-alpine
 ENV NODE_ENV=production
 
 # Labels for Docker / MCP Catalog
-LABEL org.opencontainers.image.title="Code Review Analyst" \
-      org.opencontainers.image.description="Gemini-powered MCP server for code review analysis." \
-      org.opencontainers.image.source="https://github.com/j0hanz/code-review-analyst-mcp" \
+LABEL org.opencontainers.image.title="Code Assistant" \
+      org.opencontainers.image.description="Gemini-powered MCP server for code analysis." \
+      org.opencontainers.image.source="https://github.com/j0hanz/code-assistant-mcp" \
       org.opencontainers.image.licenses="MIT" \
-      io.modelcontextprotocol.server.name="io.github.j0hanz/code-review-analyst"
+      io.modelcontextprotocol.server.name="io.github.j0hanz/code-assistant"
 
 # Create non-root user
 RUN adduser -D mcp

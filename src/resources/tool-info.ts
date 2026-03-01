@@ -118,8 +118,8 @@ export function buildCoreContextPack(): string {
   return `# Core Context Pack
 
 ## Server Essentials
-- Domain: Gemini-powered MCP server for diff-based code review.
-- Surface: 7 review tools + internal resources + guided prompts.
+- Domain: Gemini-powered MCP server for code analysis.
+- Surface: 7 analysis tools + internal resources + guided prompts.
 - Transport: stdio with task lifecycle support.
 
 ## Tool Matrix

@@ -66,10 +66,10 @@ export function buildServerInstructions(): string {
   const toolSections = contracts.map((contract) => formatToolSection(contract));
   const constraintLines = toBulletedList(getSharedConstraints());
 
-  return `# CODE REVIEW ANALYST MCP
+  return `# CODE ASSISTANT MCP
 
 ## CORE
-- Domain: Gemini-powered diff review.
+- Domain: Gemini-powered code analysis.
 - Capabilities: tools, resources (subscribe), prompts, logging, completions, tasks.
 - Tools: ${toolNames}
 
