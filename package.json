@@ -28,7 +28,7 @@
   },
   "homepage": "https://github.com/j0hanz/code-review-analyst-mcp#readme",
   "scripts": {
-     "clean": "node scripts/tasks.mjs clean",
+    "clean": "node scripts/tasks.mjs clean",
     "build": "node scripts/tasks.mjs build",
     "copy:assets": "node scripts/tasks.mjs copy:assets",
     "prepare": "npm run build",
@@ -59,7 +59,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-   "@eslint/js": "^10.0.1",
+    "@eslint/js": "^10.0.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/node": "^24",
     "eslint": "^10.0.2",
@@ -67,13 +67,13 @@
     "eslint-plugin-de-morgan": "^2.1.1",
     "eslint-plugin-depend": "^1.4.0",
     "eslint-plugin-unused-imports": "^4.4.1",
-     "knip": "^5.85.0",
+    "knip": "^5.85.0",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
   },
-   "engines": {
+  "engines": {
     "node": ">=24"
   }
 }

@@ -1,4 +1,5 @@
 import { toInlineCode } from '../lib/markdown.js';
+
 import { buildCoreContextPack } from './tool-info.js';
 
 const TOOL_CATALOG_CONTENT = `# Tool Catalog Details

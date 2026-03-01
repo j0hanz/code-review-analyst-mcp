@@ -1,6 +1,5 @@
 import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
 import { z } from 'zod';
 
 import { toInlineCode } from '../lib/markdown.js';

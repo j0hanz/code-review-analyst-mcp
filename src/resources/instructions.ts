@@ -1,5 +1,6 @@
 import { toBulletedList, toInlineCode } from '../lib/markdown.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
+
 import { PROMPT_DEFINITIONS } from '../prompts/index.js';
 import { DIFF_RESOURCE_DESCRIPTION, STATIC_RESOURCES } from './index.js';
 import { getSharedConstraints } from './tool-info.js';

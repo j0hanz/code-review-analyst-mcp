@@ -1,5 +1,6 @@
 import { toBulletedList } from '../lib/markdown.js';
 import { getToolContracts } from '../lib/tool-contracts.js';
+
 import { getSharedConstraints } from './tool-info.js';
 
 function buildWorkflowToolReference(): string {

@@ -4,6 +4,7 @@ import {
 } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { DIFF_RESOURCE_URI, getDiff } from '../lib/diff-store.js';
+
 import { buildServerConfig } from './server-config.js';
 import { buildToolCatalog } from './tool-catalog.js';
 import { getToolInfo, getToolInfoNames } from './tool-info.js';

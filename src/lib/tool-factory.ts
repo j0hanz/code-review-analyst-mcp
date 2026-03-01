@@ -9,10 +9,10 @@ import type {
   CallToolResult,
   LoggingLevel,
 } from '@modelcontextprotocol/sdk/types.js';
-
 import { z } from 'zod';
 
 import { DefaultOutputSchema } from '../schemas/outputs.js';
+
 import {
   createNoDiffError,
   type DiffSlot,

@@ -1,8 +1,7 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff-store.js';

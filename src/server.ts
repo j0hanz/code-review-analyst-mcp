@@ -1,13 +1,13 @@
-import { InMemoryTaskStore } from '@modelcontextprotocol/sdk/experimental/tasks/stores/in-memory.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
 import { readFileSync } from 'node:fs';
 import { findPackageJSON } from 'node:module';
 
+import { InMemoryTaskStore } from '@modelcontextprotocol/sdk/experimental/tasks/stores/in-memory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import { initDiffStore } from './lib/diff-store.js';
 import { getErrorMessage } from './lib/errors.js';
+
 import { registerAllPrompts } from './prompts/index.js';
 import { registerAllResources } from './resources/index.js';
 import { buildServerInstructions } from './resources/instructions.js';
