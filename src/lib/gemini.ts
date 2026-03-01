@@ -89,15 +89,6 @@ function stripConstraintValue(value: unknown): unknown {
   return value;
 }
 
-/**
- * Recursively strips value-range constraints (`min*`, `max*`, `multipleOf`)
- * from a JSON Schema object and converts `"type": "integer"` to
- * `"type": "number"`.
- *
- * Use this to derive a relaxed schema for Gemini structured output from the
- * same Zod schema that validates tool results. The tool-level result schema
- * enforces strict bounds *after* Gemini returns its response.
- */
 export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
   const result: JsonRecord = {};
 
@@ -106,8 +97,6 @@ export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
       continue;
     }
 
-    // Relax integer → number so Gemini is not forced into integer-only
-    // output; the stricter result schema still validates integrality.
     if (key === 'type' && value === INTEGER_JSON_TYPE) {
       result[key] = NUMBER_JSON_TYPE;
       continue;
@@ -510,7 +499,6 @@ const geminiContext = new AsyncLocalStorage<GeminiRequestContext>({
   },
 });
 
-// Shared fallback avoids a fresh object allocation per logEvent call when outside a run context.
 const UNKNOWN_CONTEXT: GeminiRequestContext = {
   requestId: UNKNOWN_REQUEST_CONTEXT_VALUE,
   model: UNKNOWN_REQUEST_CONTEXT_VALUE,
@@ -895,11 +883,6 @@ async function runWithRetries(
   return throwGeminiFailure(maxRetries + 1, lastError, onLog);
 }
 
-/**
- * Returns a shallow copy of the request with `thinkingLevel` removed.
- * Uses Reflect.deleteProperty to satisfy `exactOptionalPropertyTypes` —
- * the property must be absent, not explicitly set to `undefined`.
- */
 function omitThinkingLevel(
   request: GeminiStructuredRequest
 ): GeminiStructuredRequest {
