@@ -11,6 +11,23 @@ const VALIDATION_ERROR_PATTERN = /validation/i;
 
 export { CANCELLED_ERROR_PATTERN };
 
+const ERROR_CLASSIFIERS: { pattern: RegExp; meta: ErrorMeta }[] = [
+  {
+    pattern: CANCELLED_ERROR_PATTERN,
+    meta: { kind: 'cancelled', retryable: false },
+  },
+  {
+    pattern: TIMEOUT_ERROR_PATTERN,
+    meta: { kind: 'timeout', retryable: true },
+  },
+  { pattern: BUDGET_ERROR_PATTERN, meta: { kind: 'budget', retryable: false } },
+  { pattern: BUSY_ERROR_PATTERN, meta: { kind: 'busy', retryable: true } },
+  {
+    pattern: RETRYABLE_UPSTREAM_ERROR_PATTERN,
+    meta: { kind: 'upstream', retryable: true },
+  },
+];
+
 export function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
   if (error instanceof z.ZodError || VALIDATION_ERROR_PATTERN.test(message)) {
     return {
@@ -19,39 +36,10 @@ export function classifyErrorMeta(error: unknown, message: string): ErrorMeta {
     };
   }
 
-  if (CANCELLED_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'cancelled',
-      retryable: false,
-    };
-  }
-
-  if (TIMEOUT_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'timeout',
-      retryable: true,
-    };
-  }
-
-  if (BUDGET_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'budget',
-      retryable: false,
-    };
-  }
-
-  if (BUSY_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'busy',
-      retryable: true,
-    };
-  }
-
-  if (RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message)) {
-    return {
-      kind: 'upstream',
-      retryable: true,
-    };
+  for (const { pattern, meta } of ERROR_CLASSIFIERS) {
+    if (pattern.test(message)) {
+      return meta;
+    }
   }
 
   return {

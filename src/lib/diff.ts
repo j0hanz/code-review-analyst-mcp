@@ -101,28 +101,36 @@ function processSection(
   }
 }
 
-export function cleanDiff(raw: string): string {
-  if (!raw) return '';
-
-  const sections: string[] = [];
+function extractAllSections(
+  raw: string,
+  sections: string[],
+  firstIndex: number
+): void {
   let lastIndex = 0;
-  let nextIndex = raw.startsWith('diff --git ')
-    ? 0
-    : raw.indexOf('\ndiff --git ');
-
-  if (nextIndex === -1) {
-    processSection(raw, 0, raw.length, sections);
-    return sections.join('').trim();
-  }
-
+  let nextIndex = firstIndex;
   while (nextIndex !== -1) {
     const matchIndex = nextIndex === 0 ? 0 : nextIndex + 1; // +1 to skip \n
     processSection(raw, lastIndex, matchIndex, sections);
     lastIndex = matchIndex;
     nextIndex = raw.indexOf('\ndiff --git ', lastIndex);
   }
-
   processSection(raw, lastIndex, raw.length, sections);
+}
+
+export function cleanDiff(raw: string): string {
+  if (!raw) return '';
+
+  const sections: string[] = [];
+  const nextIndex = raw.startsWith('diff --git ')
+    ? 0
+    : raw.indexOf('\ndiff --git ');
+
+  if (nextIndex === -1) {
+    processSection(raw, 0, raw.length, sections);
+  } else {
+    extractAllSections(raw, sections, nextIndex);
+  }
+
   return sections.join('').trim();
 }
 
@@ -189,6 +197,16 @@ function getUniquePaths(files: readonly ParsedFile[]): Set<string> {
   return paths;
 }
 
+function buildFileSummaryList(
+  files: readonly ParsedFile[],
+  maxFiles = 40
+): string[] {
+  return files.slice(0, maxFiles).map((file) => {
+    const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
+    return `${path} (+${Math.max(0, file.additions)} -${Math.max(0, file.deletions)})`;
+  });
+}
+
 export function computeDiffStatsAndSummaryFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; summary: string }> {
@@ -196,31 +214,17 @@ export function computeDiffStatsAndSummaryFromFiles(
     return { stats: EMPTY_DIFF_STATS, summary: NO_FILES_CHANGED };
   }
 
-  let added = 0;
-  let deleted = 0;
-  const summaries: string[] = [];
+  const stats = calculateStats(files);
   const MAX_SUMMARY_FILES = 40;
-
-  let i = 0;
-  for (const file of files) {
-    added += file.additions;
-    deleted += file.deletions;
-
-    if (i < MAX_SUMMARY_FILES) {
-      const path = resolveChangedPath(file) ?? UNKNOWN_PATH;
-      summaries.push(`${path} (+${file.additions} -${file.deletions})`);
-    }
-    i++;
-  }
+  const summaries = buildFileSummaryList(files, MAX_SUMMARY_FILES);
 
   if (files.length > MAX_SUMMARY_FILES) {
     summaries.push(`... and ${files.length - MAX_SUMMARY_FILES} more files`);
   }
 
-  const stats = { files: files.length, added, deleted };
   return {
     stats,
-    summary: `${summaries.join(', ')} [${stats.files} files, +${stats.added} -${stats.deleted}]`,
+    summary: `${summaries.join(', ')} [${stats.files} files, +${stats.added} -${Math.abs(stats.deleted)}]`,
   };
 }
 
