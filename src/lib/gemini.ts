@@ -830,6 +830,24 @@ async function applyModelFallback(
   };
 }
 
+async function tryApplyModelFallback(
+  error: unknown,
+  model: string,
+  request: GeminiStructuredRequest,
+  onLog: GeminiOnLog,
+  reason: string
+): Promise<{ model: string; request: GeminiStructuredRequest } | undefined> {
+  if (!shouldUseModelFallback(error, model)) {
+    return undefined;
+  }
+
+  return applyModelFallback(request, onLog, reason);
+}
+
+function countAttemptsMade(attempt: number): number {
+  return attempt + 1;
+}
+
 async function runWithRetries(
   request: GeminiStructuredRequest,
   model: string,
@@ -838,11 +856,10 @@ async function runWithRetries(
   onLog: GeminiOnLog
 ): Promise<unknown> {
   let lastError: unknown;
-  let attempt = 0;
   let currentModel = model;
   let effectiveRequest: GeminiStructuredRequest = request;
 
-  for (; attempt <= maxRetries; attempt += 1) {
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
       return await executeAttempt(
         effectiveRequest,
@@ -854,27 +871,28 @@ async function runWithRetries(
     } catch (error: unknown) {
       lastError = error;
 
-      if (shouldUseModelFallback(error, currentModel)) {
-        const fallback = await applyModelFallback(
-          request,
-          onLog,
-          'Model not found (404)'
-        );
+      const fallback = await tryApplyModelFallback(
+        error,
+        currentModel,
+        request,
+        onLog,
+        'Model not found (404)'
+      );
+      if (fallback) {
         currentModel = fallback.model;
         effectiveRequest = fallback.request;
         continue;
       }
 
       if (!canRetryAttempt(attempt, maxRetries, error)) {
-        attempt += 1; // Count this attempt before breaking
-        break;
+        return throwGeminiFailure(countAttemptsMade(attempt), lastError, onLog);
       }
 
       await waitBeforeRetry(attempt, error, onLog, request.signal);
     }
   }
 
-  return throwGeminiFailure(attempt, lastError, onLog);
+  return throwGeminiFailure(maxRetries + 1, lastError, onLog);
 }
 
 /**

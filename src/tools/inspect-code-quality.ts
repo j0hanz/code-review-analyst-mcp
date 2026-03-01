@@ -1,13 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndSummaryFromFiles } from '../lib/diff.js';
-import { formatOptionalLine } from '../lib/format.js';
+import { formatOptionalLines } from '../lib/format.js';
 import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
+  registerStructuredToolTask,
   requireToolContract,
 } from '../lib/tools.js';
-import { registerStructuredToolTask } from '../lib/tools.js';
 import { InspectCodeQualityInputSchema } from '../schemas/inputs.js';
 import {
   CodeQualityOutputSchema,
@@ -79,17 +79,16 @@ export function registerInspectCodeQualityTool(server: McpServer): void {
       const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
       const { summary: fileSummary } =
         computeDiffStatsAndSummaryFromFiles(parsedFiles);
-      const languageLine = formatOptionalLine('Language', input.language);
-      const maxFindingsLine = formatOptionalLine(
-        'Max Findings',
-        input.maxFindings
-      );
+      const optionalLines = formatOptionalLines([
+        { label: 'Language', value: input.language },
+        { label: 'Max Findings', value: input.maxFindings },
+      ]);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt: `
-Repository: ${input.repository}${languageLine}
-Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}${maxFindingsLine}
+Repository: ${input.repository}${optionalLines}
+Focus Areas: ${input.focusAreas?.join(', ') ?? DEFAULT_FOCUS_AREAS}
 Changed Files:
 ${fileSummary}
 

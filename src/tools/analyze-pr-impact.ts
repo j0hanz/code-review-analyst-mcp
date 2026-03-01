@@ -5,9 +5,9 @@ import { formatLanguageSegment } from '../lib/format.js';
 import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
+  registerStructuredToolTask,
   requireToolContract,
 } from '../lib/tools.js';
-import { registerStructuredToolTask } from '../lib/tools.js';
 import { AnalyzePrImpactInputSchema } from '../schemas/inputs.js';
 import { PrImpactResultSchema } from '../schemas/outputs.js';
 

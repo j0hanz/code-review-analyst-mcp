@@ -144,6 +144,7 @@ export function isEmptyDiff(diff: string): boolean {
 const UNKNOWN_PATH = 'unknown';
 const NO_FILES_CHANGED = 'No files changed.';
 const EMPTY_PATHS: string[] = [];
+const MAX_SUMMARY_FILES = 40;
 export const EMPTY_DIFF_STATS: Readonly<DiffStats> = Object.freeze({
   files: 0,
   added: 0,
@@ -179,6 +180,10 @@ function sortPaths(paths: Iterable<string>): string[] {
   return Array.from(paths).sort(PATH_SORTER);
 }
 
+function isNoFiles(files: readonly ParsedFile[]): boolean {
+  return files.length === 0;
+}
+
 function calculateStats(files: readonly ParsedFile[]): DiffStats {
   let added = 0;
   let deleted = 0;
@@ -211,12 +216,11 @@ function buildFileSummaryList(
 export function computeDiffStatsAndSummaryFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; summary: string }> {
-  if (files.length === 0) {
+  if (isNoFiles(files)) {
     return { stats: EMPTY_DIFF_STATS, summary: NO_FILES_CHANGED };
   }
 
   const stats = calculateStats(files);
-  const MAX_SUMMARY_FILES = 40;
   const summaries = buildFileSummaryList(files, MAX_SUMMARY_FILES);
 
   if (files.length > MAX_SUMMARY_FILES) {
@@ -232,7 +236,7 @@ export function computeDiffStatsAndSummaryFromFiles(
 export function computeDiffStatsAndPathsFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; paths: string[] }> {
-  if (files.length === 0) {
+  if (isNoFiles(files)) {
     return { stats: EMPTY_DIFF_STATS, paths: EMPTY_PATHS };
   }
   const stats = calculateStats(files);
@@ -243,7 +247,7 @@ export function computeDiffStatsAndPathsFromFiles(
 export function extractChangedPathsFromFiles(
   files: readonly ParsedFile[]
 ): string[] {
-  if (files.length === 0) return EMPTY_PATHS;
+  if (isNoFiles(files)) return EMPTY_PATHS;
   return sortPaths(getUniquePaths(files));
 }
 
@@ -254,7 +258,7 @@ export function extractChangedPaths(diff: string): string[] {
 export function computeDiffStatsFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<DiffStats> {
-  if (files.length === 0) return EMPTY_DIFF_STATS;
+  if (isNoFiles(files)) return EMPTY_DIFF_STATS;
   return calculateStats(files);
 }
 

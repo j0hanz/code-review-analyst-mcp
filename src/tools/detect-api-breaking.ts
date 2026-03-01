@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { formatLanguageSegment } from '../lib/format.js';
+import { buildLanguageDiffPrompt } from '../lib/format.js';
 import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
+  registerStructuredToolTask,
   requireToolContract,
 } from '../lib/tools.js';
-import { registerStructuredToolTask } from '../lib/tools.js';
 import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
 import { DetectApiBreakingResultSchema } from '../schemas/outputs.js';
 
@@ -51,12 +51,14 @@ export function registerDetectApiBreakingTool(server: McpServer): void {
         : 'No breaking changes.',
     buildPrompt: (input, ctx) => {
       const { diff } = getDiffContextSnapshot(ctx);
-      const languageLine = formatLanguageSegment(input.language);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
-        prompt:
-          `${languageLine}\nDiff:\n${diff}\n\nBased on the diff above, detect any breaking API changes.`.trimStart(),
+        prompt: buildLanguageDiffPrompt(
+          input.language,
+          diff,
+          'Based on the diff above, detect any breaking API changes.'
+        ),
       };
     },
   });

@@ -5,8 +5,29 @@ export function formatOptionalLine(
   return value === undefined ? '' : `\n${label}: ${value}`;
 }
 
+export interface OptionalLineEntry {
+  label: string;
+  value: string | number | undefined;
+}
+
+export function formatOptionalLines(
+  entries: readonly OptionalLineEntry[]
+): string {
+  return entries
+    .map((entry) => formatOptionalLine(entry.label, entry.value))
+    .join('');
+}
+
 export function formatLanguageSegment(language: string | undefined): string {
   return formatOptionalLine('Language', language);
+}
+
+export function buildLanguageDiffPrompt(
+  language: string | undefined,
+  diff: string,
+  conclusion: string
+): string {
+  return `${formatLanguageSegment(language)}\nDiff:\n${diff}\n\n${conclusion}`.trimStart();
 }
 
 export function formatCountLabel(

@@ -4,13 +4,14 @@ import { promisify } from 'node:util';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff.js';
 import {
   cleanDiff,
   computeDiffStatsFromFiles,
+  DIFF_RESOURCE_URI,
   isEmptyDiff,
   NOISY_EXCLUDE_PATHSPECS,
   parseDiffFiles,
+  storeDiff,
 } from '../lib/diff.js';
 import { wrapToolHandler } from '../lib/tools.js';
 import { createErrorToolResponse, createToolResponse } from '../lib/tools.js';
@@ -40,11 +41,15 @@ async function findGitRoot(cwd: string = process.cwd()): Promise<string> {
     }
   );
   const gitRoot = stdout.trim();
+  cacheGitRoot(cwd, gitRoot);
+  return gitRoot;
+}
+
+function cacheGitRoot(cwd: string, gitRoot: string): void {
   if (gitRootByCwd.size >= MAX_GIT_ROOT_CACHE_SIZE) {
     gitRootByCwd.clear();
   }
   gitRootByCwd.set(cwd, gitRoot);
-  return gitRoot;
 }
 
 function buildGitArgs(mode: DiffMode): string[] {
@@ -118,6 +123,35 @@ async function runGitDiff(mode: DiffMode): Promise<string> {
   return cleanDiff(stdout);
 }
 
+function buildGitErrorResponse(
+  error: unknown
+): ReturnType<typeof createErrorToolResponse> {
+  const err = error as GitError;
+  return createErrorToolResponse(
+    'E_GENERATE_DIFF',
+    formatGitFailureMessage(err),
+    undefined,
+    classifyGitError(err)
+  );
+}
+
+async function generateDiffToolResponse(
+  mode: DiffMode
+): Promise<
+  | ReturnType<typeof createToolResponse>
+  | ReturnType<typeof createErrorToolResponse>
+> {
+  try {
+    const diff = await runGitDiff(mode);
+    if (isEmptyDiff(diff)) {
+      return createNoChangesResponse(mode);
+    }
+    return createSuccessResponse(diff, mode);
+  } catch (error: unknown) {
+    return buildGitErrorResponse(error);
+  }
+}
+
 function createNoChangesResponse(
   mode: DiffMode
 ): ReturnType<typeof createErrorToolResponse> {
@@ -184,22 +218,7 @@ export function registerGenerateDiffTool(server: McpServer): void {
       },
       async (input) => {
         const { mode } = input;
-
-        try {
-          const diff = await runGitDiff(mode);
-          if (isEmptyDiff(diff)) {
-            return createNoChangesResponse(mode);
-          }
-          return createSuccessResponse(diff, mode);
-        } catch (error: unknown) {
-          const err = error as GitError;
-          return createErrorToolResponse(
-            'E_GENERATE_DIFF',
-            formatGitFailureMessage(err),
-            undefined,
-            classifyGitError(err)
-          );
-        }
+        return generateDiffToolResponse(mode);
       }
     )
   );

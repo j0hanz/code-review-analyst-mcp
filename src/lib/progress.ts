@@ -143,7 +143,7 @@ export function formatProgressStep(
   context: string,
   metadata: string
 ): string {
-  return `${toolName}: ${context} [${metadata}]`;
+  return formatProgressMessage(toolName, context, metadata);
 }
 
 export function formatProgressCompletion(
@@ -151,7 +151,15 @@ export function formatProgressCompletion(
   context: string,
   outcome: string
 ): string {
-  return `${toolName}: ${context} [${outcome}]`;
+  return formatProgressMessage(toolName, context, outcome);
+}
+
+function formatProgressMessage(
+  toolName: string,
+  context: string,
+  metadata: string
+): string {
+  return `${toolName}: ${context} [${metadata}]`;
 }
 
 export function createFailureStatusMessage(

@@ -1,13 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { computeDiffStatsAndPathsFromFiles } from '../lib/diff.js';
-import { formatOptionalLine } from '../lib/format.js';
+import { formatOptionalLines } from '../lib/format.js';
 import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
+  registerStructuredToolTask,
   requireToolContract,
 } from '../lib/tools.js';
-import { registerStructuredToolTask } from '../lib/tools.js';
 import { GenerateTestPlanInputSchema } from '../schemas/inputs.js';
 import { TestPlanResultSchema } from '../schemas/outputs.js';
 
@@ -57,20 +57,16 @@ export function registerGenerateTestPlanTool(server: McpServer): void {
     buildPrompt: (input, ctx) => {
       const { diff, parsedFiles } = getDiffContextSnapshot(ctx);
       const { stats, paths } = computeDiffStatsAndPathsFromFiles(parsedFiles);
-      const languageLine = formatOptionalLine('Language', input.language);
-      const frameworkLine = formatOptionalLine(
-        'Test Framework',
-        input.testFramework
-      );
-      const maxCasesLine = formatOptionalLine(
-        'Max Test Cases',
-        input.maxTestCases
-      );
+      const optionalLines = formatOptionalLines([
+        { label: 'Language', value: input.language },
+        { label: 'Test Framework', value: input.testFramework },
+        { label: 'Max Test Cases', value: input.maxTestCases },
+      ]);
 
       return {
         systemInstruction: SYSTEM_INSTRUCTION,
         prompt: `
-Repository: ${input.repository}${languageLine}${frameworkLine}${maxCasesLine}
+Repository: ${input.repository}${optionalLines}
 Stats: ${stats.files} files, +${stats.added}, -${stats.deleted}
 Changed Files: ${paths.join(', ')}
 
