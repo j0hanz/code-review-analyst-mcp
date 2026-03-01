@@ -5,7 +5,7 @@ import { InMemoryTaskStore } from '@modelcontextprotocol/sdk/experimental/tasks/
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { initDiffStore } from './lib/diff-store.js';
+import { initDiffStore } from './lib/diff.js';
 import { getErrorMessage } from './lib/errors.js';
 
 import { registerAllPrompts } from './prompts/index.js';

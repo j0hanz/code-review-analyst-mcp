@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { formatLanguageSegment } from '../lib/format.js';
-import { getDiffContextSnapshot } from '../lib/tool-context.js';
+import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
   requireToolContract,
-} from '../lib/tool-contracts.js';
-import { registerStructuredToolTask } from '../lib/tool-factory.js';
+} from '../lib/tools.js';
+import { registerStructuredToolTask } from '../lib/tools.js';
 import { DetectApiBreakingInputSchema } from '../schemas/inputs.js';
 import { DetectApiBreakingResultSchema } from '../schemas/outputs.js';
 

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomInt } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { performance } from 'node:perf_hooks';
@@ -15,16 +16,244 @@ import {
 import type { GenerateContentConfig } from '@google/genai';
 
 import { ConcurrencyLimiter } from './concurrency.js';
-import { formatUsNumber } from './contract-format.js';
-import { createCachedEnvInt } from './env-config.js';
-import { getErrorMessage, toRecord } from './errors.js';
+import { createCachedEnvInt } from './config.js';
 import {
-  canRetryAttempt,
-  getNumericErrorCode,
-  getRetryDelayMs,
-  toUpperStringCode,
-} from './gemini-retry.js';
-import type { GeminiStructuredRequest } from './types.js';
+  getErrorMessage,
+  RETRYABLE_UPSTREAM_ERROR_PATTERN,
+  toRecord,
+} from './errors.js';
+import { formatUsNumber } from './format.js';
+
+export type JsonObject = Record<string, unknown>;
+export type GeminiLogHandler = (level: string, data: unknown) => Promise<void>;
+export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+
+export interface GeminiRequestExecutionOptions {
+  maxRetries?: number;
+  timeoutMs?: number;
+  temperature?: number;
+  maxOutputTokens?: number;
+  thinkingLevel?: GeminiThinkingLevel;
+  includeThoughts?: boolean;
+  signal?: AbortSignal;
+  onLog?: GeminiLogHandler;
+  responseKeyOrdering?: readonly string[];
+  batchMode?: 'off' | 'inline';
+}
+
+export interface GeminiStructuredRequestOptions extends GeminiRequestExecutionOptions {
+  model?: string;
+}
+
+export interface GeminiStructuredRequest extends GeminiStructuredRequestOptions {
+  systemInstruction?: string;
+  prompt: string;
+  responseSchema: Readonly<JsonObject>;
+}
+
+const CONSTRAINT_KEY_VALUES = [
+  'minLength',
+  'maxLength',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'minItems',
+  'maxItems',
+  'multipleOf',
+  'pattern',
+  'format',
+] as const;
+const CONSTRAINT_KEYS = new Set<string>(CONSTRAINT_KEY_VALUES);
+const INTEGER_JSON_TYPE = 'integer';
+const NUMBER_JSON_TYPE = 'number';
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stripConstraintValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const stripped = new Array<unknown>(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      stripped[index] = stripConstraintValue(value[index]);
+    }
+    return stripped;
+  }
+
+  if (isJsonRecord(value)) {
+    return stripJsonSchemaConstraints(value);
+  }
+
+  return value;
+}
+
+/**
+ * Recursively strips value-range constraints (`min*`, `max*`, `multipleOf`)
+ * from a JSON Schema object and converts `"type": "integer"` to
+ * `"type": "number"`.
+ *
+ * Use this to derive a relaxed schema for Gemini structured output from the
+ * same Zod schema that validates tool results. The tool-level result schema
+ * enforces strict bounds *after* Gemini returns its response.
+ */
+export function stripJsonSchemaConstraints(schema: JsonRecord): JsonRecord {
+  const result: JsonRecord = {};
+
+  for (const [key, value] of Object.entries(schema)) {
+    if (CONSTRAINT_KEYS.has(key)) {
+      continue;
+    }
+
+    // Relax integer → number so Gemini is not forced into integer-only
+    // output; the stricter result schema still validates integrality.
+    if (key === 'type' && value === INTEGER_JSON_TYPE) {
+      result[key] = NUMBER_JSON_TYPE;
+      continue;
+    }
+
+    result[key] = stripConstraintValue(value);
+  }
+
+  return result;
+}
+
+const DIGITS_ONLY_PATTERN = /^\d+$/;
+const RETRY_DELAY_BASE_MS = 300;
+const RETRY_DELAY_MAX_MS = 5_000;
+const RETRY_JITTER_RATIO = 0.2;
+
+export const RETRYABLE_NUMERIC_CODES = new Set([429, 500, 502, 503, 504]);
+
+export const RETRYABLE_TRANSIENT_CODES = new Set([
+  'RESOURCE_EXHAUSTED',
+  'UNAVAILABLE',
+  'DEADLINE_EXCEEDED',
+  'INTERNAL',
+  'ABORTED',
+]);
+
+function getNestedError(error: unknown): Record<string, unknown> | undefined {
+  const record = toRecord(error);
+  if (!record) {
+    return undefined;
+  }
+
+  const nested = record.error;
+  const nestedRecord = toRecord(nested);
+  if (!nestedRecord) {
+    return record;
+  }
+
+  return nestedRecord;
+}
+
+function toNumericCode(candidate: unknown): number | undefined {
+  if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+    return candidate;
+  }
+
+  if (typeof candidate === 'string' && DIGITS_ONLY_PATTERN.test(candidate)) {
+    return Number.parseInt(candidate, 10);
+  }
+
+  return undefined;
+}
+
+export function toUpperStringCode(candidate: unknown): string | undefined {
+  if (typeof candidate !== 'string') {
+    return undefined;
+  }
+
+  const normalized = candidate.trim().toUpperCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function findFirstNumericCode(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): number | undefined {
+  for (const key of keys) {
+    const numericCode = toNumericCode(record[key]);
+    if (numericCode !== undefined) {
+      return numericCode;
+    }
+  }
+  return undefined;
+}
+
+function findFirstStringCode(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): string | undefined {
+  for (const key of keys) {
+    const stringCode = toUpperStringCode(record[key]);
+    if (stringCode !== undefined) {
+      return stringCode;
+    }
+  }
+  return undefined;
+}
+
+const NUMERIC_ERROR_KEYS = ['status', 'statusCode', 'code'] as const;
+
+export function getNumericErrorCode(error: unknown): number | undefined {
+  const record = getNestedError(error);
+  if (!record) {
+    return undefined;
+  }
+
+  return findFirstNumericCode(record, NUMERIC_ERROR_KEYS);
+}
+
+const TRANSIENT_ERROR_KEYS = ['code', 'status', 'statusText'] as const;
+
+function getTransientErrorCode(error: unknown): string | undefined {
+  const record = getNestedError(error);
+  if (!record) {
+    return undefined;
+  }
+
+  return findFirstStringCode(record, TRANSIENT_ERROR_KEYS);
+}
+
+export function shouldRetry(error: unknown): boolean {
+  const numericCode = getNumericErrorCode(error);
+  if (numericCode !== undefined && RETRYABLE_NUMERIC_CODES.has(numericCode)) {
+    return true;
+  }
+
+  const transientCode = getTransientErrorCode(error);
+  if (
+    transientCode !== undefined &&
+    RETRYABLE_TRANSIENT_CODES.has(transientCode)
+  ) {
+    return true;
+  }
+
+  const message = getErrorMessage(error);
+  return RETRYABLE_UPSTREAM_ERROR_PATTERN.test(message);
+}
+
+export function getRetryDelayMs(attempt: number): number {
+  const exponentialDelay = RETRY_DELAY_BASE_MS * 2 ** attempt;
+  const boundedDelay = Math.min(RETRY_DELAY_MAX_MS, exponentialDelay);
+  const jitterWindow = Math.max(
+    1,
+    Math.floor(boundedDelay * RETRY_JITTER_RATIO)
+  );
+  const jitter = randomInt(0, jitterWindow);
+  return Math.min(RETRY_DELAY_MAX_MS, boundedDelay + jitter);
+}
+
+export function canRetryAttempt(
+  attempt: number,
+  maxRetries: number,
+  error: unknown
+): boolean {
+  return attempt < maxRetries && shouldRetry(error);
+}
 
 // Lazy-cached: first call happens after parseCommandLineArgs() sets GEMINI_MODEL.
 let _defaultModel: string | undefined;

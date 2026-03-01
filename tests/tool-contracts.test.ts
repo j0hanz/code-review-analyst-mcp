@@ -7,7 +7,7 @@ import {
   getToolContractNames,
   getToolContracts,
   requireToolContract,
-} from '../src/lib/tool-contracts.js';
+} from '../src/lib/tools.js';
 
 describe('tool contracts', () => {
   it('exposes expected tool names with no duplicates', () => {

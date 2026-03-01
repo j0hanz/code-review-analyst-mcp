@@ -1,12 +1,12 @@
+import { createCachedEnvInt } from '../lib/config.js';
+import { FLASH_MODEL } from '../lib/config.js';
 import {
   formatThinkingLevel,
   formatTimeoutSeconds,
   formatUsNumber,
-} from '../lib/contract-format.js';
-import { createCachedEnvInt } from '../lib/env-config.js';
-import { toInlineCode } from '../lib/markdown.js';
-import { FLASH_MODEL } from '../lib/model-config.js';
-import { getToolContracts } from '../lib/tool-contracts.js';
+} from '../lib/format.js';
+import { toInlineCode } from '../lib/format.js';
+import { getToolContracts } from '../lib/tools.js';
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 const DEFAULT_MAX_CONCURRENT_CALLS = 10;

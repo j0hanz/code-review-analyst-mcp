@@ -2,12 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { extractChangedPathsFromFiles } from '../lib/diff.js';
 import { formatCountLabel } from '../lib/format.js';
-import { getDiffContextSnapshot } from '../lib/tool-context.js';
+import { getDiffContextSnapshot } from '../lib/tools.js';
 import {
   buildStructuredToolExecutionOptions,
   requireToolContract,
-} from '../lib/tool-contracts.js';
-import { registerStructuredToolTask } from '../lib/tool-factory.js';
+} from '../lib/tools.js';
+import { registerStructuredToolTask } from '../lib/tools.js';
 import { SuggestSearchReplaceInputSchema } from '../schemas/inputs.js';
 import { SearchReplaceResultSchema } from '../schemas/outputs.js';
 

@@ -1,5 +1,5 @@
-import { toBulletedList } from '../lib/markdown.js';
-import { getToolContracts } from '../lib/tool-contracts.js';
+import { toBulletedList } from '../lib/format.js';
+import { getToolContracts } from '../lib/tools.js';
 
 import { getSharedConstraints } from './tool-info.js';
 

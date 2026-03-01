@@ -2,12 +2,12 @@ import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { toInlineCode } from '../lib/markdown.js';
+import { toInlineCode } from '../lib/format.js';
 import {
   getToolContract,
   getToolContractNames,
   INSPECTION_FOCUS_AREAS,
-} from '../lib/tool-contracts.js';
+} from '../lib/tools.js';
 
 export const PROMPT_DEFINITIONS = [
   {

@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff-store.js';
+import { DIFF_RESOURCE_URI, storeDiff } from '../lib/diff.js';
 import {
   cleanDiff,
   computeDiffStatsFromFiles,
@@ -12,11 +12,8 @@ import {
   NOISY_EXCLUDE_PATHSPECS,
   parseDiffFiles,
 } from '../lib/diff.js';
-import { wrapToolHandler } from '../lib/tool-factory.js';
-import {
-  createErrorToolResponse,
-  createToolResponse,
-} from '../lib/tool-response.js';
+import { wrapToolHandler } from '../lib/tools.js';
+import { createErrorToolResponse, createToolResponse } from '../lib/tools.js';
 import { DefaultOutputSchema } from '../schemas/outputs.js';
 
 const GIT_TIMEOUT_MS = 30_000;

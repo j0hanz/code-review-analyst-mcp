@@ -1,4 +1,4 @@
-import { toInlineCode } from '../lib/markdown.js';
+import { toInlineCode } from '../lib/format.js';
 
 import { buildCoreContextPack } from './tool-info.js';
 

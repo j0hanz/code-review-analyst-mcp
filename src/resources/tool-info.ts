@@ -2,9 +2,9 @@ import {
   formatThinkingLevel,
   formatTimeoutSeconds,
   formatUsNumber,
-} from '../lib/contract-format.js';
-import { toBulletedList, toInlineCode } from '../lib/markdown.js';
-import { getToolContract, getToolContracts } from '../lib/tool-contracts.js';
+} from '../lib/format.js';
+import { toBulletedList, toInlineCode } from '../lib/format.js';
+import { getToolContract, getToolContracts } from '../lib/tools.js';
 
 interface ToolInfoEntry {
   name: string;

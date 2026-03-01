@@ -1,5 +1,5 @@
 import { getErrorMessage } from './errors.js';
-import type { createErrorToolResponse } from './tool-response.js';
+import type { createErrorToolResponse } from './tools.js';
 
 // Named progress step indices for 7-step progress (0–6).
 export const STEP_STARTING = 0;

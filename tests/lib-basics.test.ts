@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createCachedEnvInt } from '../src/lib/env-config.js';
+import { createCachedEnvInt } from '../src/lib/config.js';
 import {
   getErrorMessage,
   RETRYABLE_UPSTREAM_ERROR_PATTERN,
@@ -11,11 +11,11 @@ import {
   formatLanguageSegment,
   formatOptionalLine,
 } from '../src/lib/format.js';
-import { toBulletedList, toInlineCode } from '../src/lib/markdown.js';
+import { toBulletedList, toInlineCode } from '../src/lib/format.js';
 import {
   createErrorToolResponse,
   createToolResponse,
-} from '../src/lib/tool-response.js';
+} from '../src/lib/tools.js';
 
 describe('errors', () => {
   it('extracts message from Error instances and strings', () => {

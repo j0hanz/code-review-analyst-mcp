@@ -9,7 +9,7 @@ import {
   initDiffStore,
   setDiffForTesting,
   storeDiff,
-} from '../src/lib/diff-store.js';
+} from '../src/lib/diff.js';
 
 function createSlot(generatedAt: string) {
   return {
