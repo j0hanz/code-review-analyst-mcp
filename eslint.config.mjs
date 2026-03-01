@@ -2,7 +2,6 @@ import eslint from '@eslint/js';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import deMorgan from 'eslint-plugin-de-morgan';
 import depend from 'eslint-plugin-depend';
-import sonarjs from 'eslint-plugin-sonarjs';
 import unusedImports from 'eslint-plugin-unused-imports';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
@@ -13,17 +12,16 @@ export default defineConfig(
       'dist',
       'node_modules',
       '.agents',
+      '.tmp/**',
       '*.config.mjs',
       '*.config.js',
       'src/__tests__/**',
       'tests/**',
       '**/*.test.ts',
       '**/*.spec.ts',
-      'coverage/**',
     ],
   },
   eslint.configs.recommended,
-  sonarjs.configs.recommended,
   deMorgan.configs.recommended,
   depend.configs['flat/recommended'],
   {
@@ -54,8 +52,6 @@ export default defineConfig(
           argsIgnorePattern: '^_',
         },
       ],
-
-      'no-console': ['error', { allow: ['warn', 'error'] }],
 
       '@typescript-eslint/consistent-type-assertions': [
         'error',
