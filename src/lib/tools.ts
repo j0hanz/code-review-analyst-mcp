@@ -1269,14 +1269,26 @@ function runToolTaskInBackground<
   runner: ToolExecutionRunner<TInput, TResult, TFinal>,
   input: unknown,
   taskId: string,
-  extendedStore: ExtendedRequestTaskStore
+  extendedStore: ExtendedRequestTaskStore,
+  signal?: AbortSignal
 ): void {
   runner.run(input).catch(async (error: unknown) => {
-    await extendedStore.updateTaskStatus(
-      taskId,
-      'failed',
-      getErrorMessage(error)
-    );
+    const isAbort =
+      error != null &&
+      typeof error === 'object' &&
+      'name' in error &&
+      (error as { name: string }).name === 'AbortError';
+    const isCancelled = (signal?.aborted ?? false) || isAbort;
+
+    try {
+      await extendedStore.updateTaskStatus(
+        taskId,
+        isCancelled ? 'cancelled' : 'failed',
+        getErrorMessage(error)
+      );
+    } catch {
+      // Status update failed — nothing more we can do
+    }
   });
 }
 
@@ -1317,19 +1329,29 @@ export function registerStructuredToolTask<
         const extendedStore =
           extra.taskStore as unknown as ExtendedRequestTaskStore;
 
-        const runner = new ToolExecutionRunner(config, {
-          onLog: createGeminiLogger(server),
-          reportProgress: getOrCreateProgressReporter(
-            extra as unknown as ProgressExtra
-          ),
-          statusReporter: createTaskStatusReporter(
-            task.taskId,
-            extra,
-            extendedStore
-          ),
-        });
+        const runner = new ToolExecutionRunner(
+          config,
+          {
+            onLog: createGeminiLogger(server),
+            reportProgress: getOrCreateProgressReporter(
+              extra as unknown as ProgressExtra
+            ),
+            statusReporter: createTaskStatusReporter(
+              task.taskId,
+              extra,
+              extendedStore
+            ),
+          },
+          extra.signal
+        );
 
-        runToolTaskInBackground(runner, input, task.taskId, extendedStore);
+        runToolTaskInBackground(
+          runner,
+          input,
+          task.taskId,
+          extendedStore,
+          extra.signal
+        );
 
         return { task };
       },

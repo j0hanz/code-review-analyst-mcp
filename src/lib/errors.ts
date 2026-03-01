@@ -6,7 +6,7 @@ import type { ErrorMeta } from './tools.js';
 
 /** Matches transient upstream provider failures that are typically safe to retry. */
 export const RETRYABLE_UPSTREAM_ERROR_PATTERN =
-  /(429|500|502|503|504|rate.?limit|quota|overload|unavailable|gateway|timeout|timed.out|connection|reset|econn|enotfound|temporary|transient|invalid.json)/i;
+  /(429|500|502|503|504|rate.?limit|quota|overload|unavailable|gateway|timeout|timed.out|connection|reset|econn|enotfound|temporary|transient)/i;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

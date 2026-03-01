@@ -37,6 +37,7 @@ const ERROR_KINDS = [
   'upstream',
   'timeout',
   'cancelled',
+  'busy',
   'internal',
 ] as const;
 

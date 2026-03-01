@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { createCachedEnvInt } from '../src/lib/config.js';
 import {
+  classifyErrorMeta,
   getErrorMessage,
   RETRYABLE_UPSTREAM_ERROR_PATTERN,
 } from '../src/lib/errors.js';
@@ -16,6 +17,7 @@ import {
   createErrorToolResponse,
   createToolResponse,
 } from '../src/lib/tools.js';
+import { DefaultOutputSchema } from '../src/schemas/outputs.js';
 
 describe('errors', () => {
   it('extracts message from Error instances and strings', () => {
@@ -36,12 +38,35 @@ describe('errors', () => {
     );
     assert.equal(
       RETRYABLE_UPSTREAM_ERROR_PATTERN.test('upstream invalid.json payload'),
-      true
+      false
     );
     assert.equal(
       RETRYABLE_UPSTREAM_ERROR_PATTERN.test('user input validation failed'),
       false
     );
+  });
+
+  it('classifies busy errors with kind=busy and retryable=true', () => {
+    const meta = classifyErrorMeta(
+      new Error('too many concurrent requests'),
+      'too many concurrent requests'
+    );
+    assert.equal(meta.kind, 'busy');
+    assert.equal(meta.retryable, true);
+  });
+
+  it('DefaultOutputSchema accepts kind=busy in error payload', () => {
+    const payload = {
+      ok: false,
+      error: {
+        code: 'E_BUSY',
+        message: 'too many concurrent requests',
+        retryable: true,
+        kind: 'busy' as const,
+      },
+    };
+    const parsed = DefaultOutputSchema.safeParse(payload);
+    assert.equal(parsed.success, true);
   });
 });
 

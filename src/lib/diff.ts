@@ -311,19 +311,7 @@ function notifyDiffUpdated(): void {
 
 /** Binds diff resource notifications to the currently active server instance. */
 export function initDiffStore(server: McpServer): void {
-  const inner = (
-    server as unknown as {
-      server?: { sendResourceUpdated?: SendResourceUpdated };
-    }
-  ).server;
-  if (typeof inner?.sendResourceUpdated === 'function') {
-    sendResourceUpdated = inner.sendResourceUpdated.bind(inner);
-  } else {
-    sendResourceUpdated = undefined;
-    console.error(
-      '[diff-store] sendResourceUpdated not available — diff resource notifications disabled.'
-    );
-  }
+  sendResourceUpdated = (params) => server.server.sendResourceUpdated(params);
 }
 
 export function storeDiff(data: DiffSlot, key: string = process.cwd()): void {
