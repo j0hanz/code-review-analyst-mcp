@@ -43,7 +43,9 @@ function readUtf8File(path: string): string {
   try {
     return readFileSync(path, UTF8_ENCODING);
   } catch (error: unknown) {
-    throw new Error(`Unable to read ${path}: ${getErrorMessage(error)}`);
+    throw new Error(`Unable to read ${path}: ${getErrorMessage(error)}`, {
+      cause: error,
+    });
   }
 }
 
@@ -56,7 +58,8 @@ function parsePackageVersion(
     return PackageJsonSchema.parse(json).version;
   } catch (error: unknown) {
     throw new Error(
-      `Invalid package.json at ${packageJsonPath}: ${getErrorMessage(error)}`
+      `Invalid package.json at ${packageJsonPath}: ${getErrorMessage(error)}`,
+      { cause: error }
     );
   }
 }

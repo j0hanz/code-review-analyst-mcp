@@ -575,7 +575,9 @@ function parseStructuredResponse(responseText: string | undefined): unknown {
   try {
     return JSON.parse(jsonText);
   } catch (error: unknown) {
-    throw new Error(`Model produced invalid JSON: ${getErrorMessage(error)}`);
+    throw new Error(`Model produced invalid JSON: ${getErrorMessage(error)}`, {
+      cause: error,
+    });
   }
 }
 
