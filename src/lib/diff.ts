@@ -1,6 +1,7 @@
 import parseDiff from 'parse-diff';
 import type { File as ParsedFile } from 'parse-diff';
 
+import { formatUsNumber } from './contract-format.js';
 import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse, type ErrorMeta } from './tool-response.js';
 
@@ -10,7 +11,6 @@ export type { ParsedFile };
 
 const DEFAULT_MAX_DIFF_CHARS = 120_000;
 const MAX_DIFF_CHARS_ENV_VAR = 'MAX_DIFF_CHARS';
-const numberFormatter = new Intl.NumberFormat('en-US');
 
 const diffCharsConfig = createCachedEnvInt(
   MAX_DIFF_CHARS_ENV_VAR,
@@ -33,7 +33,7 @@ export function getDiffBudgetError(
   diffLength: number,
   maxChars = getMaxDiffChars()
 ): string {
-  return `diff exceeds max allowed size (${numberFormatter.format(diffLength)} chars > ${numberFormatter.format(maxChars)} chars)`;
+  return `diff exceeds max allowed size (${formatUsNumber(diffLength)} chars > ${formatUsNumber(maxChars)} chars)`;
 }
 
 const BUDGET_ERROR_META: ErrorMeta = { retryable: false, kind: 'budget' };
@@ -135,7 +135,11 @@ export function isEmptyDiff(diff: string): boolean {
 const UNKNOWN_PATH = 'unknown';
 const NO_FILES_CHANGED = 'No files changed.';
 const EMPTY_PATHS: string[] = [];
-const EMPTY_STATS = Object.freeze({ files: 0, added: 0, deleted: 0 });
+export const EMPTY_DIFF_STATS: Readonly<DiffStats> = Object.freeze({
+  files: 0,
+  added: 0,
+  deleted: 0,
+});
 const PATH_SORTER = (left: string, right: string): number =>
   left.localeCompare(right);
 
@@ -189,7 +193,7 @@ export function computeDiffStatsAndSummaryFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; summary: string }> {
   if (files.length === 0) {
-    return { stats: EMPTY_STATS, summary: NO_FILES_CHANGED };
+    return { stats: EMPTY_DIFF_STATS, summary: NO_FILES_CHANGED };
   }
 
   let added = 0;
@@ -224,7 +228,7 @@ export function computeDiffStatsAndPathsFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<{ stats: DiffStats; paths: string[] }> {
   if (files.length === 0) {
-    return { stats: EMPTY_STATS, paths: EMPTY_PATHS };
+    return { stats: EMPTY_DIFF_STATS, paths: EMPTY_PATHS };
   }
   const stats = calculateStats(files);
   const paths = sortPaths(getUniquePaths(files));
@@ -245,7 +249,7 @@ export function extractChangedPaths(diff: string): string[] {
 export function computeDiffStatsFromFiles(
   files: readonly ParsedFile[]
 ): Readonly<DiffStats> {
-  if (files.length === 0) return EMPTY_STATS;
+  if (files.length === 0) return EMPTY_DIFF_STATS;
   return calculateStats(files);
 }
 

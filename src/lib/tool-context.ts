@@ -1,12 +1,7 @@
-import type { DiffStats, ParsedFile } from './diff.js';
+import { type DiffStats, EMPTY_DIFF_STATS, type ParsedFile } from './diff.js';
 import type { ToolExecutionContext } from './tool-factory.js';
 
 const EMPTY_PARSED_FILES: readonly ParsedFile[] = [];
-const EMPTY_DIFF_STATS = Object.freeze({
-  files: 0,
-  added: 0,
-  deleted: 0,
-}) as Readonly<DiffStats>;
 
 export interface DiffContextSnapshot {
   diff: string;

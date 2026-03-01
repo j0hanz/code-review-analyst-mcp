@@ -8,6 +8,13 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+export function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!isObjectRecord(value)) {
+    return undefined;
+  }
+  return value;
+}
+
 function getStringProperty(value: unknown, key: string): string | undefined {
   if (!isObjectRecord(value) || !(key in value)) {
     return undefined;

@@ -1,8 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import type { ParsedFile } from './diff.js';
+import type { DiffStats, ParsedFile } from './diff.js';
 import { createCachedEnvInt } from './env-config.js';
 import { createErrorToolResponse } from './tool-response.js';
+
+export type { DiffStats };
 
 export const DIFF_RESOURCE_URI = 'diff://current';
 
@@ -15,12 +17,6 @@ export const diffStaleWarningMs = createCachedEnvInt(
   'DIFF_STALE_WARNING_MS',
   5 * 60 * 1_000 // 5 minutes default
 );
-
-export interface DiffStats {
-  files: number;
-  added: number;
-  deleted: number;
-}
 
 export interface DiffSlot {
   diff: string;
