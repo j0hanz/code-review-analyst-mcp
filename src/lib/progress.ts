@@ -41,30 +41,25 @@ const progressReporterCache = new WeakMap<
   (payload: ProgressPayload) => Promise<void>
 >();
 
-function createProgressReporter(
-  extra: ProgressExtra
-): (payload: ProgressPayload) => Promise<void> {
-  const rawToken = extra._meta?.progressToken;
-  if (typeof rawToken !== 'string' && typeof rawToken !== 'number') {
-    return async (): Promise<void> => {
-      // Request did not provide a progress token.
-    };
-  }
+class ProgressReporter {
+  private lastCurrent = -1;
+  private didSendTerminal = false;
 
-  const progressToken = rawToken;
-  let lastCurrent = -1;
-  let didSendTerminal = false;
+  constructor(
+    private readonly extra: ProgressExtra,
+    private readonly progressToken: string | number
+  ) {}
 
-  return async (payload): Promise<void> => {
-    if (didSendTerminal) {
+  async report(payload: ProgressPayload): Promise<void> {
+    if (this.didSendTerminal) {
       return;
     }
 
     let { current } = payload;
-    if (current <= lastCurrent && current < (payload.total ?? Infinity)) {
-      current = lastCurrent + 0.01;
+    if (current <= this.lastCurrent && current < (payload.total ?? Infinity)) {
+      current = this.lastCurrent + 0.01;
     }
-    current = Math.max(current, lastCurrent);
+    current = Math.max(current, this.lastCurrent);
 
     const total =
       payload.total !== undefined
@@ -80,7 +75,7 @@ function createProgressReporter(
     }
 
     const params: ProgressNotificationParams = {
-      progressToken,
+      progressToken: this.progressToken,
       progress: progressPayload.current,
       ...(progressPayload.total !== undefined
         ? { total: progressPayload.total }
@@ -90,17 +85,31 @@ function createProgressReporter(
         : {}),
     };
 
-    await extra
+    await this.extra
       .sendNotification({ method: 'notifications/progress', params })
       .catch(() => {
         // Progress notifications are best-effort; never fail tool execution.
       });
 
-    lastCurrent = current;
+    this.lastCurrent = current;
     if (total !== undefined && total === current) {
-      didSendTerminal = true;
+      this.didSendTerminal = true;
     }
-  };
+  }
+}
+
+function createProgressReporter(
+  extra: ProgressExtra
+): (payload: ProgressPayload) => Promise<void> {
+  const rawToken = extra._meta?.progressToken;
+  if (typeof rawToken !== 'string' && typeof rawToken !== 'number') {
+    return async (): Promise<void> => {
+      // Request did not provide a progress token.
+    };
+  }
+
+  const reporter = new ProgressReporter(extra, rawToken);
+  return (payload) => reporter.report(payload);
 }
 
 export function getOrCreateProgressReporter(
@@ -156,20 +165,22 @@ export function createFailureStatusMessage(
   return errorMessage;
 }
 
+function tryParseErrorMessage(text: string): string | undefined {
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: string } };
+    return parsed.error?.message;
+  } catch {
+    return undefined;
+  }
+}
+
 export function extractValidationMessage(
   validationError: ReturnType<typeof createErrorToolResponse>
 ): string {
-  const text = validationError.content[0]?.text;
-  if (!text) {
-    return INPUT_VALIDATION_FAILED;
-  }
+  const text = validationError.content.at(0)?.text;
+  if (!text) return INPUT_VALIDATION_FAILED;
 
-  try {
-    const parsed = JSON.parse(text) as { error?: { message?: string } };
-    return parsed.error?.message ?? INPUT_VALIDATION_FAILED;
-  } catch {
-    return INPUT_VALIDATION_FAILED;
-  }
+  return tryParseErrorMessage(text) ?? INPUT_VALIDATION_FAILED;
 }
 
 export async function sendSingleStepProgress(

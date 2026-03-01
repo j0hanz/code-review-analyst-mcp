@@ -305,34 +305,28 @@ function createGenerationRequest<
     prompt: promptParts.prompt,
     responseSchema,
     onLog,
+    ...(config.thinkingLevel !== undefined
+      ? { thinkingLevel: config.thinkingLevel }
+      : {}),
+    ...(config.timeoutMs !== undefined ? { timeoutMs: config.timeoutMs } : {}),
+    ...(config.maxOutputTokens !== undefined
+      ? { maxOutputTokens: config.maxOutputTokens }
+      : {}),
+    ...(config.temperature !== undefined
+      ? { temperature: config.temperature }
+      : {}),
+    ...(config.includeThoughts !== undefined
+      ? { includeThoughts: config.includeThoughts }
+      : {}),
+    ...(config.batchMode !== undefined ? { batchMode: config.batchMode } : {}),
+    ...(signal !== undefined ? { signal } : {}),
   };
 
-  if (config.thinkingLevel !== undefined) {
-    request.thinkingLevel = config.thinkingLevel;
-  }
-  if (config.timeoutMs !== undefined) {
-    request.timeoutMs = config.timeoutMs;
-  }
-  if (config.maxOutputTokens !== undefined) {
-    request.maxOutputTokens = config.maxOutputTokens;
-  }
-  if (config.temperature !== undefined) {
-    request.temperature = config.temperature;
-  }
-  if (config.includeThoughts !== undefined) {
-    request.includeThoughts = config.includeThoughts;
-  }
   if (config.deterministicJson) {
     const responseKeyOrdering = extractResponseKeyOrdering(responseSchema);
     if (responseKeyOrdering !== undefined) {
       request.responseKeyOrdering = responseKeyOrdering;
     }
-  }
-  if (config.batchMode !== undefined) {
-    request.batchMode = config.batchMode;
-  }
-  if (signal !== undefined) {
-    request.signal = signal;
   }
 
   return request;
@@ -380,6 +374,20 @@ function asObjectRecord(value: unknown): Record<string, unknown> {
   return { payload: value };
 }
 
+async function safeSendProgress(
+  extra: ProgressExtra,
+  toolName: string,
+  context: string,
+  current: 0 | 1,
+  state: 'starting' | 'completed' | 'failed' | 'cancelled'
+): Promise<void> {
+  try {
+    await sendSingleStepProgress(extra, toolName, context, current, state);
+  } catch {
+    // Progress is best-effort; tool execution must not fail on notification errors.
+  }
+}
+
 export function wrapToolHandler<TInput, TResult extends CallToolResult>(
   options: {
     toolName: string;
@@ -390,54 +398,18 @@ export function wrapToolHandler<TInput, TResult extends CallToolResult>(
   return async (input: TInput, extra: ProgressExtra): Promise<TResult> => {
     const context = normalizeProgressContext(options.progressContext?.(input));
 
-    // Start progress (0/1)
-    try {
-      await sendSingleStepProgress(
-        extra,
-        options.toolName,
-        context,
-        0,
-        'starting'
-      );
-    } catch {
-      // Progress is best-effort; tool execution must not fail on notification errors.
-    }
+    await safeSendProgress(extra, options.toolName, context, 0, 'starting');
 
     try {
       const result = await handler(input, extra);
-
-      // End progress (1/1)
       const outcome = result.isError ? 'failed' : 'completed';
-      try {
-        await sendSingleStepProgress(
-          extra,
-          options.toolName,
-          context,
-          1,
-          outcome
-        );
-      } catch {
-        // Progress is best-effort; returning a successful tool result takes precedence.
-      }
-
+      await safeSendProgress(extra, options.toolName, context, 1, outcome);
       return result;
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       const failureMeta = classifyErrorMeta(error, errorMessage);
       const outcome = failureMeta.kind === 'cancelled' ? 'cancelled' : 'failed';
-
-      // Progress is best-effort; must never mask the original error.
-      try {
-        await sendSingleStepProgress(
-          extra,
-          options.toolName,
-          context,
-          1,
-          outcome
-        );
-      } catch {
-        // Swallow progress delivery errors so the original error propagates.
-      }
+      await safeSendProgress(extra, options.toolName, context, 1, outcome);
       throw error;
     }
   };
@@ -557,36 +529,46 @@ export class ToolExecutionRunner<
     return undefined;
   }
 
+  private async executeModelCallAttempt(
+    systemInstruction: string,
+    prompt: string,
+    attempt: number
+  ): Promise<TResult> {
+    const raw = await generateStructuredJson(
+      createGenerationRequest(
+        this.config,
+        { systemInstruction, prompt },
+        this.responseSchema,
+        this.onLog,
+        this.signal
+      )
+    );
+
+    if (attempt === 0) {
+      await this.reporter.reportStep(
+        STEP_VALIDATING_RESPONSE,
+        'Verifying output structure...'
+      );
+    }
+
+    return this.config.resultSchema.parse(raw);
+  }
+
   private async executeModelCall(
     systemInstruction: string,
     prompt: string
   ): Promise<TResult> {
-    let parsed: TResult | undefined;
     let retryPrompt = prompt;
     const maxRetries =
       this.config.schemaRetries ?? geminiSchemaRetriesConfig.get();
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
-        const raw = await generateStructuredJson(
-          createGenerationRequest(
-            this.config,
-            { systemInstruction, prompt: retryPrompt },
-            this.responseSchema,
-            this.onLog,
-            this.signal
-          )
+        return await this.executeModelCallAttempt(
+          systemInstruction,
+          retryPrompt,
+          attempt
         );
-
-        if (attempt === 0) {
-          await this.reporter.reportStep(
-            STEP_VALIDATING_RESPONSE,
-            'Verifying output structure...'
-          );
-        }
-
-        parsed = this.config.resultSchema.parse(raw);
-        break;
       } catch (error: unknown) {
         if (attempt >= maxRetries || !isRetryableSchemaError(error)) {
           throw error;
@@ -613,10 +595,7 @@ export class ToolExecutionRunner<
       }
     }
 
-    if (!parsed) {
-      throw new Error('Unexpected state: parsed result is undefined');
-    }
-    return parsed;
+    throw new Error('Unexpected state: execution loop exhausted');
   }
 
   private createExecutionContext(): ToolExecutionContext {

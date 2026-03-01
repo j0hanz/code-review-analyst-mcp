@@ -14,6 +14,7 @@ import {
 } from '@google/genai';
 import type { GenerateContentConfig } from '@google/genai';
 
+import { ConcurrencyLimiter } from './concurrency.js';
 import { formatUsNumber } from './contract-format.js';
 import { createCachedEnvInt } from './env-config.js';
 import { getErrorMessage, toRecord } from './errors.js';
@@ -73,33 +74,20 @@ const batchTimeoutMsConfig = createCachedEnvInt(
   'GEMINI_BATCH_TIMEOUT_MS',
   120_000
 );
-let activeCalls = 0;
-let activeBatchCalls = 0;
-const slotWaiters = new Set<() => void>();
-const batchSlotWaiters = new Set<() => void>();
 
-type Waiter = () => void;
+const callLimiter = new ConcurrencyLimiter(
+  () => maxConcurrentCallsConfig.get(),
+  () => concurrencyWaitMsConfig.get(),
+  (limit, ms) => formatConcurrencyLimitErrorMessage(limit, ms),
+  () => CANCELLED_REQUEST_MESSAGE
+);
 
-function getWaiterCount(waiters: Set<Waiter>): number {
-  return waiters.size;
-}
-
-function addWaiter(waiters: Set<Waiter>, waiter: Waiter): void {
-  waiters.add(waiter);
-}
-
-function removeWaiter(waiters: Set<Waiter>, waiter: Waiter): void {
-  waiters.delete(waiter);
-}
-
-function popNextWaiter(waiters: Set<Waiter>): Waiter | undefined {
-  const next = waiters.values().next().value;
-  if (next !== undefined) {
-    waiters.delete(next);
-  }
-  return next;
-}
-
+const batchCallLimiter = new ConcurrencyLimiter(
+  () => maxConcurrentBatchCallsConfig.get(),
+  () => concurrencyWaitMsConfig.get(),
+  (limit, ms) => formatConcurrencyLimitErrorMessage(limit, ms),
+  () => CANCELLED_REQUEST_MESSAGE
+);
 const SAFETY_CATEGORIES = [
   HarmCategory.HARM_CATEGORY_HATE_SPEECH,
   HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
@@ -158,35 +146,27 @@ function parseSafetyThreshold(
   ];
 }
 
+const THINKING_LEVEL_MAP: Record<string, ThinkingLevel> = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+};
+
 function getThinkingConfig(
   thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | undefined,
   includeThoughts: boolean
 ): { thinkingLevel?: ThinkingLevel; includeThoughts?: true } | undefined {
-  if (thinkingLevel === undefined && !includeThoughts) {
+  if (!thinkingLevel && !includeThoughts) {
     return undefined;
   }
 
-  const config: { thinkingLevel?: ThinkingLevel; includeThoughts?: true } = {};
-  if (thinkingLevel !== undefined) {
-    switch (thinkingLevel) {
-      case 'minimal':
-        config.thinkingLevel = ThinkingLevel.MINIMAL;
-        break;
-      case 'low':
-        config.thinkingLevel = ThinkingLevel.LOW;
-        break;
-      case 'medium':
-        config.thinkingLevel = ThinkingLevel.MEDIUM;
-        break;
-      case 'high':
-        config.thinkingLevel = ThinkingLevel.HIGH;
-        break;
-    }
-  }
-  if (includeThoughts) {
-    config.includeThoughts = true;
-  }
-  return config;
+  return {
+    ...(thinkingLevel
+      ? { thinkingLevel: THINKING_LEVEL_MAP[thinkingLevel] }
+      : {}),
+    ...(includeThoughts ? { includeThoughts: true } : {}),
+  };
 }
 
 function parseBooleanEnv(value: string): boolean | undefined {
@@ -668,13 +648,6 @@ async function runWithRetries(
   return throwGeminiFailure(attempt, lastError, onLog);
 }
 
-function tryWakeNextWaiter(): void {
-  const next = popNextWaiter(slotWaiters);
-  if (next !== undefined) {
-    next();
-  }
-}
-
 /**
  * Returns a shallow copy of the request with `thinkingLevel` removed.
  * Uses Reflect.deleteProperty to satisfy `exactOptionalPropertyTypes` —
@@ -688,106 +661,6 @@ function omitThinkingLevel(
   return copy;
 }
 
-async function waitForSlot(
-  limit: number,
-  getActiveCount: () => number,
-  acquireSlot: () => void,
-  waiters: Set<Waiter>,
-  requestSignal?: AbortSignal
-): Promise<void> {
-  if (getWaiterCount(waiters) === 0 && getActiveCount() < limit) {
-    acquireSlot();
-    return;
-  }
-
-  throwIfRequestCancelled(requestSignal);
-
-  const waitLimitMs = concurrencyWaitMsConfig.get();
-
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-
-    const waiter = (): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(deadlineTimer);
-      detachAbortListener();
-      acquireSlot();
-      resolve();
-    };
-
-    addWaiter(waiters, waiter);
-
-    const removeCurrentWaiter = (): void => {
-      removeWaiter(waiters, waiter);
-    };
-
-    const detachAbortListener = (): void => {
-      if (requestSignal) {
-        requestSignal.removeEventListener('abort', onAbort);
-      }
-    };
-
-    const deadlineTimer = setTimeout((): void => {
-      if (settled) return;
-      settled = true;
-      removeCurrentWaiter();
-      detachAbortListener();
-      reject(new Error(formatConcurrencyLimitErrorMessage(limit, waitLimitMs)));
-    }, waitLimitMs);
-    deadlineTimer.unref();
-
-    const onAbort = (): void => {
-      if (settled) return;
-      settled = true;
-      removeCurrentWaiter();
-      clearTimeout(deadlineTimer);
-      reject(new Error(CANCELLED_REQUEST_MESSAGE));
-    };
-
-    if (requestSignal) {
-      requestSignal.addEventListener('abort', onAbort, { once: true });
-    }
-  });
-}
-
-async function waitForConcurrencySlot(
-  limit: number,
-  requestSignal?: AbortSignal
-): Promise<void> {
-  return waitForSlot(
-    limit,
-    () => activeCalls,
-    () => {
-      activeCalls += 1;
-    },
-    slotWaiters,
-    requestSignal
-  );
-}
-
-function tryWakeNextBatchWaiter(): void {
-  const next = popNextWaiter(batchSlotWaiters);
-  if (next !== undefined) {
-    next();
-  }
-}
-
-async function waitForBatchConcurrencySlot(
-  limit: number,
-  requestSignal?: AbortSignal
-): Promise<void> {
-  return waitForSlot(
-    limit,
-    () => activeBatchCalls,
-    () => {
-      activeBatchCalls += 1;
-    },
-    batchSlotWaiters,
-    requestSignal
-  );
-}
-
 type ExecutionMode = 'off' | 'inline';
 
 function isInlineBatchMode(mode: ExecutionMode): mode is 'inline' {
@@ -798,34 +671,28 @@ async function acquireQueueSlot(
   mode: ExecutionMode,
   requestSignal?: AbortSignal
 ): Promise<{ queueWaitMs: number; waitingCalls: number }> {
-  const limit = isInlineBatchMode(mode)
-    ? maxConcurrentBatchCallsConfig.get()
-    : maxConcurrentCallsConfig.get();
   const queueWaitStartedAt = performance.now();
 
   if (isInlineBatchMode(mode)) {
-    await waitForBatchConcurrencySlot(limit, requestSignal);
+    await batchCallLimiter.acquire(requestSignal);
   } else {
-    await waitForConcurrencySlot(limit, requestSignal);
+    await callLimiter.acquire(requestSignal);
   }
 
   return {
     queueWaitMs: Math.round(performance.now() - queueWaitStartedAt),
     waitingCalls: isInlineBatchMode(mode)
-      ? batchSlotWaiters.size
-      : slotWaiters.size,
+      ? batchCallLimiter.pendingCount
+      : callLimiter.pendingCount,
   };
 }
 
 function releaseQueueSlot(mode: ExecutionMode): void {
   if (isInlineBatchMode(mode)) {
-    activeBatchCalls -= 1;
-    tryWakeNextBatchWaiter();
+    batchCallLimiter.release();
     return;
   }
-
-  activeCalls -= 1;
-  tryWakeNextWaiter();
+  callLimiter.release();
 }
 
 interface BatchApiClient {
@@ -839,110 +706,80 @@ interface BatchApiClient {
 const BatchHelper = {
   getState(payload: unknown): string | undefined {
     const record = toRecord(payload);
-    if (!record) {
-      return undefined;
-    }
+    if (!record) return undefined;
 
     const directState = toUpperStringCode(record.state);
-    if (directState) {
-      return directState;
-    }
+    if (directState) return directState;
 
     const metadata = toRecord(record.metadata);
-    if (!metadata) {
-      return undefined;
-    }
-
-    return toUpperStringCode(metadata.state);
+    return metadata ? toUpperStringCode(metadata.state) : undefined;
   },
 
   getResponseText(payload: unknown): string | undefined {
     const record = toRecord(payload);
-    if (!record) {
-      return undefined;
-    }
+    if (!record) return undefined;
 
-    const inlineResponse = toRecord(record.inlineResponse);
-    const inlineText =
-      typeof inlineResponse?.text === 'string'
-        ? inlineResponse.text
-        : undefined;
-    if (inlineText) {
-      return inlineText;
-    }
+    // Try inlineResponse.text
+    const inline = toRecord(record.inlineResponse);
+    if (typeof inline?.text === 'string') return inline.text;
 
     const response = toRecord(record.response);
-    if (!response) {
-      return undefined;
+    if (!response) return undefined;
+
+    // Try response.text
+    if (typeof response.text === 'string') return response.text;
+
+    // Try response.inlineResponses[0].text
+    if (
+      Array.isArray(response.inlineResponses) &&
+      response.inlineResponses.length > 0
+    ) {
+      const first = toRecord(response.inlineResponses[0]);
+      if (typeof first?.text === 'string') return first.text;
     }
 
-    const responseText =
-      typeof response.text === 'string' ? response.text : undefined;
-    if (responseText) {
-      return responseText;
-    }
-
-    const { inlineResponses } = response;
-    if (!Array.isArray(inlineResponses) || inlineResponses.length === 0) {
-      return undefined;
-    }
-
-    const firstInline = toRecord(inlineResponses[0]);
-    return typeof firstInline?.text === 'string' ? firstInline.text : undefined;
+    return undefined;
   },
 
   getErrorDetail(payload: unknown): string | undefined {
     const record = toRecord(payload);
-    if (!record) {
-      return undefined;
-    }
+    if (!record) return undefined;
 
+    // Try error.message
     const directError = toRecord(record.error);
-    const directMessage =
-      typeof directError?.message === 'string'
-        ? directError.message
-        : undefined;
-    if (directMessage) {
-      return directMessage;
-    }
+    if (typeof directError?.message === 'string') return directError.message;
 
+    // Try metadata.error.message
     const metadata = toRecord(record.metadata);
-    const metadataError = toRecord(metadata?.error);
-    const metadataMessage =
-      typeof metadataError?.message === 'string'
-        ? metadataError.message
-        : undefined;
-    if (metadataMessage) {
-      return metadataMessage;
-    }
+    const metaError = toRecord(metadata?.error);
+    if (typeof metaError?.message === 'string') return metaError.message;
 
+    // Try response.error.message
     const response = toRecord(record.response);
-    const responseError = toRecord(response?.error);
-    return typeof responseError?.message === 'string'
-      ? responseError.message
+    const respError = toRecord(response?.error);
+    return typeof respError?.message === 'string'
+      ? respError.message
       : undefined;
   },
 
   getSuccessResponseText(polled: unknown): string {
-    const responseText = this.getResponseText(polled);
-    if (!responseText) {
-      const errorDetail = this.getErrorDetail(polled);
-      throw new Error(
-        errorDetail
-          ? `Gemini batch request succeeded but returned no response text: ${errorDetail}`
-          : 'Gemini batch request succeeded but returned no response text.'
-      );
-    }
+    const text = this.getResponseText(polled);
+    if (text) return text;
 
-    return responseText;
+    const err = this.getErrorDetail(polled);
+    throw new Error(
+      err
+        ? `Gemini batch request succeeded but returned no response text: ${err}`
+        : 'Gemini batch request succeeded but returned no response text.'
+    );
   },
 
   handleTerminalState(state: string | undefined, payload: unknown): void {
     if (state === 'JOB_STATE_FAILED' || state === 'JOB_STATE_CANCELLED') {
-      const errorDetail = this.getErrorDetail(payload);
+      const err = this.getErrorDetail(payload);
       throw new Error(
-        errorDetail
-          ? `Gemini batch request ended with state ${state}: ${errorDetail}`
+        err
+          ? `Gemini batch request ended with state ${state}: ${err}`
           : `Gemini batch request ended with state ${state}.`
       );
     }
@@ -981,29 +818,25 @@ async function cancelBatchIfNeeded(
   timedOut: boolean
 ): Promise<void> {
   const aborted = request.signal?.aborted === true;
-  if (completed || (!aborted && !timedOut) || !batchName) {
+  const shouldCancel = !completed && (aborted || timedOut);
+
+  if (!shouldCancel || !batchName || !batches.cancel) {
     return;
   }
 
-  if (batches.cancel === undefined) {
-    return;
-  }
-
+  const reason = timedOut ? 'timeout' : 'aborted';
   try {
     await batches.cancel({ name: batchName });
     await emitGeminiLog(onLog, 'info', {
       event: 'gemini_batch_cancelled',
-      details: {
-        batchName,
-        reason: timedOut ? 'timeout' : 'aborted',
-      },
+      details: { batchName, reason },
     });
   } catch (error: unknown) {
     await emitGeminiLog(onLog, 'warning', {
       event: 'gemini_batch_cancel_failed',
       details: {
         batchName,
-        reason: timedOut ? 'timeout' : 'aborted',
+        reason,
         error: getErrorMessage(error),
       },
     });
@@ -1053,6 +886,45 @@ async function createBatchJobWithFallback(
   );
 }
 
+async function pollBatchForCompletion(
+  batches: NonNullable<BatchApiClient['batches']>,
+  batchName: string,
+  onLog: GeminiOnLog,
+  requestSignal?: AbortSignal
+): Promise<unknown> {
+  const pollIntervalMs = batchPollIntervalMsConfig.get();
+  const timeoutMs = batchTimeoutMsConfig.get();
+  const pollStart = performance.now();
+
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  while (true) {
+    throwIfRequestCancelled(requestSignal);
+
+    const elapsedMs = Math.round(performance.now() - pollStart);
+    if (elapsedMs > timeoutMs) {
+      throw new Error(
+        `Gemini batch request timed out after ${formatUsNumber(timeoutMs)}ms.`
+      );
+    }
+
+    const polled = await pollBatchStatusWithRetries(
+      batches,
+      batchName,
+      onLog,
+      requestSignal
+    );
+    const state = BatchHelper.getState(polled);
+
+    if (state === 'JOB_STATE_SUCCEEDED') {
+      const responseText = BatchHelper.getSuccessResponseText(polled);
+      return parseStructuredResponse(responseText);
+    }
+
+    BatchHelper.handleTerminalState(state, polled);
+    await sleep(pollIntervalMs, undefined, getSleepOptions(requestSignal));
+  }
+}
+
 async function runInlineBatchWithPolling(
   request: GeminiStructuredRequest,
   model: string,
@@ -1060,7 +932,7 @@ async function runInlineBatchWithPolling(
 ): Promise<unknown> {
   const client = getClient() as unknown as BatchApiClient;
   const { batches } = client;
-  if (batches === undefined) {
+  if (!batches) {
     throw new Error(
       'Batch mode requires SDK batch support, but batches API is unavailable.'
     );
@@ -1077,52 +949,30 @@ async function runInlineBatchWithPolling(
       model,
       onLog
     );
-
     const createdRecord = toRecord(createdJob);
     batchName =
       typeof createdRecord?.name === 'string' ? createdRecord.name : undefined;
-    if (!batchName) {
-      throw new Error('Batch mode failed to return a job name.');
-    }
 
-    const pollStart = performance.now();
-    const timeoutMs = batchTimeoutMsConfig.get();
-    const pollIntervalMs = batchPollIntervalMsConfig.get();
+    if (!batchName) throw new Error('Batch mode failed to return a job name.');
 
     await emitGeminiLog(onLog, 'info', {
       event: 'gemini_batch_created',
       details: { batchName },
     });
 
-    for (;;) {
-      throwIfRequestCancelled(request.signal);
-
-      const elapsedMs = Math.round(performance.now() - pollStart);
-      if (elapsedMs > timeoutMs) {
-        timedOut = true;
-        throw new Error(
-          `Gemini batch request timed out after ${formatUsNumber(timeoutMs)}ms.`
-        );
-      }
-
-      const polled = await pollBatchStatusWithRetries(
-        batches,
-        batchName,
-        onLog,
-        request.signal
-      );
-      const state = BatchHelper.getState(polled);
-
-      if (state === 'JOB_STATE_SUCCEEDED') {
-        const responseText = BatchHelper.getSuccessResponseText(polled);
-        completed = true;
-        return parseStructuredResponse(responseText);
-      }
-
-      BatchHelper.handleTerminalState(state, polled);
-
-      await sleep(pollIntervalMs, undefined, getSleepOptions(request.signal));
+    const result = await pollBatchForCompletion(
+      batches,
+      batchName,
+      onLog,
+      request.signal
+    );
+    completed = true;
+    return result;
+  } catch (error: unknown) {
+    if (getErrorMessage(error).includes('timed out')) {
+      timedOut = true;
     }
+    throw error;
   } finally {
     await cancelBatchIfNeeded(
       request,
@@ -1136,12 +986,16 @@ async function runInlineBatchWithPolling(
 }
 
 export function getGeminiQueueSnapshot(): {
+  activeWaiters: number;
   activeCalls: number;
-  waitingCalls: number;
+  activeBatchWaiters: number;
+  activeBatchCalls: number;
 } {
   return {
-    activeCalls,
-    waitingCalls: slotWaiters.size,
+    activeWaiters: callLimiter.pendingCount,
+    activeCalls: callLimiter.active,
+    activeBatchWaiters: batchCallLimiter.pendingCount,
+    activeBatchCalls: batchCallLimiter.active,
   };
 }
 
@@ -1162,8 +1016,8 @@ export async function generateStructuredJson(
     event: 'gemini_queue_acquired',
     queueWaitMs,
     waitingCalls,
-    activeCalls,
-    activeBatchCalls,
+    activeCalls: callLimiter.active,
+    activeBatchCalls: batchCallLimiter.active,
     mode: batchMode,
   });
 
