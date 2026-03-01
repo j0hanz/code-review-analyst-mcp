@@ -141,7 +141,7 @@ jobs:
       - name: Publish
         run: |
           npm publish --access public --provenance --ignore-scripts || {
-            if npm view "@j0hanz/code-assistant-mcp@$VERSION" version 2>/dev/null; then
+            if npm view "@j0hanz/code-assistant@$VERSION" version 2>/dev/null; then
               echo "::notice::v$VERSION already on npm — skipped"
             else
               exit 1
@@ -154,7 +154,7 @@ jobs:
           ## 📦 Published to npm
           | | |
           |---|---|
-          | **Package** | [\`@j0hanz/code-assistant-mcp@$VERSION\`](https://www.npmjs.com/package/@j0hanz/code-assistant-mcp) |
+          | **Package** | [\`@j0hanz/code-assistant@$VERSION\`](https://www.npmjs.com/package/@j0hanz/code-assistant) |
           | **Auth** | Trusted Publishing (OIDC) |
           | **Provenance** | ✅ |
           EOF

@@ -28,7 +28,7 @@ ENV NODE_ENV=production
 # Labels for Docker / MCP Catalog
 LABEL org.opencontainers.image.title="Code Assistant" \
       org.opencontainers.image.description="Gemini-powered MCP server for code analysis." \
-      org.opencontainers.image.source="https://github.com/j0hanz/code-assistant-mcp" \
+      org.opencontainers.image.source="https://github.com/j0hanz/code-assistant" \
       org.opencontainers.image.licenses="MIT" \
       io.modelcontextprotocol.server.name="io.github.j0hanz/code-assistant"
 

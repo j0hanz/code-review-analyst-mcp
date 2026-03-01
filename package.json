@@ -14,7 +14,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "code-assistant-mcp": "dist/index.js"
+    "code-assistant": "dist/index.js"
   },
   "files": [
     "dist",

@@ -1,5 +1,5 @@
 services:
-  code-assistant-mcp:
+  code-assistant:
     build: .
     stdin_open: true
     volumes:

@@ -4,15 +4,15 @@
   "title": "Code Assistant",
   "description": "Gemini-powered MCP server for code analysis.",
   "repository": {
-    "url": "https://github.com/j0hanz/code-assistant-mcp",
+    "url": "https://github.com/j0hanz/code-assistant",
     "source": "github"
   },
-  "websiteUrl": "https://github.com/j0hanz/code-assistant-mcp#readme",
+  "websiteUrl": "https://github.com/j0hanz/code-assistant#readme",
   "version": "0.9.0",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@j0hanz/code-assistant-mcp",
+      "identifier": "@j0hanz/code-assistant",
       "version": "0.9.0",
       "transport": {
         "type": "stdio"
