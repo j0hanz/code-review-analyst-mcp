@@ -16,18 +16,13 @@ import { DefaultOutputSchema } from '../schemas/outputs.js';
 import {
   ANALYSIS_TEMPERATURE,
   CREATIVE_TEMPERATURE,
-  DEFAULT_TIMEOUT_EXTENDED_MS,
   FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
   FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
-  FLASH_HIGH_THINKING_LEVEL,
   FLASH_MODEL,
-  FLASH_PATCH_MAX_OUTPUT_TOKENS,
-  FLASH_REVIEW_MAX_OUTPUT_TOKENS,
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
   FLASH_THINKING_LEVEL,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
   FLASH_TRIAGE_THINKING_LEVEL,
-  PATCH_TEMPERATURE,
   TRIAGE_TEMPERATURE,
 } from './config.js';
 import { createCachedEnvInt } from './config.js';
@@ -306,38 +301,6 @@ const LANGUAGE_PARAM = createParam(
   'Primary language hint.'
 );
 
-const FOCUS_AREAS_PARAM = createParam(
-  'focusAreas',
-  'string[]',
-  false,
-  '1-12 items, 2-80 chars each',
-  `Focused inspection categories (e.g. ${INSPECTION_FOCUS_AREAS.join(', ')}).`
-);
-
-const MAX_FINDINGS_PARAM = createParam(
-  'maxFindings',
-  'number',
-  false,
-  '1-25',
-  'Post-generation cap applied to findings.'
-);
-
-const FINDING_TITLE_PARAM = createParam(
-  'findingTitle',
-  'string',
-  true,
-  '3-160 chars',
-  'Short finding title.'
-);
-
-const FINDING_DETAILS_PARAM = createParam(
-  'findingDetails',
-  'string',
-  true,
-  '10-3000 chars',
-  'Detailed finding context.'
-);
-
 const TEST_FRAMEWORK_PARAM = createParam(
   'testFramework',
   'string',
@@ -416,54 +379,6 @@ export const TOOL_CONTRACTS = [
     ],
   },
   {
-    name: 'inspect_code_quality',
-    purpose: 'Deep code review over the cached diff.',
-    model: FLASH_MODEL,
-    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
-    thinkingLevel: FLASH_HIGH_THINKING_LEVEL,
-    maxOutputTokens: FLASH_REVIEW_MAX_OUTPUT_TOKENS,
-    temperature: ANALYSIS_TEMPERATURE,
-    deterministicJson: true,
-    params: cloneParams(
-      REPOSITORY_PARAM,
-      LANGUAGE_PARAM,
-      FOCUS_AREAS_PARAM,
-      MAX_FINDINGS_PARAM
-    ),
-    outputShape:
-      '{summary, overallRisk, findings[], testsNeeded[], contextualInsights[], totalFindings}',
-    gotchas: [
-      'Requires generate_diff to be called first.',
-      'maxFindings caps output after generation.',
-    ],
-    crossToolFlow: [
-      'findings[].title -> suggest_search_replace.findingTitle',
-      'findings[].explanation -> suggest_search_replace.findingDetails',
-    ],
-    constraints: ['Diff budget bounded by MAX_DIFF_CHARS.'],
-  },
-  {
-    name: 'suggest_search_replace',
-    purpose: 'Generate verbatim search/replace fix blocks for one finding.',
-    model: FLASH_MODEL,
-    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
-    thinkingLevel: FLASH_HIGH_THINKING_LEVEL,
-    maxOutputTokens: FLASH_PATCH_MAX_OUTPUT_TOKENS,
-    temperature: PATCH_TEMPERATURE,
-    deterministicJson: true,
-    params: cloneParams(FINDING_TITLE_PARAM, FINDING_DETAILS_PARAM),
-    outputShape: '{summary, blocks[], validationChecklist[]}',
-    gotchas: [
-      'Requires generate_diff to be called first.',
-      'One finding per call to avoid mixed patch intent.',
-      'search must be exact whitespace-preserving match.',
-    ],
-    crossToolFlow: [
-      'Consumes findings from inspect_code_quality for targeted fixes.',
-    ],
-    constraints: ['One finding per call; verbatim search match required.'],
-  },
-  {
     name: 'generate_test_plan',
     purpose: 'Generate prioritized test cases and coverage guidance.',
     model: FLASH_MODEL,
@@ -483,9 +398,7 @@ export const TOOL_CONTRACTS = [
       'Requires generate_diff to be called first.',
       'maxTestCases caps output after generation.',
     ],
-    crossToolFlow: [
-      'Pair with inspect_code_quality to validate high-risk paths.',
-    ],
+    crossToolFlow: ['Pair with review tools to validate high-risk paths.'],
   },
   {
     name: 'analyze_time_space_complexity',

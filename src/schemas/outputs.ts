@@ -1,13 +1,6 @@
 import { z } from 'zod';
 
 const OUTPUT_LIMITS = {
-  reviewFinding: {
-    fileMax: 260,
-    lineMin: 1,
-    lineMax: 1_000_000,
-    title: { min: 3, max: 160 },
-    text: { min: 1, max: 2_000 },
-  },
   reviewDiffResult: {
     summary: { min: 1, max: 2_000 },
     findingsMax: 50,
@@ -71,12 +64,6 @@ function createReviewSummarySchema(description: string): z.ZodString {
     .describe(description);
 }
 
-const reviewFindingSeveritySchema = z
-  .enum(QUALITY_RISK_LEVELS)
-  .describe('Severity for this issue.');
-const qualityRiskSchema = z
-  .enum(QUALITY_RISK_LEVELS)
-  .describe('Overall risk with full context.');
 const mergeRiskSchema = z
   .enum(MERGE_RISK_LEVELS)
   .describe('High-level merge risk.');
@@ -100,61 +87,6 @@ export const DefaultOutputSchema = z.strictObject({
     .optional()
     .describe('Error payload when ok is false.'),
 });
-
-export const ReviewFindingSchema = z.strictObject({
-  severity: reviewFindingSeveritySchema,
-  file: z
-    .string()
-    .min(1)
-    .max(OUTPUT_LIMITS.reviewFinding.fileMax)
-    .describe('File path for the finding.'),
-  line: z
-    .number()
-    .int()
-    .min(OUTPUT_LIMITS.reviewFinding.lineMin)
-    .max(OUTPUT_LIMITS.reviewFinding.lineMax)
-    .nullable()
-    .describe('1-based line number when known, otherwise null.'),
-  title: createBoundedString(
-    OUTPUT_LIMITS.reviewFinding.title.min,
-    OUTPUT_LIMITS.reviewFinding.title.max,
-    'Short finding title.'
-  ),
-  explanation: createBoundedString(
-    OUTPUT_LIMITS.reviewFinding.text.min,
-    OUTPUT_LIMITS.reviewFinding.text.max,
-    'What the issue is and its runtime, security, or correctness impact.'
-  ),
-  recommendation: createBoundedString(
-    OUTPUT_LIMITS.reviewFinding.text.min,
-    OUTPUT_LIMITS.reviewFinding.text.max,
-    'Concrete fix - name the exact code, function, or pattern to change.'
-  ),
-});
-
-const CODE_QUALITY_SHARED_FIELDS = {
-  summary: createReviewSummarySchema('Deep-dive review summary.'),
-  overallRisk: qualityRiskSchema,
-  findings: z
-    .array(ReviewFindingSchema)
-    .min(0)
-    .max(30)
-    .describe('Findings (severity desc).'),
-  testsNeeded: createBoundedStringArray(
-    1,
-    300,
-    0,
-    12,
-    'Test cases needed to validate this change.'
-  ),
-  contextualInsights: createBoundedStringArray(
-    1,
-    500,
-    0,
-    5,
-    'Cross-file insights from diff analysis.'
-  ),
-} as const;
 
 export const PrImpactResultSchema = z.strictObject({
   severity: z.enum(QUALITY_RISK_LEVELS).describe('Overall severity.'),
@@ -214,51 +146,6 @@ export const ReviewSummaryResultSchema = z.strictObject({
       linesRemoved: z.number().int().min(0).describe('Lines removed.'),
     })
     .describe('Change statistics (computed from diff before Gemini call).'),
-});
-
-export const CodeQualityResultSchema = z.strictObject({
-  ...CODE_QUALITY_SHARED_FIELDS,
-});
-
-export const CodeQualityOutputSchema = z.strictObject({
-  ...CODE_QUALITY_SHARED_FIELDS,
-  totalFindings: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe('Total findings (before capping).'),
-});
-
-export const SearchReplaceBlockSchema = z.strictObject({
-  file: z.string().min(1).max(500).describe('File path.'),
-  search: z
-    .string()
-    .min(1)
-    .max(5000)
-    .describe('Verbatim search text (exact whitespace/indentation).'),
-  replace: z
-    .string()
-    .min(0)
-    .max(5000)
-    .describe('Replacement text (empty to delete).'),
-  explanation: z.string().min(1).max(500).describe('Fix rationale.'),
-});
-
-export const SearchReplaceResultSchema = z.strictObject({
-  summary: z.string().min(1).max(1000).describe('Fix summary.'),
-  blocks: z
-    .array(SearchReplaceBlockSchema)
-    .min(1)
-    .max(10)
-    .describe('Search/replace ops (ordered).'),
-  validationChecklist: createBoundedStringArray(
-    1,
-    300,
-    1,
-    12,
-    'Validation steps.'
-  ),
 });
 
 export const TestCaseSchema = z.strictObject({

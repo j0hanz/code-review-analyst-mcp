@@ -27,9 +27,6 @@ const TOOLS = getToolContractNames();
 type FocusArea = (typeof INSPECTION_FOCUS_AREAS)[number];
 const TOOL_DESCRIPTION_TEXT = 'Select tool for review guide.';
 const FOCUS_DESCRIPTION_TEXT = 'Select focus area.';
-const EXAMPLE_FINDING = 'Uncaught promise rejection';
-const EXAMPLE_SEARCH = '  } catch {\\n  }';
-const EXAMPLE_REPLACE = '  } catch (err) {\\n    logger.error(err);\\n  }';
 
 const FOCUS_AREA_GUIDES: Record<FocusArea, string> = {
   security: 'Focus: Injection, Auth, Crypto, OWASP.',
@@ -116,20 +113,11 @@ function registerHelpPrompt(server: McpServer, instructions: string): void {
 
 function buildReviewGuideText(tool: string, focusArea: string): string {
   const toolCode = toInlineCode(tool);
-  const suggestToolCode = toInlineCode('suggest_search_replace');
 
   return (
     `# Guide: ${tool} / ${focusArea}\n\n` +
     `## Tool: ${toolCode}\n${getToolGuide(tool)}\n\n` +
-    `## Focus: ${focusArea}\n${getFocusAreaGuide(focusArea)}\n\n` +
-    `## Example Fix\n` +
-    `Finding: "${EXAMPLE_FINDING}"\n` +
-    `Call ${suggestToolCode}:\n` +
-    '```\n' +
-    `search: "${EXAMPLE_SEARCH}"\n` +
-    `replace: "${EXAMPLE_REPLACE}"\n` +
-    '```\n' +
-    `Validate verbatim match.`
+    `## Focus: ${focusArea}\n${getFocusAreaGuide(focusArea)}`
   );
 }
 

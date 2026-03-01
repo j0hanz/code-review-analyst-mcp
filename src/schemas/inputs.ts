@@ -3,10 +3,6 @@ import { z } from 'zod';
 const INPUT_LIMITS = {
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
-  focusArea: { min: 2, max: 80, maxItems: 12 },
-  maxFindings: { min: 1, max: 25 },
-  findingTitle: { min: 3, max: 160 },
-  findingDetails: { min: 10, max: 3_000 },
   testFramework: { min: 1, max: 50 },
   maxTestCases: { min: 1, max: 30 },
 } as const;
@@ -67,43 +63,6 @@ export const AnalyzePrImpactInputSchema = z.strictObject({
 export const GenerateReviewSummaryInputSchema = z.strictObject({
   repository: RepositorySchema,
   language: LanguageSchema,
-});
-
-export const InspectCodeQualityInputSchema = z.strictObject({
-  repository: RepositorySchema,
-  language: LanguageSchema,
-  focusAreas: z
-    .array(
-      createBoundedString(
-        INPUT_LIMITS.focusArea.min,
-        INPUT_LIMITS.focusArea.max,
-        'Focus tag (e.g. security, logic).'
-      )
-    )
-    .min(1)
-    .max(INPUT_LIMITS.focusArea.maxItems)
-    .optional()
-    .describe(
-      'Review focus areas. Tags: security, correctness, performance, regressions, tests, maintainability, concurrency.'
-    ),
-  maxFindings: createOptionalBoundedInteger(
-    INPUT_LIMITS.maxFindings.min,
-    INPUT_LIMITS.maxFindings.max,
-    'Max findings (1-25). Default: 10.'
-  ),
-});
-
-export const SuggestSearchReplaceInputSchema = z.strictObject({
-  findingTitle: createBoundedString(
-    INPUT_LIMITS.findingTitle.min,
-    INPUT_LIMITS.findingTitle.max,
-    'Exact finding title from inspect_code_quality.'
-  ),
-  findingDetails: createBoundedString(
-    INPUT_LIMITS.findingDetails.min,
-    INPUT_LIMITS.findingDetails.max,
-    'Exact finding explanation from inspect_code_quality.'
-  ),
 });
 
 export const GenerateTestPlanInputSchema = z.strictObject({

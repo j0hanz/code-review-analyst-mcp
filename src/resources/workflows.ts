@@ -19,10 +19,6 @@ export function buildWorkflowGuide(): string {
 ## A: Full PR Review
 
 1. \`generate_review_summary\` → \`{overallRisk, keyChanges[], recommendation, stats}\`
-2. \`inspect_code_quality\` → \`{findings[], overallRisk, contextualInsights[]}\`
-3. For each finding: \`suggest_search_replace\` → \`{blocks[]}\`
-
-> One finding per \`suggest_search_replace\` call.
 
 ## B: Impact Assessment
 
@@ -31,22 +27,14 @@ export function buildWorkflowGuide(): string {
 
 > Use when categorization (breaking, api) or rollback assessment needed.
 
-## C: Remediation Loop
-
-1. \`inspect_code_quality\` → \`{findings[]}\`
-2. Pick one finding. \`suggest_search_replace\` → \`{blocks[]}\`
-3. Validate \`blocks[].search\` matches file content verbatim.
-
-> Never batch findings.
-
-## D: Test Coverage
+## C: Test Coverage
 
 1. \`generate_test_plan\` → \`{testCases[], coverageSummary}\`
 2. Review by priority: \`must_have\` → \`should_have\` → \`nice_to_have\`
 
-> Combine with \`inspect_code_quality\`.
+> Combine with review tools.
 
-## E: Complexity & Breaking Changes
+## D: Complexity & Breaking Changes
 
 1. \`analyze_time_space_complexity\` → \`{timeComplexity, spaceComplexity, isDegradation}\`
 2. \`detect_api_breaking_changes\` → \`{hasBreakingChanges, breakingChanges[]}\`

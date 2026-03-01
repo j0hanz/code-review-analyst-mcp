@@ -314,33 +314,6 @@ Summarize a pull request diff and assess high-level risk using the Flash model.
 
 **Returns:** `summary`, `overallRisk` (low/medium/high), `keyChanges[]`, `recommendation`, `stats` (filesChanged, linesAdded, linesRemoved).
 
-### `inspect_code_quality`
-
-Deep-dive code review using the Flash model with high thinking (16K token budget).
-
-| Parameter     | Type       | Required | Description                                   |
-| ------------- | ---------- | -------- | --------------------------------------------- |
-| `repository`  | `string`   | Yes      | Repository identifier (e.g. `org/repo`).      |
-| `language`    | `string`   | No       | Primary language hint.                        |
-| `focusAreas`  | `string[]` | No       | Areas to inspect: security, correctness, etc. |
-| `maxFindings` | `number`   | No       | Maximum findings to return (1-25).            |
-
-**Returns:** `summary`, `overallRisk` (low/medium/high/critical), `findings[]` (severity, file, line, title, explanation, recommendation), `testsNeeded[]`, `contextualInsights[]`.
-
-> [!NOTE]
-> Diff size bounded by `MAX_DIFF_CHARS` (default 120,000). Expect 60-120s latency due to deep thinking.
-
-### `suggest_search_replace`
-
-Generate verbatim search-and-replace blocks to fix a specific finding using the Flash model with high thinking.
-
-| Parameter        | Type     | Required | Description                              |
-| ---------------- | -------- | -------- | ---------------------------------------- |
-| `findingTitle`   | `string` | Yes      | Short title of the finding to fix.       |
-| `findingDetails` | `string` | Yes      | Detailed explanation of the bug or risk. |
-
-**Returns:** `summary`, `blocks[]` (file, search, replace, explanation), `validationChecklist[]`.
-
 ### `generate_test_plan`
 
 Create a test plan covering the changes in the diff using the Flash model with thinking (8K token budget).
@@ -399,8 +372,6 @@ Create a test plan covering the changes in the diff using the Flash model with t
 | ------------------------- | ------------------------ | -------------- |
 | `analyze_pr_impact`       | `gemini-3-flash-preview` | `minimal`      |
 | `generate_review_summary` | `gemini-3-flash-preview` | `minimal`      |
-| `inspect_code_quality`    | `gemini-3-flash-preview` | `high`         |
-| `suggest_search_replace`  | `gemini-3-flash-preview` | `high`         |
 | `generate_test_plan`      | `gemini-3-flash-preview` | `medium`       |
 
 ## Workflows
@@ -411,17 +382,10 @@ Create a test plan covering the changes in the diff using the Flash model with t
 2. If low/medium — call `generate_review_summary` for a quick digest.
 3. If high/critical — proceed to deep inspection.
 
-### Deep Code Inspection
+### Testing
 
-1. Call `inspect_code_quality` with the cached diff.
-2. Use `focusAreas` to target specific concerns (security, performance).
-3. Review `findings` and `contextualInsights`.
-
-### Remediation & Testing
-
-1. For each finding, call `suggest_search_replace` with `findingTitle` and `findingDetails`.
-2. Call `generate_test_plan` to create a verification strategy.
-3. Apply fixes and implement tests.
+1. Call `generate_test_plan` to create a verification strategy.
+2. Implement tests based on returned test cases and coverage summary.
 
 ## Development
 
