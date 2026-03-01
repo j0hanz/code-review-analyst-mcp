@@ -39,6 +39,7 @@ export interface GeminiRequestExecutionOptions {
   onLog?: GeminiLogHandler;
   responseKeyOrdering?: readonly string[];
   batchMode?: 'off' | 'inline';
+  useGrounding?: boolean;
 }
 
 export interface GeminiStructuredRequestOptions extends GeminiRequestExecutionOptions {
@@ -585,14 +586,19 @@ function buildGenerationConfig(
   const config: GenerateContentConfig = {
     temperature: request.temperature ?? 1.0,
     maxOutputTokens: request.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    responseMimeType: 'application/json',
-    responseSchema: applyResponseKeyOrdering(
-      request.responseSchema,
-      request.responseKeyOrdering
-    ),
     safetySettings: getSafetySettings(getSafetyThreshold()),
     abortSignal,
   };
+
+  if (request.useGrounding) {
+    config.tools = [{ googleSearch: {} }];
+  } else {
+    config.responseMimeType = 'application/json';
+    config.responseSchema = applyResponseKeyOrdering(
+      request.responseSchema,
+      request.responseKeyOrdering
+    );
+  }
 
   if (request.systemInstruction) {
     config.systemInstruction = request.systemInstruction;
@@ -739,6 +745,13 @@ async function executeAttempt(
     throw new Error(
       `Response truncated: model output exceeds limit (maxOutputTokens=${formatUsNumber(limit)}). Increase maxOutputTokens or reduce prompt complexity.`
     );
+  }
+
+  if (request.useGrounding) {
+    return {
+      text: response.text,
+      groundingMetadata: response.candidates?.[0]?.groundingMetadata,
+    };
   }
 
   return parseStructuredResponse(response.text);
@@ -1227,6 +1240,17 @@ export function getGeminiQueueSnapshot(): {
     activeBatchWaiters: batchCallLimiter.pendingCount,
     activeBatchCalls: batchCallLimiter.active,
   };
+}
+
+export async function generateGroundedContent(
+  request: GeminiStructuredRequest
+): Promise<{ text: string; groundingMetadata: unknown }> {
+  return (await generateStructuredJson({
+    ...request,
+    useGrounding: true,
+    // Provide a dummy schema if one is required by types, though it won't be used due to useGrounding check
+    responseSchema: request.responseSchema,
+  })) as { text: string; groundingMetadata: unknown };
 }
 
 export async function generateStructuredJson(

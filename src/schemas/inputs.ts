@@ -87,3 +87,7 @@ export const AnalyzeComplexityInputSchema = z.strictObject({
 export const DetectApiBreakingInputSchema = z.strictObject({
   language: LanguageSchema,
 });
+
+export const WebSearchInputSchema = z.strictObject({
+  query: z.string().min(1).max(1000).describe('Search query'),
+});
