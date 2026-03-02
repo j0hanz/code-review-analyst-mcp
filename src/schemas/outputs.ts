@@ -279,3 +279,37 @@ export type RefactorCodeGeminiResult = z.infer<
   typeof RefactorCodeGeminiResultSchema
 >;
 export type RefactorCodeResult = z.infer<typeof RefactorCodeResultSchema>;
+
+const CONFIDENCE_LEVELS = ['high', 'medium', 'low'] as const;
+
+export const AskCodeReferenceSchema = z.strictObject({
+  target: createBoundedString(
+    1,
+    300,
+    'Function/class/variable/line referenced.'
+  ),
+  explanation: createBoundedString(
+    1,
+    500,
+    'How this code relates to the answer.'
+  ),
+});
+
+export const AskGeminiResultSchema = z.strictObject({
+  answer: z.string().min(1).max(10_000).describe('Answer to the question.'),
+  codeReferences: z
+    .array(AskCodeReferenceSchema)
+    .min(0)
+    .max(20)
+    .describe('Specific code elements referenced in the answer.'),
+  confidence: z.enum(CONFIDENCE_LEVELS).describe('Confidence in the answer.'),
+});
+
+export const AskResultSchema = AskGeminiResultSchema.extend({
+  filePath: z.string().describe('Analyzed file path.'),
+  language: z.string().describe('Detected/provided language.'),
+});
+
+export type AskCodeReference = z.infer<typeof AskCodeReferenceSchema>;
+export type AskGeminiResult = z.infer<typeof AskGeminiResultSchema>;
+export type AskResult = z.infer<typeof AskResultSchema>;

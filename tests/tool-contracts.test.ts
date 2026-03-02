@@ -14,7 +14,7 @@ describe('tool contracts', () => {
     const names = getToolContractNames();
     const uniqueNames = new Set(names);
 
-    assert.equal(names.length, 8);
+    assert.equal(names.length, 9);
     assert.equal(uniqueNames.size, names.length);
     assert.deepEqual(names, [
       'generate_diff',
@@ -25,6 +25,7 @@ describe('tool contracts', () => {
       'detect_api_breaking_changes',
       'load_file',
       'refactor_code',
+      'ask_about_code',
     ]);
   });
 
@@ -42,7 +43,7 @@ describe('tool contracts', () => {
 
   it('returns immutable-style contract list with expected shape fields', () => {
     const contracts = getToolContracts();
-    assert.equal(contracts.length, 8);
+    assert.equal(contracts.length, 9);
 
     for (const contract of contracts) {
       assert.match(contract.name, /^[A-Za-z0-9_.-]+$/);

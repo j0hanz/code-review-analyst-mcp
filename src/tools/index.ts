@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { registerAnalyzeComplexityTool } from './analyze-complexity.js';
 import { registerAnalyzePrImpactTool } from './analyze-pr-impact.js';
+import { registerAskTool } from './ask.js';
 import { registerDetectApiBreakingTool } from './detect-api-breaking.js';
 import { registerGenerateDiffTool } from './generate-diff.js';
 import { registerGenerateReviewSummaryTool } from './generate-review-summary.js';
@@ -21,6 +22,7 @@ const TOOL_REGISTRARS = [
   registerDetectApiBreakingTool,
   registerLoadFileTool,
   registerRefactorCodeTool,
+  registerAskTool,
   registerWebSearchTool,
 ] as const satisfies readonly ToolRegistrar[];
 

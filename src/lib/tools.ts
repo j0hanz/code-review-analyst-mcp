@@ -333,6 +333,14 @@ const FILE_PATH_PARAM = createParam(
   'Absolute path to the file to analyze.'
 );
 
+const QUESTION_PARAM = createParam(
+  'question',
+  'string',
+  true,
+  '1-2000 chars',
+  'Question about the loaded file.'
+);
+
 export const TOOL_CONTRACTS = [
   {
     name: 'generate_diff',
@@ -490,6 +498,26 @@ export const TOOL_CONTRACTS = [
     ],
     crossToolFlow: [
       'Use after load_file. Provides refactoring roadmap for the cached file.',
+    ],
+  },
+  {
+    name: 'ask_about_code',
+    purpose: 'Answer natural-language questions about a cached file.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
+    thinkingLevel: FLASH_THINKING_LEVEL,
+    maxOutputTokens: FLASH_REFACTOR_MAX_OUTPUT_TOKENS,
+    temperature: ANALYSIS_TEMPERATURE,
+    deterministicJson: true,
+    params: cloneParams(QUESTION_PARAM, LANGUAGE_PARAM),
+    outputShape:
+      '{answer, codeReferences[{target, explanation}], confidence, filePath, language}',
+    gotchas: [
+      'Requires load_file first.',
+      'Answers based solely on the cached file content.',
+    ],
+    crossToolFlow: [
+      'Use after load_file. Complements refactor_code for understanding code.',
     ],
   },
 ] as const satisfies readonly ToolContract[];

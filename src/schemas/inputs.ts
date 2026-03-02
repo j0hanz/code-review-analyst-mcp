@@ -90,6 +90,11 @@ export const RefactorCodeInputSchema = z.strictObject({
   language: LanguageSchema,
 });
 
+export const AskInputSchema = z.strictObject({
+  question: createBoundedString(1, 2000, 'Question about the loaded file.'),
+  language: LanguageSchema,
+});
+
 export type AnalyzePrImpactInput = z.infer<typeof AnalyzePrImpactInputSchema>;
 export type GenerateReviewSummaryInput = z.infer<
   typeof GenerateReviewSummaryInputSchema
@@ -104,3 +109,4 @@ export type DetectApiBreakingInput = z.infer<
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 export type LoadFileInput = z.infer<typeof LoadFileInputSchema>;
 export type RefactorCodeInput = z.infer<typeof RefactorCodeInputSchema>;
+export type AskInput = z.infer<typeof AskInputSchema>;
