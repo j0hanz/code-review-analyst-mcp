@@ -1,7 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { getErrorMessage } from '../lib/errors.js';
 import { generateGroundedContent } from '../lib/gemini.js';
+import { createErrorToolResponse, wrapToolHandler } from '../lib/tools.js';
 import { WebSearchInputSchema } from '../schemas/inputs.js';
+import { DefaultOutputSchema } from '../schemas/outputs.js';
 
 interface GroundingChunk {
   web?: {
@@ -74,43 +77,52 @@ function formatGroundedResponse(
 }
 
 export function registerWebSearchTool(server: McpServer): void {
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
-  server.tool(
+  server.registerTool(
     'web_search',
-    'Perform a Google Search with Grounding to get up-to-date information.',
     {
-      query: WebSearchInputSchema.shape.query,
+      title: 'Web Search',
+      description:
+        'Perform a Google Search with Grounding to get up-to-date information.',
+      inputSchema: WebSearchInputSchema,
+      outputSchema: DefaultOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+        destructiveHint: false,
+      },
     },
-    async ({ query }) => {
-      try {
-        const result = await generateGroundedContent({
-          prompt: query,
-          responseSchema: {}, // Ignored but required by type
-        });
+    wrapToolHandler(
+      {
+        toolName: 'web_search',
+        progressContext: (input) => input.query.slice(0, 60),
+      },
+      async (input) => {
+        try {
+          const result = await generateGroundedContent({
+            prompt: input.query,
+            responseSchema: {},
+          });
 
-        const { text } = result;
-        const metadata = result.groundingMetadata as GroundingMetadata;
-        const formatted = formatGroundedResponse(text, metadata);
+          const { text } = result;
+          const metadata = result.groundingMetadata as GroundingMetadata;
+          const formatted = formatGroundedResponse(text, metadata);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: formatted,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          isError: true,
-        };
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: formatted,
+              },
+            ],
+          };
+        } catch (error) {
+          return createErrorToolResponse(
+            'E_WEB_SEARCH',
+            getErrorMessage(error)
+          );
+        }
       }
-    }
+    )
   );
 }

@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { z } from 'zod';
 
 import { formatLanguageSegment } from '../lib/format.js';
 import { getDiffContextSnapshot } from '../lib/tools.js';
@@ -8,7 +7,10 @@ import {
   registerStructuredToolTask,
   requireToolContract,
 } from '../lib/tools.js';
-import { GenerateReviewSummaryInputSchema } from '../schemas/inputs.js';
+import {
+  type GenerateReviewSummaryInput,
+  GenerateReviewSummaryInputSchema,
+} from '../schemas/inputs.js';
 import { ReviewSummaryResultSchema } from '../schemas/outputs.js';
 
 const ReviewSummaryModelSchema = ReviewSummaryResultSchema.omit({
@@ -34,8 +36,6 @@ Summarize the pull request based on the diff:
 - Return valid JSON matching the schema.
 </constraints>
 `;
-type ReviewSummaryInput = z.infer<typeof GenerateReviewSummaryInputSchema>;
-
 export function registerGenerateReviewSummaryTool(server: McpServer): void {
   registerStructuredToolTask(server, {
     name: 'generate_review_summary',
@@ -50,7 +50,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     requiresDiff: true,
     progressContext: (input) => input.repository,
     formatOutcome: (result) => `risk: ${result.overallRisk}`,
-    transformResult: (_input: ReviewSummaryInput, result, ctx) => {
+    transformResult: (_input: GenerateReviewSummaryInput, result, ctx) => {
       const { stats } = getDiffContextSnapshot(ctx);
       return {
         ...result,
@@ -63,7 +63,7 @@ export function registerGenerateReviewSummaryTool(server: McpServer): void {
     },
     formatOutput: (result) =>
       `${result.summary}\nRecommendation: ${result.recommendation}`,
-    buildPrompt: (input: ReviewSummaryInput, ctx) => {
+    buildPrompt: (input: GenerateReviewSummaryInput, ctx) => {
       const { diff, stats } = getDiffContextSnapshot(ctx);
       const languageSegment = formatLanguageSegment(input.language);
 

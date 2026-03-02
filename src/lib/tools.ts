@@ -623,7 +623,9 @@ function createGeminiResponseSchema(config: {
 }): Record<string, unknown> {
   const sourceSchema = config.geminiSchema ?? config.resultSchema;
   return stripJsonSchemaConstraints(
-    z.toJSONSchema(sourceSchema) as Record<string, unknown>
+    z.toJSONSchema(sourceSchema, {
+      target: 'draft-2020-12',
+    }) as Record<string, unknown>
   );
 }
 

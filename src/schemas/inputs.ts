@@ -1,27 +1,13 @@
 import { z } from 'zod';
 
+import { createBoundedString, createOptionalBoundedString } from './helpers.js';
+
 const INPUT_LIMITS = {
   repository: { min: 1, max: 200 },
   language: { min: 2, max: 32 },
   testFramework: { min: 1, max: 50 },
   maxTestCases: { min: 1, max: 30 },
 } as const;
-
-function createBoundedString(
-  min: number,
-  max: number,
-  description: string
-): z.ZodString {
-  return z.string().min(min).max(max).describe(description);
-}
-
-function createOptionalBoundedString(
-  min: number,
-  max: number,
-  description: string
-): z.ZodOptional<z.ZodString> {
-  return createBoundedString(min, max, description).optional();
-}
 
 const LANGUAGE_DESCRIPTION =
   'Primary language (e.g. TypeScript). Auto-infer from files.';
@@ -48,8 +34,8 @@ function createOptionalBoundedInteger(
   min: number,
   max: number,
   description: string
-): z.ZodOptional<z.ZodNumber> {
-  return z.number().int().min(min).max(max).optional().describe(description);
+): z.ZodOptional<z.ZodInt> {
+  return z.int().min(min).max(max).optional().describe(description);
 }
 
 const RepositorySchema = createRepositorySchema();
@@ -91,3 +77,16 @@ export const DetectApiBreakingInputSchema = z.strictObject({
 export const WebSearchInputSchema = z.strictObject({
   query: z.string().min(1).max(1000).describe('Search query'),
 });
+
+export type AnalyzePrImpactInput = z.infer<typeof AnalyzePrImpactInputSchema>;
+export type GenerateReviewSummaryInput = z.infer<
+  typeof GenerateReviewSummaryInputSchema
+>;
+export type GenerateTestPlanInput = z.infer<typeof GenerateTestPlanInputSchema>;
+export type AnalyzeComplexityInput = z.infer<
+  typeof AnalyzeComplexityInputSchema
+>;
+export type DetectApiBreakingInput = z.infer<
+  typeof DetectApiBreakingInputSchema
+>;
+export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;

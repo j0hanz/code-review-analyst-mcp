@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { createBoundedString, createBoundedStringArray } from './helpers.js';
+
 const OUTPUT_LIMITS = {
   reviewDiffResult: {
     summary: { min: 1, max: 2_000 },
@@ -33,28 +35,6 @@ const ERROR_KINDS = [
   'busy',
   'internal',
 ] as const;
-
-function createBoundedString(
-  min: number,
-  max: number,
-  description: string
-): z.ZodString {
-  return z.string().min(min).max(max).describe(description);
-}
-
-function createBoundedStringArray(
-  itemMin: number,
-  itemMax: number,
-  minItems: number,
-  maxItems: number,
-  description: string
-): z.ZodArray<z.ZodString> {
-  return z
-    .array(z.string().min(itemMin).max(itemMax))
-    .min(minItems)
-    .max(maxItems)
-    .describe(description);
-}
 
 function createReviewSummarySchema(description: string): z.ZodString {
   return z
@@ -141,9 +121,9 @@ export const ReviewSummaryResultSchema = z.strictObject({
   recommendation: z.string().min(1).max(500).describe('Merge recommendation.'),
   stats: z
     .strictObject({
-      filesChanged: z.number().int().min(0).describe('Files changed.'),
-      linesAdded: z.number().int().min(0).describe('Lines added.'),
-      linesRemoved: z.number().int().min(0).describe('Lines removed.'),
+      filesChanged: z.int().min(0).describe('Files changed.'),
+      linesAdded: z.int().min(0).describe('Lines added.'),
+      linesRemoved: z.int().min(0).describe('Lines removed.'),
     })
     .describe('Change statistics (computed from diff before Gemini call).'),
 });
@@ -239,3 +219,15 @@ export const DetectApiBreakingResultSchema = z.strictObject({
     .max(OUTPUT_LIMITS.apiBreaking.maxItems)
     .describe('Breaking changes list.'),
 });
+
+export type DefaultOutput = z.infer<typeof DefaultOutputSchema>;
+export type PrImpactResult = z.infer<typeof PrImpactResultSchema>;
+export type ReviewSummaryResult = z.infer<typeof ReviewSummaryResultSchema>;
+export type TestCase = z.infer<typeof TestCaseSchema>;
+export type TestPlanResult = z.infer<typeof TestPlanResultSchema>;
+export type AnalyzeComplexityResult = z.infer<
+  typeof AnalyzeComplexityResultSchema
+>;
+export type DetectApiBreakingResult = z.infer<
+  typeof DetectApiBreakingResultSchema
+>;
