@@ -1,3 +1,5 @@
+import { performance } from 'node:perf_hooks';
+
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { createCachedEnvInt } from './config.js';
@@ -61,7 +63,7 @@ export interface FileSlot {
   language: string;
   lineCount: number;
   sizeChars: number;
-  cachedAt: string;
+  cachedAt: number;
 }
 
 type SendResourceUpdated = (params: { uri: string }) => Promise<void>;
@@ -90,7 +92,7 @@ export function getFile(): FileSlot | undefined {
     return undefined;
   }
 
-  const age = Date.now() - new Date(currentSlot.cachedAt).getTime();
+  const age = performance.now() - currentSlot.cachedAt;
   if (age > fileCacheTtlMs.get()) {
     currentSlot = undefined;
     notifyFileUpdated();

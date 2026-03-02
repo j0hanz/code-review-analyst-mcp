@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -65,15 +66,12 @@ function detectLanguage(filePath: string): string {
   return EXTENSION_LANGUAGE_MAP.get(ext) ?? 'Unknown';
 }
 
-const DENIED_PATTERNS = ['.env', '.git/', 'node_modules/'] as const;
+const DENIED_SEGMENTS = new Set(['.env', '.git', 'node_modules']);
 
 function isDeniedPath(resolved: string): boolean {
-  const normalized = resolved.replace(/\\/g, '/');
-  return DENIED_PATTERNS.some(
-    (pattern) =>
-      normalized.includes(`/${pattern}`) ||
-      normalized.endsWith(`/${pattern.replace(/\/$/, '')}`)
-  );
+  return resolved
+    .split(path.sep)
+    .some((segment) => DENIED_SEGMENTS.has(segment));
 }
 
 function validateFilePath(
@@ -83,10 +81,9 @@ function validateFilePath(
   const resolved = path.resolve(filePath);
   const resolvedRoot = path.resolve(workspaceRoot);
 
-  if (
-    !resolved.startsWith(resolvedRoot + path.sep) &&
-    resolved !== resolvedRoot
-  ) {
+  const relative = path.relative(resolvedRoot, resolved);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return 'File path must be within the workspace root directory.';
   }
 
@@ -181,7 +178,7 @@ export function registerLoadFileTool(server: McpServer): void {
         const language = detectLanguage(resolved);
         const lineCount = content.split('\n').length;
         const sizeChars = content.length;
-        const cachedAt = new Date().toISOString();
+        const cachedAt = performance.now();
 
         storeFile({
           filePath: resolved,
