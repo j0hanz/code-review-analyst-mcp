@@ -4,6 +4,7 @@ import {
 } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { DIFF_RESOURCE_URI, getDiff } from '../lib/diff.js';
+import { getFile, SOURCE_RESOURCE_URI } from '../lib/file-store.js';
 
 import { buildServerConfig } from './server-config.js';
 import { buildToolCatalog } from './tool-catalog.js';
@@ -167,6 +168,40 @@ function registerDiffResource(server: McpServer): void {
   );
 }
 
+export const FILE_RESOURCE_DESCRIPTION =
+  'The most recently loaded source file, cached by load_file. Read by file analysis tools automatically.';
+
+function formatFileResourceText(): string {
+  const slot = getFile();
+  if (!slot) {
+    return '# No file cached. Call load_file first.';
+  }
+
+  return `# File — ${slot.filePath} — ${slot.cachedAt}\n# ${slot.lineCount} lines, ${slot.sizeChars} chars\n\n${slot.content}`;
+}
+
+function registerFileResource(server: McpServer): void {
+  server.registerResource(
+    'file-current',
+    SOURCE_RESOURCE_URI,
+    {
+      title: 'Current File',
+      description: FILE_RESOURCE_DESCRIPTION,
+      mimeType: 'text/plain',
+      annotations: createResourceAnnotations(1.0),
+    },
+    (uri: URL) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'text/plain',
+          text: formatFileResourceText(),
+        },
+      ],
+    })
+  );
+}
+
 export function registerAllResources(
   server: McpServer,
   instructions: string
@@ -178,4 +213,5 @@ export function registerAllResources(
 
   registerToolInfoResources(server);
   registerDiffResource(server);
+  registerFileResource(server);
 }

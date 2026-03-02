@@ -6,6 +6,8 @@ import { registerDetectApiBreakingTool } from './detect-api-breaking.js';
 import { registerGenerateDiffTool } from './generate-diff.js';
 import { registerGenerateReviewSummaryTool } from './generate-review-summary.js';
 import { registerGenerateTestPlanTool } from './generate-test-plan.js';
+import { registerLoadFileTool } from './load-file.js';
+import { registerRefactorCodeTool } from './refactor-code.js';
 import { registerWebSearchTool } from './web-search.js';
 
 type ToolRegistrar = (server: McpServer) => void;
@@ -17,6 +19,8 @@ const TOOL_REGISTRARS = [
   registerGenerateTestPlanTool,
   registerAnalyzeComplexityTool,
   registerDetectApiBreakingTool,
+  registerLoadFileTool,
+  registerRefactorCodeTool,
   registerWebSearchTool,
 ] as const satisfies readonly ToolRegistrar[];
 

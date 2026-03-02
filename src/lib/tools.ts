@@ -16,9 +16,11 @@ import { DefaultOutputSchema } from '../schemas/outputs.js';
 import {
   ANALYSIS_TEMPERATURE,
   CREATIVE_TEMPERATURE,
+  DEFAULT_TIMEOUT_EXTENDED_MS,
   FLASH_API_BREAKING_MAX_OUTPUT_TOKENS,
   FLASH_COMPLEXITY_MAX_OUTPUT_TOKENS,
   FLASH_MODEL,
+  FLASH_REFACTOR_MAX_OUTPUT_TOKENS,
   FLASH_TEST_PLAN_MAX_OUTPUT_TOKENS,
   FLASH_THINKING_LEVEL,
   FLASH_TRIAGE_MAX_OUTPUT_TOKENS,
@@ -36,6 +38,12 @@ import { validateDiffBudget } from './diff.js';
 import { type DiffStats, EMPTY_DIFF_STATS, type ParsedFile } from './diff.js';
 import { classifyErrorMeta } from './errors.js';
 import { getErrorMessage } from './errors.js';
+import {
+  createNoFileError,
+  type FileSlot,
+  getFile,
+  validateFileBudget,
+} from './file-store.js';
 import { stripJsonSchemaConstraints } from './gemini.js';
 import { generateStructuredJson } from './gemini.js';
 import type { GeminiStructuredRequest } from './gemini.js';
@@ -317,6 +325,14 @@ const MAX_TEST_CASES_PARAM = createParam(
   'Post-generation cap applied to test cases.'
 );
 
+const FILE_PATH_PARAM = createParam(
+  'filePath',
+  'string',
+  true,
+  '1-500 chars',
+  'Absolute path to the file to analyze.'
+);
+
 export const TOOL_CONTRACTS = [
   {
     name: 'generate_diff',
@@ -436,6 +452,46 @@ export const TOOL_CONTRACTS = [
     ],
     crossToolFlow: ['Run before merge for API-surface-sensitive changes.'],
   },
+  {
+    name: 'load_file',
+    purpose:
+      'Read a single file from disk and cache it server-side. MUST be called before any file analysis tool.',
+    model: 'none',
+    timeoutMs: 0,
+    maxOutputTokens: 0,
+    params: cloneParams(FILE_PATH_PARAM),
+    outputShape:
+      '{ok, result: {fileRef, filePath, language, lineCount, sizeChars, cachedAt, message}}',
+    gotchas: [
+      'Single file only — overwrites previous cache.',
+      'Max file size enforced (120K chars default).',
+      'File must be under workspace root.',
+    ],
+    crossToolFlow: [
+      'Caches file at source://current — consumed by refactor_code and future analysis tools.',
+    ],
+  },
+  {
+    name: 'refactor_code',
+    purpose:
+      'Analyze cached file for naming, complexity, duplication, and grouping improvements.',
+    model: FLASH_MODEL,
+    timeoutMs: DEFAULT_TIMEOUT_EXTENDED_MS,
+    thinkingLevel: FLASH_THINKING_LEVEL,
+    maxOutputTokens: FLASH_REFACTOR_MAX_OUTPUT_TOKENS,
+    temperature: ANALYSIS_TEMPERATURE,
+    deterministicJson: true,
+    params: cloneParams(LANGUAGE_PARAM),
+    outputShape:
+      '{filePath, language, summary, suggestions[{category, target, currentIssue, suggestion, priority}], *IssuesCount}',
+    gotchas: [
+      'Requires load_file first.',
+      'Analyzes one file — does not suggest cross-file moves.',
+    ],
+    crossToolFlow: [
+      'Use after load_file. Provides refactoring roadmap for the cached file.',
+    ],
+  },
 ] as const satisfies readonly ToolContract[];
 
 const TOOL_CONTRACTS_BY_NAME = new Map<string, ToolContract>(
@@ -477,6 +533,7 @@ export interface PromptParts {
  */
 export interface ToolExecutionContext {
   readonly diffSlot: DiffSlot | undefined;
+  readonly fileSlot: FileSlot | undefined;
 }
 
 const DEFAULT_SCHEMA_RETRIES = 1;
@@ -573,6 +630,9 @@ export interface StructuredToolTaskConfig<
 
   /** Optional flag to enforce diff presence and budget check before tool execution. */
   requiresDiff?: boolean;
+
+  /** Optional flag to enforce file presence and budget check before tool execution. */
+  requiresFile?: boolean;
 
   /** Optional override for schema validation retries. Defaults to GEMINI_SCHEMA_RETRIES env var. */
   schemaRetries?: number;
@@ -851,6 +911,17 @@ async function validateRequest<
     }
   }
 
+  if (config.requiresFile) {
+    if (!ctx.fileSlot) {
+      return createNoFileError();
+    }
+
+    const budgetError = validateFileBudget(ctx.fileSlot.content);
+    if (budgetError) {
+      return budgetError;
+    }
+  }
+
   if (config.validateInput) {
     return await config.validateInput(inputRecord, ctx);
   }
@@ -1017,6 +1088,7 @@ export class ToolExecutionRunner<
   private createExecutionContext(): ToolExecutionContext {
     return {
       diffSlot: this.hasSnapshot ? this.diffSlotSnapshot : getDiff(),
+      fileSlot: getFile(),
     };
   }
 
@@ -1306,5 +1378,38 @@ export function getDiffContextSnapshot(
     diff: slot.diff,
     parsedFiles: slot.parsedFiles,
     stats: slot.stats,
+  };
+}
+
+export interface FileContextSnapshot {
+  filePath: string;
+  content: string;
+  language: string;
+  lineCount: number;
+  sizeChars: number;
+}
+
+const EMPTY_FILE_SNAPSHOT: FileContextSnapshot = {
+  filePath: '',
+  content: '',
+  language: '',
+  lineCount: 0,
+  sizeChars: 0,
+};
+
+export function getFileContextSnapshot(
+  ctx: ToolExecutionContext
+): FileContextSnapshot {
+  const slot = ctx.fileSlot;
+  if (!slot) {
+    return EMPTY_FILE_SNAPSHOT;
+  }
+
+  return {
+    filePath: slot.filePath,
+    content: slot.content,
+    language: slot.language,
+    lineCount: slot.lineCount,
+    sizeChars: slot.sizeChars,
   };
 }

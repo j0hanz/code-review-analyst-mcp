@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { initDiffStore } from './lib/diff.js';
 import { getErrorMessage } from './lib/errors.js';
+import { initFileStore } from './lib/file-store.js';
 
 import { registerAllPrompts } from './prompts/index.js';
 import { registerAllResources } from './resources/index.js';
@@ -99,6 +100,7 @@ function createMcpServer(taskStore: InMemoryTaskStore): McpServer {
 
 function registerServerCapabilities(server: McpServer): void {
   initDiffStore(server);
+  initFileStore(server);
   registerAllTools(server);
   registerAllResources(server, SERVER_INSTRUCTIONS);
   registerAllPrompts(server, SERVER_INSTRUCTIONS);

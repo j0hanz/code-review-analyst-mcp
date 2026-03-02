@@ -78,6 +78,18 @@ export const WebSearchInputSchema = z.strictObject({
   query: z.string().min(1).max(1000).describe('Search query'),
 });
 
+export const LoadFileInputSchema = z.strictObject({
+  filePath: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe('Absolute path to the file to analyze.'),
+});
+
+export const RefactorCodeInputSchema = z.strictObject({
+  language: LanguageSchema,
+});
+
 export type AnalyzePrImpactInput = z.infer<typeof AnalyzePrImpactInputSchema>;
 export type GenerateReviewSummaryInput = z.infer<
   typeof GenerateReviewSummaryInputSchema
@@ -90,3 +102,5 @@ export type DetectApiBreakingInput = z.infer<
   typeof DetectApiBreakingInputSchema
 >;
 export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
+export type LoadFileInput = z.infer<typeof LoadFileInputSchema>;
+export type RefactorCodeInput = z.infer<typeof RefactorCodeInputSchema>;

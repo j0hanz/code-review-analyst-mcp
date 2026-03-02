@@ -220,6 +220,49 @@ export const DetectApiBreakingResultSchema = z.strictObject({
     .describe('Breaking changes list.'),
 });
 
+const REFACTOR_CATEGORIES = [
+  'naming',
+  'complexity',
+  'duplication',
+  'grouping',
+] as const;
+
+const REFACTOR_PRIORITIES = ['high', 'medium', 'low'] as const;
+
+export const RefactorSuggestionSchema = z.strictObject({
+  category: z.enum(REFACTOR_CATEGORIES).describe('Refactoring category.'),
+  target: createBoundedString(
+    1,
+    300,
+    'Function/variable/block name or location.'
+  ),
+  currentIssue: createBoundedString(1, 500, 'What is wrong.'),
+  suggestion: createBoundedString(1, 1000, 'Concrete refactoring suggestion.'),
+  priority: z.enum(REFACTOR_PRIORITIES).describe('Suggestion priority.'),
+});
+
+export const RefactorCodeGeminiResultSchema = z.strictObject({
+  summary: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe('Refactoring analysis summary.'),
+  suggestions: z
+    .array(RefactorSuggestionSchema)
+    .min(0)
+    .max(50)
+    .describe('Refactoring suggestions.'),
+});
+
+export const RefactorCodeResultSchema = RefactorCodeGeminiResultSchema.extend({
+  filePath: z.string().describe('Analyzed file path.'),
+  language: z.string().describe('Detected/provided language.'),
+  namingIssuesCount: z.int().min(0).describe('Naming issues count.'),
+  complexityIssuesCount: z.int().min(0).describe('Complexity issues count.'),
+  duplicationIssuesCount: z.int().min(0).describe('Duplication issues count.'),
+  groupingIssuesCount: z.int().min(0).describe('Grouping issues count.'),
+});
+
 export type DefaultOutput = z.infer<typeof DefaultOutputSchema>;
 export type PrImpactResult = z.infer<typeof PrImpactResultSchema>;
 export type ReviewSummaryResult = z.infer<typeof ReviewSummaryResultSchema>;
@@ -231,3 +274,8 @@ export type AnalyzeComplexityResult = z.infer<
 export type DetectApiBreakingResult = z.infer<
   typeof DetectApiBreakingResultSchema
 >;
+export type RefactorSuggestion = z.infer<typeof RefactorSuggestionSchema>;
+export type RefactorCodeGeminiResult = z.infer<
+  typeof RefactorCodeGeminiResultSchema
+>;
+export type RefactorCodeResult = z.infer<typeof RefactorCodeResultSchema>;

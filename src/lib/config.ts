@@ -99,6 +99,9 @@ export const FLASH_PATCH_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 /** Output cap for Flash deep review findings. */
 export const FLASH_REVIEW_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
 
+/** Output cap for Flash refactoring analysis. */
+export const FLASH_REFACTOR_MAX_OUTPUT_TOKENS = DEFAULT_OUTPUT_CAP;
+
 // ---------------------------------------------------------------------------
 // Temperatures
 // ---------------------------------------------------------------------------
